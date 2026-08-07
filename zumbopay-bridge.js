@@ -497,7 +497,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 
 /* ── Carousel area ── */
 .carousel-area{padding:24px 0 12px;position:relative;}
-.carousel-outer{display:flex;overflow-x:scroll;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+.carousel-outer{width:100%;display:flex;overflow-x:scroll;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
 .carousel-outer::-webkit-scrollbar{display:none;}
 
 /* ── Slide wrapper ── */
@@ -790,8 +790,9 @@ function setCat(id) { curCat = id; renderCarousel() }
 // Update dots on native scroll (finger swipe)
 outer.addEventListener('scroll', () => {
   if (!outer.clientWidth) return
+  const total = (PKGS[curCat]||[]).length
   const idx = Math.round(outer.scrollLeft / outer.clientWidth)
-  if (idx !== curIdx) { curIdx = idx; renderDots() }
+  if (idx !== curIdx) { curIdx = idx; renderDots(total) }
 }, {passive: true})
 
 // ── Sheet ──
