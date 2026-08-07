@@ -1,0 +1,12 @@
+{
+  "name": "zumbopay-bridge",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "zumbopay-bridge.js",
+  "scripts": {
+    "start": "PORT=5000 node zumbopay-bridge.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
