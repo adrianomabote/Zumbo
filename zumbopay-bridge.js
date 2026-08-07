@@ -554,16 +554,29 @@ function megasPage() {
     `<div class="vcard-footer"><button class="share-btn" onclick="event.stopPropagation()">⋮</button></div>` +
     `</div></div>`
 
+  // Labels for list section headers
+  const listLabels = {diarias:'Diário',semanais:'Semanal',mensais:'Mensal',infinitas:'Infinitas'}
+
   // Generate one full category section HTML
   const sectionHtml = (catId, visible) => {
     const {note, pkgs} = CAT_DATA[catId]
     const slides = pkgs.map(slideHtml).join('')
     const dots   = pkgs.map((_,i) => `<div class="dot${i===0?' active':''}"></div>`).join('')
     const noteHtml = note ? `<div class="cat-note show">${note}</div>` : ''
+    const listItems = pkgs.map(p =>
+      `<div class="pkg-item" onclick="openBuy('${p.id}')">` +
+      `<div class="pkg-item-top"><span class="pkg-item-name">${p.name}</span>` +
+      `<span class="pkg-item-price">${p.price} MT<span class="pkg-item-arr"> ›</span></span></div>` +
+      `<div class="pkg-item-sep"></div>` +
+      `<div class="pkg-item-data">` +
+      `<svg class="pkg-item-icon" viewBox="0 0 24 24"><path d="M7 16V4"/><path d="M4 7l3-3 3 3"/><path d="M17 8v12"/><path d="M14 17l3 3 3-3"/></svg>` +
+      `<span class="pkg-item-size">${p.size}</span></div></div>`
+    ).join('')
     return `<div class="cat-section" id="cat-${catId}"${visible ? '' : ' style="display:none"'}>` +
       noteHtml +
       `<div class="carousel-outer" id="co-${catId}">${slides}</div>` +
       `<div class="dots" id="dots-${catId}">${dots}</div>` +
+      `<div class="pkg-list"><div class="pkg-list-head">${listLabels[catId]||''}</div>${listItems}</div>` +
       `</div>`
   }
 
@@ -685,6 +698,33 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .dot{width:6px;height:6px;border-radius:50%;background:#d1d1d6;transition:background .2s,width .2s;}
 .dot.active{background:#cc0000;width:18px;border-radius:3px;}
 
+/* ── Package list (below carousel) ── */
+.pkg-list{padding:8px 16px 24px;}
+.pkg-list-head{font-size:13px;color:#636366;font-weight:600;margin:16px 0 10px 4px;}
+.pkg-item{background:#fff;border-radius:14px;margin-bottom:10px;overflow:hidden;box-shadow:0 1px 6px rgba(0,0,0,.08);cursor:pointer;}
+.pkg-item:active{opacity:.85;}
+.pkg-item-top{display:flex;align-items:center;justify-content:space-between;padding:16px 16px 12px;}
+.pkg-item-name{font-size:16px;font-weight:600;color:#1c1c1e;}
+.pkg-item-price{font-size:16px;font-weight:700;color:#1c1c1e;display:flex;align-items:center;gap:8px;}
+.pkg-item-arr{color:#cc0000;font-size:20px;font-weight:300;line-height:1;}
+.pkg-item-sep{height:1px;background:#f2f2f7;margin:0 16px;}
+.pkg-item-data{display:flex;flex-direction:column;align-items:center;padding:14px 16px 16px;gap:5px;}
+.pkg-item-icon{width:26px;height:26px;stroke:#cc0000;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.pkg-item-size{font-size:13px;color:#636366;}
+
+/* ── Footer ── */
+.site-footer{background:#fff;border-top:1px solid #e5e5ea;padding:28px 20px 44px;}
+.footer-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;}
+.footer-brand{display:flex;align-items:center;gap:10px;}
+.footer-logo-img{width:34px;height:34px;object-fit:contain;}
+.footer-brand-name{font-size:16px;font-weight:800;color:#1c1c1e;}
+.footer-brand-name span{color:#cc0000;}
+.footer-links{display:flex;flex-direction:column;gap:12px;text-align:right;}
+.footer-links a{font-size:13px;color:#636366;text-decoration:none;font-weight:500;}
+.footer-links a:active{color:#cc0000;}
+.footer-bottom{border-top:1px solid #f2f2f7;padding-top:16px;text-align:center;}
+.footer-copy{font-size:12px;color:#8e8e93;line-height:1.7;}
+
 /* ── Note banner ── */
 .cat-note{margin:0 20px 16px;padding:10px 14px;background:#fff3cd;border:1px solid #ffc107;border-radius:10px;font-size:12px;color:#856404;line-height:1.5;display:none;}
 .cat-note.show{display:block;}
@@ -787,6 +827,23 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 </div>
 
 <div class="carousel-area">${allSections}</div>
+
+<footer class="site-footer">
+  <div class="footer-top">
+    <div class="footer-brand">
+      <img src="/static/vodacom.webp" alt="Net Serviços" class="footer-logo-img">
+      <div class="footer-brand-name">Net <span>Serviços</span></div>
+    </div>
+    <div class="footer-links">
+      <a href="/">Início</a>
+      <a href="/megas">Pacotes de Internet</a>
+      <a href="/deposito">Fazer Depósito</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <p class="footer-copy">© 2025 Net Serviços · Todos os direitos reservados<br>Powered by ZumboPay · Mozambique 🇲🇿</p>
+  </div>
+</footer>
 
 <div class="overlay" id="overlay" onclick="closeSheet()"></div>
 <div class="sheet" id="sheet">
