@@ -469,119 +469,167 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
 }
 
 // ── PÁGINA: Megas ─────────────────────────────────────────────────────────────
-function megasPage() {
-  const normalCards = [
-    {id:'n01',size:'380 MB',price:10},{id:'n02',size:'512 MB',price:13},{id:'n03',size:'624 MB',price:17},
-    {id:'n04',size:'780 MB',price:20},{id:'n05',size:'1 GB',  price:25},{id:'n06',size:'1.1 GB',price:28},
-    {id:'n07',size:'1.6 GB',price:41},{id:'n08',size:'2 GB',  price:50},{id:'n09',size:'3 GB',  price:75},
-    {id:'n10',size:'4 GB',  price:100},{id:'n11',size:'5 GB', price:125},{id:'n12',size:'6 GB', price:150},
-    {id:'n13',size:'7 GB',  price:175},{id:'n14',size:'8 GB', price:200},{id:'n15',size:'9 GB', price:225},
-    {id:'n16',size:'10 GB', price:250},
-  ]
-  const initGrid = normalCards.map(p =>
-    `<div class="pkg" onclick="openSheet('${p.id}')"><div class="pkg-size">${p.size}</div><div class="pkg-price">${p.price}<span> MT</span></div></div>`
-  ).join('')
-
-  return `<!DOCTYPE html>
+function megasPage() { return `<!DOCTYPE html>
 <html lang="pt"><head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Megas Vodacom — Net Serviços</title>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Megas — Net Serviços</title>
 <script>(function(){document.addEventListener('contextmenu',e=>e.preventDefault());document.addEventListener('keydown',function(e){const c=e.ctrlKey||e.metaKey;if(e.key==='F12'){e.preventDefault();return false}if(c&&e.shiftKey&&['I','J','C','K'].includes(e.key.toUpperCase())){e.preventDefault();return false}if(c&&['u','U','s','S','a','A','c','C','x','X'].includes(e.key)){e.preventDefault();return false}},true);['copy','cut','selectstart','dragstart'].forEach(ev=>document.addEventListener(ev,e=>e.preventDefault(),true))})()
 </script>
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;user-select:none;-webkit-user-select:none;}
-:root{--bg:#07080f;--s:#0d0f1a;--card:#111422;--b:#1a1e35;--accent:#10b981;--blue:#3b82f6;--red:#ef4444;--text:#e8eaf6;--muted:#4a5080;--r:14px;}
-body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;padding-bottom:48px;}
-.nav{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--b);position:sticky;top:0;background:rgba(7,8,15,.92);backdrop-filter:blur(12px);z-index:50;}
-.nav-logo{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:800;text-decoration:none;color:var(--text);}
-.nav-logo-icon{width:32px;height:32px;background:linear-gradient(135deg,var(--accent),#059669);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;}
-.nav-logo-text span{color:var(--accent);}
-.nav-back{font-size:12px;color:var(--muted);text-decoration:none;padding:6px 12px;border:1px solid var(--b);border-radius:8px;}
-.nav-back:hover{color:var(--text);border-color:var(--accent);}
-.hero{padding:28px 20px 16px;text-align:center;}
-.hero-icon{font-size:40px;margin-bottom:10px;}
-.hero-title{font-size:24px;font-weight:800;margin-bottom:4px;}
-.hero-sub{font-size:13px;color:var(--muted);}
-.voda-badge{display:inline-flex;align-items:center;gap:6px;margin-top:10px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.2);border-radius:999px;padding:4px 12px;font-size:12px;font-weight:700;color:var(--accent);}
-.tabs{display:flex;gap:8px;padding:16px 16px 8px;overflow-x:auto;scrollbar-width:none;}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;overflow-x:hidden;user-select:none;-webkit-user-select:none;}
+
+/* ── Nav ── */
+.nav{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#fff;border-bottom:1px solid #e5e5ea;position:sticky;top:0;z-index:50;}
+.nav-logo{display:flex;align-items:center;gap:8px;text-decoration:none;color:#1c1c1e;}
+.nav-logo-icon{width:28px;height:28px;background:#cc0000;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;}
+.nav-logo-text{font-size:15px;font-weight:800;}
+.nav-logo-text span{color:#cc0000;}
+.nav-back{font-size:13px;color:#cc0000;text-decoration:none;font-weight:600;}
+
+/* ── Tabs (Vodacom style) ── */
+.tabs-wrap{background:#fff;border-bottom:1px solid #e5e5ea;position:sticky;top:53px;z-index:40;}
+.tabs{display:flex;overflow-x:auto;scrollbar-width:none;}
 .tabs::-webkit-scrollbar{display:none;}
-.tab{flex-shrink:0;padding:8px 16px;border-radius:999px;border:1.5px solid var(--b);background:transparent;color:var(--muted);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;transition:all .18s;white-space:nowrap;}
-.tab.active{border-color:var(--accent);background:rgba(16,185,129,.1);color:var(--accent);}
-.tab:hover:not(.active){border-color:#252a45;color:var(--text);}
-.cat-note{margin:0 16px 14px;padding:10px 14px;background:rgba(255,255,255,.03);border:1px solid var(--b);border-radius:10px;font-size:12px;color:var(--muted);line-height:1.5;display:none;}
+.tab{flex:1;min-width:80px;padding:14px 8px 12px;background:none;border:none;font-size:14px;font-weight:600;font-family:inherit;color:#8e8e93;cursor:pointer;white-space:nowrap;text-align:center;position:relative;transition:color .15s;}
+.tab.active{color:#cc0000;}
+.tab.active::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2.5px;background:#cc0000;border-radius:2px 2px 0 0;}
+
+/* ── Carousel area ── */
+.carousel-area{padding:24px 0 12px;position:relative;}
+.carousel-outer{display:flex;overflow-x:scroll;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+.carousel-outer::-webkit-scrollbar{display:none;}
+
+/* ── Slide wrapper ── */
+.carousel-slide{flex:0 0 100%;scroll-snap-align:start;padding:0 20px;}
+
+/* ── Card (Vodacom style) ── */
+.vcard{background:#fff;border-radius:16px;box-shadow:0 2px 16px rgba(0,0,0,.10);overflow:hidden;cursor:pointer;}
+
+/* Red header */
+.vcard-header{background:#cc0000;padding:18px 20px 20px;display:flex;align-items:center;justify-content:space-between;border-radius:16px 16px 0 0;}
+.vcard-name{font-size:18px;font-weight:700;color:#fff;}
+.vcard-buy{background:transparent;border:2px solid #fff;border-radius:6px;padding:7px 18px;color:#fff;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;}
+.vcard-buy:active{background:rgba(255,255,255,.15);}
+
+/* Dark info row */
+.vcard-info{display:flex;overflow:hidden;}
+.vi-price{flex:1;background:#3a3a3c;padding:12px 16px;display:flex;align-items:center;}
+.vi-price span{font-size:17px;font-weight:700;color:#fff;}
+.vi-dur{background:#636366;padding:12px 16px;display:flex;align-items:center;}
+.vi-dur span{font-size:17px;font-weight:700;color:#fff;white-space:nowrap;}
+
+/* Data row */
+.vcard-data{padding:14px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e5e5ea;}
+.vdata-left{display:flex;align-items:center;gap:10px;}
+.arrows{display:flex;flex-direction:column;align-items:center;gap:1px;}
+.arr-up{font-size:13px;color:#8e8e93;line-height:1;}
+.arr-dn{font-size:13px;color:#cc0000;line-height:1;}
+.vdata-label{font-size:15px;color:#1c1c1e;font-weight:500;}
+.vdata-size{font-size:15px;color:#1c1c1e;font-weight:600;}
+
+/* Extra info (calls, SMS) */
+.vcard-extra{padding:10px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e5e5ea;}
+.vextra-left{display:flex;align-items:center;gap:10px;}
+.vextra-icon{font-size:14px;color:#cc0000;}
+.vextra-label{font-size:13px;color:#1c1c1e;}
+.vextra-val{font-size:13px;color:#1c1c1e;font-weight:600;}
+
+/* Footer */
+.vcard-footer{padding:12px 16px;display:flex;justify-content:flex-end;}
+.share-btn{background:none;border:none;cursor:pointer;font-size:20px;color:#8e8e93;padding:4px;}
+
+/* ── Dots ── */
+.dots{display:flex;justify-content:center;gap:5px;padding:14px 0 8px;}
+.dot{width:6px;height:6px;border-radius:50%;background:#d1d1d6;transition:background .2s,width .2s;}
+.dot.active{background:#cc0000;width:18px;border-radius:3px;}
+
+/* ── Note banner ── */
+.cat-note{margin:0 20px 16px;padding:10px 14px;background:#fff3cd;border:1px solid #ffc107;border-radius:10px;font-size:12px;color:#856404;line-height:1.5;display:none;}
 .cat-note.show{display:block;}
-.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;padding:0 16px;}
-@media(min-width:480px){.grid{grid-template-columns:repeat(3,1fr);}}
-@media(min-width:720px){.grid{grid-template-columns:repeat(4,1fr);padding:0 24px;}}
-.pkg{background:var(--card);border:1.5px solid var(--b);border-radius:var(--r);padding:16px 12px;cursor:pointer;transition:border-color .18s,transform .12s;text-align:center;position:relative;overflow:hidden;}
-.pkg:hover{border-color:var(--accent);transform:translateY(-2px);}
-.pkg:active{transform:scale(.97);}
-.pkg::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),#3b82f6);opacity:0;transition:opacity .18s;}
-.pkg:hover::before{opacity:1;}
-.pkg-size{font-size:20px;font-weight:800;letter-spacing:-.5px;margin-bottom:6px;}
-.pkg-price{font-size:22px;font-weight:900;color:var(--accent);}
-.pkg-price span{font-size:12px;color:var(--muted);font-weight:600;}
-.pkg-extra{font-size:10px;color:var(--muted);margin-top:4px;line-height:1.4;}
-.pkg-badge{position:absolute;top:0;right:0;font-size:9px;font-weight:800;padding:4px 8px;letter-spacing:.3px;border-radius:0 var(--r) 0 8px;}
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:100;display:none;backdrop-filter:blur(4px);}
+
+/* ── Bottom sheet ── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:none;backdrop-filter:blur(4px);}
 .overlay.open{display:block;}
-.sheet{position:fixed;bottom:0;left:0;right:0;max-width:480px;margin:0 auto;background:#111728;border:1px solid var(--b);border-bottom:none;border-radius:20px 20px 0 0;z-index:101;padding:0 20px 40px;transform:translateY(100%);transition:transform .3s cubic-bezier(.32,.72,0,1);max-height:90vh;overflow-y:auto;}
+.sheet{position:fixed;bottom:0;left:0;right:0;max-width:480px;margin:0 auto;background:#1c1c1e;border-radius:20px 20px 0 0;z-index:101;padding:0 20px 40px;transform:translateY(100%);transition:transform .3s cubic-bezier(.32,.72,0,1);max-height:90vh;overflow-y:auto;}
 .sheet.open{transform:translateY(0);}
-.sh-handle{width:36px;height:4px;background:var(--b);border-radius:2px;margin:12px auto 20px;}
-.s-buy,.s-pending,.s-success,.s-failed{display:none;}
-.sel-pkg{background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.15);border-radius:12px;padding:14px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;}
-.sel-size{font-size:18px;font-weight:800;}
-.sel-cat{font-size:11px;color:var(--muted);margin-top:2px;}
-.sel-price{font-size:26px;font-weight:900;color:var(--accent);}
-.sel-cur{font-size:12px;color:var(--muted);}
-.lbl{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px;display:block;}
-.inp{width:100%;background:var(--s);border:1.5px solid var(--b);border-radius:12px;padding:13px 14px 13px 42px;color:var(--text);font-size:16px;font-family:inherit;outline:none;transition:border-color .15s;}
-.inp:focus{border-color:var(--accent);}
-.inp::placeholder{color:var(--muted);}
+.sh-handle{width:36px;height:4px;background:#3a3a3c;border-radius:2px;margin:12px auto 20px;}
+.s-buy,.s-pending,.s-success,.s-failed{display:none;color:#f2f2f7;}
+.sel-pkg{background:#cc000015;border:1px solid #cc000035;border-radius:12px;padding:14px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;}
+.sel-size{font-size:18px;font-weight:800;color:#f2f2f7;}
+.sel-cat{font-size:11px;color:#8e8e93;margin-top:2px;}
+.sel-price{font-size:26px;font-weight:900;color:#cc0000;}
+.sel-cur{font-size:12px;color:#8e8e93;}
+.lbl{font-size:11px;font-weight:700;color:#8e8e93;text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px;display:block;}
+.inp{width:100%;background:#2c2c2e;border:1.5px solid #3a3a3c;border-radius:12px;padding:13px 14px 13px 42px;color:#f2f2f7;font-size:16px;font-family:inherit;outline:none;transition:border-color .15s;}
+.inp:focus{border-color:#cc0000;}
+.inp::placeholder{color:#636366;}
 .inp-w{position:relative;}
-.inp-ico{position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:16px;color:var(--muted);pointer-events:none;}
-.hint{font-size:11px;color:var(--muted);margin-top:6px;}
-.errs{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:10px;padding:10px 14px;font-size:13px;color:#fca5a5;margin-bottom:14px;display:none;}
-.btn{width:100%;padding:15px;border:none;border-radius:12px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;background:linear-gradient(135deg,var(--accent),#059669);color:#fff;margin-top:14px;transition:opacity .2s;}
-.btn:hover{opacity:.9;}.btn:active{transform:scale(.99);}.btn:disabled{opacity:.4;cursor:not-allowed;}
-.btn-g{background:transparent;border:1.5px solid var(--b);color:var(--muted);margin-top:10px;}
-.btn-g:hover{border-color:var(--accent);color:var(--text);background:rgba(16,185,129,.05);}
-.spinner{width:52px;height:52px;border:4px solid var(--b);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite;margin:8px auto 20px;}
+.inp-ico{position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:16px;color:#636366;pointer-events:none;}
+.hint{font-size:11px;color:#636366;margin-top:6px;}
+.errs{background:rgba(255,59,48,.1);border:1px solid rgba(255,59,48,.3);border-radius:10px;padding:10px 14px;font-size:13px;color:#ff6b6b;margin-bottom:14px;display:none;}
+.btn{width:100%;padding:15px;border:none;border-radius:12px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;background:#cc0000;color:#fff;margin-top:14px;transition:opacity .2s;}
+.btn:hover{opacity:.9;}.btn:active{opacity:.8;}.btn:disabled{opacity:.4;cursor:not-allowed;}
+.btn-g{background:transparent;border:1.5px solid #3a3a3c;color:#8e8e93;margin-top:10px;}
+.btn-g:hover{border-color:#cc0000;color:#f2f2f7;}
+.spinner{width:52px;height:52px;border:4px solid #3a3a3c;border-top-color:#cc0000;border-radius:50%;animation:spin 1s linear infinite;margin:8px auto 20px;}
 @keyframes spin{to{transform:rotate(360deg)}}
-.pend-ph{display:block;text-align:center;padding:6px 16px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.15);border-radius:8px;font-size:14px;font-weight:700;color:var(--accent);margin-bottom:16px;}
-.psteps{list-style:none;background:var(--s);border:1px solid var(--b);border-radius:12px;padding:12px 16px;}
-.psteps li{font-size:12px;color:var(--muted);padding:6px 0;display:flex;align-items:flex-start;gap:8px;border-bottom:1px solid var(--b);}
+.pend-ph{display:block;text-align:center;padding:6px 16px;background:rgba(204,0,0,.1);border:1px solid rgba(204,0,0,.2);border-radius:8px;font-size:14px;font-weight:700;color:#cc0000;margin-bottom:16px;}
+.psteps{list-style:none;background:#2c2c2e;border:1px solid #3a3a3c;border-radius:12px;padding:12px 16px;}
+.psteps li{font-size:12px;color:#8e8e93;padding:6px 0;display:flex;align-items:flex-start;gap:8px;border-bottom:1px solid #3a3a3c;}
 .psteps li:last-child{border-bottom:none;}
-.sn{min-width:18px;height:18px;border-radius:50%;background:rgba(16,185,129,.15);color:var(--accent);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+.sn{min-width:18px;height:18px;border-radius:50%;background:rgba(204,0,0,.15);color:#cc0000;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
 .res-icon{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;margin:8px auto 16px;}
-.res-icon.ok{background:rgba(16,185,129,.12);}
-.res-icon.bad{background:rgba(239,68,68,.12);}
+.res-icon.ok{background:rgba(52,199,89,.15);}
+.res-icon.bad{background:rgba(255,59,48,.12);}
 .res-t{font-size:20px;font-weight:700;text-align:center;margin-bottom:6px;}
-.res-s{font-size:13px;color:var(--muted);text-align:center;line-height:1.6;margin-bottom:20px;}
-.res-box{background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.12);border-radius:10px;padding:14px;text-align:center;margin-bottom:20px;}
-.res-box-l{font-size:11px;color:var(--muted);margin-bottom:4px;}
-.res-box-v{font-size:16px;font-weight:700;color:var(--accent);}
+.res-s{font-size:13px;color:#8e8e93;text-align:center;line-height:1.6;margin-bottom:20px;}
+.res-box{background:rgba(204,0,0,.07);border:1px solid rgba(204,0,0,.15);border-radius:10px;padding:14px;text-align:center;margin-bottom:20px;}
+.res-box-l{font-size:11px;color:#8e8e93;margin-bottom:4px;}
+.res-box-v{font-size:16px;font-weight:700;color:#cc0000;}
 </style>
 </head><body>
+
 <nav class="nav">
-  <a href="/" class="nav-logo"><div class="nav-logo-icon">🌐</div><div class="nav-logo-text">Net <span>Serviços</span></div></a>
+  <a href="/" class="nav-logo">
+    <div class="nav-logo-icon">🌐</div>
+    <div class="nav-logo-text">Net <span>Serviços</span></div>
+  </a>
   <a href="/" class="nav-back">← Início</a>
 </nav>
-<div class="hero">
-  <div class="hero-icon">🌐</div>
-  <div class="hero-title">Megas Vodacom</div>
-  <div class="hero-sub">Escolha o pacote, pague com M-Pesa ou e-Mola. Activação em 5–15 min.</div>
-  <div class="voda-badge">✓ Válido apenas para Vodacom</div>
+
+<div class="tabs-wrap">
+  <div class="tabs" id="tab-bar">
+    <button class="tab active" onclick="setCat('diarias')">Diárias</button>
+    <button class="tab" onclick="setCat('semanais')">Semanais</button>
+    <button class="tab" onclick="setCat('mensais')">Mensais</button>
+    <button class="tab" onclick="setCat('infinitas')">Infinitas</button>
+  </div>
 </div>
-<div class="tabs" id="tabs">
-  <button class="tab active" onclick="setCat('normal')">📶 Normal</button>
-  <button class="tab" onclick="setCat('premium')">🔄 Premium 3D</button>
-  <button class="tab" onclick="setCat('sete')">📅 7 Dias</button>
-  <button class="tab" onclick="setCat('mensal')">📱 Mensal</button>
-  <button class="tab" onclick="setCat('diamante')">💎 Diamante</button>
+
+<div class="carousel-area">
+  <div class="cat-note" id="cat-note"></div>
+  <div class="carousel-outer" id="carousel-outer">${[
+    {id:'n01',name:'Diário 10',size:'380 MB',price:10,dur:'1 dia(s)'},
+    {id:'n02',name:'Diário 13',size:'512 MB',price:13,dur:'1 dia(s)'},
+    {id:'n03',name:'Diário 17',size:'624 MB',price:17,dur:'1 dia(s)'},
+    {id:'n04',name:'Diário 20',size:'780 MB',price:20,dur:'1 dia(s)'},
+    {id:'n05',name:'Diário 25',size:'1 GB',  price:25,dur:'1 dia(s)'},
+    {id:'n06',name:'Diário 28',size:'1.1 GB',price:28,dur:'1 dia(s)'},
+    {id:'n07',name:'Diário 41',size:'1.6 GB',price:41,dur:'1 dia(s)'},
+    {id:'n08',name:'Diário 50',size:'2 GB',  price:50,dur:'1 dia(s)'},
+    {id:'n09',name:'Diário 75',size:'3 GB',  price:75,dur:'1 dia(s)'},
+    {id:'n10',name:'Diário 100',size:'4 GB', price:100,dur:'1 dia(s)'},
+    {id:'n11',name:'Diário 125',size:'5 GB', price:125,dur:'1 dia(s)'},
+    {id:'n12',name:'Diário 150',size:'6 GB', price:150,dur:'1 dia(s)'},
+    {id:'n13',name:'Diário 175',size:'7 GB', price:175,dur:'1 dia(s)'},
+    {id:'n14',name:'Diário 200',size:'8 GB', price:200,dur:'1 dia(s)'},
+    {id:'n15',name:'Diário 225',size:'9 GB', price:225,dur:'1 dia(s)'},
+    {id:'n16',name:'Diário 250',size:'10 GB',price:250,dur:'1 dia(s)'},
+  ].map(p=>`<div class="carousel-slide"><div class="vcard"><div class="vcard-header"><span class="vcard-name">${p.name}</span><button class="vcard-buy" onclick="openBuy('${p.id}');event.stopPropagation()">Activar</button></div><div class="vcard-info"><div class="vi-price"><span>${p.price} MT</span></div><div class="vi-dur"><span>${p.dur}</span></div></div><div class="vcard-data"><div class="vdata-left"><div class="arrows"><span class="arr-up">▲</span><span class="arr-dn">▼</span></div><span class="vdata-label">Dados</span></div><span class="vdata-size">${p.size}</span></div><div class="vcard-footer"><button class="share-btn" onclick="event.stopPropagation()">⋮</button></div></div></div>`).join('')}</div>
+  <div class="dots" id="dots"></div>
 </div>
-<div class="cat-note" id="cat-note"></div>
-<div class="grid" id="pkg-grid">${initGrid}</div>
+
 <div class="overlay" id="overlay" onclick="closeSheet()"></div>
 <div class="sheet" id="sheet">
   <div class="sh-handle"></div>
@@ -592,7 +640,7 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
     </div>
     <div class="errs" id="sh-err"></div>
     <label class="lbl">Número Vodacom do destinatário</label>
-    <div class="inp-w" style="margin-bottom:6px"><span class="inp-ico">📱</span><input class="inp" id="sh-phone" type="tel" placeholder="84 000 0000" maxlength="15" inputmode="tel"></div>
+    <div class="inp-w" style="margin-bottom:6px"><span class="inp-ico">📱</span><input class="inp" id="sh-phone" type="tel" placeholder="84 000 0000" maxlength="15" inputmode="tel" autocomplete="off"></div>
     <div class="hint">84/85 → M-Pesa &nbsp;·&nbsp; 86/87 → e-Mola</div>
     <button class="btn" id="sh-btn" onclick="pay()">Pagar e Encomendar</button>
     <button class="btn btn-g" onclick="closeSheet()">Cancelar</button>
@@ -601,7 +649,7 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
     <div class="spinner"></div>
     <div class="res-t" style="margin-bottom:8px">Aguardando PIN</div>
     <div class="pend-ph" id="sh-pend-phone"></div>
-    <p style="font-size:12px;color:var(--muted);text-align:center;margin-bottom:14px;line-height:1.6">Introduza o <strong style="color:var(--text)">PIN</strong> no pedido recebido no telemóvel.</p>
+    <p style="font-size:12px;color:#8e8e93;text-align:center;margin-bottom:14px;line-height:1.6">Introduza o <strong style="color:#f2f2f7">PIN</strong> no pedido recebido no telemóvel.</p>
     <ul class="psteps">
       <li><span class="sn">1</span>Verifique o telemóvel — pedido <span id="sh-method-lbl">M-Pesa</span> recebido</li>
       <li><span class="sn">2</span>Seleccione "Aceitar" e introduza o seu PIN</li>
@@ -609,86 +657,191 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
     </ul>
   </div>
   <div class="s-success" id="s-success">
-    <div class="res-icon ok">✓</div>
+    <div class="res-icon ok" style="font-size:32px">✓</div>
     <div class="res-t">Pedido recebido!</div>
-    <p class="res-s">Pagamento confirmado. O seu pacote será activado em <strong style="color:var(--text)">5–15 minutos</strong>.</p>
+    <p class="res-s">Pagamento confirmado. O seu pacote será activado em <strong style="color:#f2f2f7">5–15 minutos</strong>.</p>
     <div class="res-box"><div class="res-box-l">Pacote encomendado</div><div class="res-box-v" id="sh-ok-pkg"></div></div>
     <button class="btn" onclick="closeSheet()">Comprar outro pacote</button>
   </div>
   <div class="s-failed" id="s-failed">
-    <div class="res-icon bad">✗</div>
+    <div class="res-icon bad" style="font-size:32px">✗</div>
     <div class="res-t">Pagamento não confirmado</div>
     <p class="res-s" id="sh-fail-msg">O PIN não foi introduzido ou o tempo expirou.</p>
     <button class="btn" onclick="shShow('buy')">Tentar novamente</button>
     <button class="btn btn-g" onclick="closeSheet()">Cancelar</button>
   </div>
 </div>
+
 <script>
-const CATS={normal:{note:null},premium:{note:'3 Dias · Renovável · 🎁 +100MB ao renovar dentro de 3 dias'},sete:{note:'Validade de 7 dias'},mensal:{note:'30 Dias · ⚠️ Não deve ter Txuna crédito activo'},diamante:{note:'30 Dias · 📞 Chamadas + SMS ilimitadas · ⚠️ Não deve ter Txuna crédito activo'}}
-const PKGS={
-  normal:[{id:'n01',size:'380 MB',price:10},{id:'n02',size:'512 MB',price:13},{id:'n03',size:'624 MB',price:17},{id:'n04',size:'780 MB',price:20},{id:'n05',size:'1 GB',price:25},{id:'n06',size:'1.1 GB',price:28},{id:'n07',size:'1.6 GB',price:41},{id:'n08',size:'2 GB',price:50},{id:'n09',size:'3 GB',price:75},{id:'n10',size:'4 GB',price:100},{id:'n11',size:'5 GB',price:125},{id:'n12',size:'6 GB',price:150},{id:'n13',size:'7 GB',price:175},{id:'n14',size:'8 GB',price:200},{id:'n15',size:'9 GB',price:225},{id:'n16',size:'10 GB',price:250}],
-  premium:[{id:'p01',size:'1.7 GB',price:57},{id:'p02',size:'2.6 GB',price:83},{id:'p03',size:'3.4 GB',price:100},{id:'p04',size:'4 GB',price:135},{id:'p05',size:'5.4 GB',price:160},{id:'p06',size:'6.2 GB',price:180},{id:'p07',size:'9.5 GB',price:280}],
-  sete:[{id:'s01',size:'1.7 GB',price:49},{id:'s02',size:'2.9 GB',price:85},{id:'s03',size:'3.4 GB',price:90},{id:'s04',size:'5.3 GB',price:145},{id:'s05',size:'7.2 GB',price:200},{id:'s06',size:'11 GB',price:290}],
-  mensal:[{id:'m01',size:'2.8 GB',price:95},{id:'m02',size:'5.8 GB',price:195},{id:'m03',size:'7.8 GB',price:210},{id:'m04',size:'10.8 GB',price:320},{id:'m05',size:'17.8 GB',price:480},{id:'m06',size:'20.8 GB',price:575},{id:'m07',size:'32.8 GB',price:950}],
-  diamante:[{id:'d01',size:'11 GB',price:450,extra:'📞 Chamadas+SMS ilim.'},{id:'d02',size:'15 GB',price:580,extra:'📞 Chamadas+SMS ilim.'},{id:'d03',size:'21 GB',price:720,extra:'📞 Chamadas+SMS ilim.'},{id:'d04',size:'30 GB',price:970,extra:'📞 Chamadas+SMS ilim.'},{id:'d05',size:'50 GB',price:1490,extra:'📞 Chamadas+SMS ilim.'}]
+// ── Catálogo ──
+const PKGS = {
+  diarias:[
+    {id:'n01',name:'Diário 10',size:'380 MB', price:10, dur:'1 dia(s)'},
+    {id:'n02',name:'Diário 13',size:'512 MB', price:13, dur:'1 dia(s)'},
+    {id:'n03',name:'Diário 17',size:'624 MB', price:17, dur:'1 dia(s)'},
+    {id:'n04',name:'Diário 20',size:'780 MB', price:20, dur:'1 dia(s)'},
+    {id:'n05',name:'Diário 25',size:'1 GB',   price:25, dur:'1 dia(s)'},
+    {id:'n06',name:'Diário 28',size:'1.1 GB', price:28, dur:'1 dia(s)'},
+    {id:'n07',name:'Diário 41',size:'1.6 GB', price:41, dur:'1 dia(s)'},
+    {id:'n08',name:'Diário 50',size:'2 GB',   price:50, dur:'1 dia(s)'},
+    {id:'n09',name:'Diário 75',size:'3 GB',   price:75, dur:'1 dia(s)'},
+    {id:'n10',name:'Diário 100',size:'4 GB',  price:100,dur:'1 dia(s)'},
+    {id:'n11',name:'Diário 125',size:'5 GB',  price:125,dur:'1 dia(s)'},
+    {id:'n12',name:'Diário 150',size:'6 GB',  price:150,dur:'1 dia(s)'},
+    {id:'n13',name:'Diário 175',size:'7 GB',  price:175,dur:'1 dia(s)'},
+    {id:'n14',name:'Diário 200',size:'8 GB',  price:200,dur:'1 dia(s)'},
+    {id:'n15',name:'Diário 225',size:'9 GB',  price:225,dur:'1 dia(s)'},
+    {id:'n16',name:'Diário 250',size:'10 GB', price:250,dur:'1 dia(s)'},
+  ],
+  semanais:[
+    {id:'p01',name:'Premium 57', size:'1.7 GB',price:57, dur:'3 dia(s)'},
+    {id:'p02',name:'Premium 83', size:'2.6 GB',price:83, dur:'3 dia(s)'},
+    {id:'p03',name:'Premium 100',size:'3.4 GB',price:100,dur:'3 dia(s)'},
+    {id:'p04',name:'Premium 135',size:'4 GB',  price:135,dur:'3 dia(s)'},
+    {id:'p05',name:'Premium 160',size:'5.4 GB',price:160,dur:'3 dia(s)'},
+    {id:'p06',name:'Premium 180',size:'6.2 GB',price:180,dur:'3 dia(s)'},
+    {id:'p07',name:'Premium 280',size:'9.5 GB',price:280,dur:'3 dia(s)'},
+    {id:'s01',name:'Semanal 49', size:'1.7 GB',price:49, dur:'7 dia(s)'},
+    {id:'s02',name:'Semanal 85', size:'2.9 GB',price:85, dur:'7 dia(s)'},
+    {id:'s03',name:'Semanal 90', size:'3.4 GB',price:90, dur:'7 dia(s)'},
+    {id:'s04',name:'Semanal 145',size:'5.3 GB',price:145,dur:'7 dia(s)'},
+    {id:'s05',name:'Semanal 200',size:'7.2 GB',price:200,dur:'7 dia(s)'},
+    {id:'s06',name:'Semanal 290',size:'11 GB', price:290,dur:'7 dia(s)'},
+  ],
+  mensais:[
+    {id:'m01',name:'Mensal 95', size:'2.8 GB', price:95, dur:'30 dia(s)'},
+    {id:'m02',name:'Mensal 195',size:'5.8 GB', price:195,dur:'30 dia(s)'},
+    {id:'m03',name:'Mensal 210',size:'7.8 GB', price:210,dur:'30 dia(s)'},
+    {id:'m04',name:'Mensal 320',size:'10.8 GB',price:320,dur:'30 dia(s)'},
+    {id:'m05',name:'Mensal 480',size:'17.8 GB',price:480,dur:'30 dia(s)'},
+    {id:'m06',name:'Mensal 575',size:'20.8 GB',price:575,dur:'30 dia(s)'},
+    {id:'m07',name:'Mensal 950',size:'32.8 GB',price:950,dur:'30 dia(s)'},
+  ],
+  infinitas:[
+    {id:'d01',name:'Diamante 450', size:'11 GB',price:450, dur:'30 dia(s)',calls:'Chamadas + SMS ilim.'},
+    {id:'d02',name:'Diamante 580', size:'15 GB',price:580, dur:'30 dia(s)',calls:'Chamadas + SMS ilim.'},
+    {id:'d03',name:'Diamante 720', size:'21 GB',price:720, dur:'30 dia(s)',calls:'Chamadas + SMS ilim.'},
+    {id:'d04',name:'Diamante 970', size:'30 GB',price:970, dur:'30 dia(s)',calls:'Chamadas + SMS ilim.'},
+    {id:'d05',name:'Diamante 1490',size:'50 GB',price:1490,dur:'30 dia(s)',calls:'Chamadas + SMS ilim.'},
+  ]
 }
-const BADGES={normal:'',premium:'<div class="pkg-badge" style="background:#f59e0b;color:#000">3D</div>',sete:'<div class="pkg-badge" style="background:#22c55e;color:#000">7D</div>',mensal:'<div class="pkg-badge" style="background:#8b5cf6;color:#fff">30D</div>',diamante:'<div class="pkg-badge" style="background:#fbbf24;color:#000">💎</div>'}
-const CATLABELS={normal:'📶 Normal',premium:'🔄 Premium 3D',sete:'📅 7 Dias',mensal:'📱 Mensal',diamante:'💎 Diamante'}
-let curCat='normal',curPkg=null,evtSrc=null
-
-function renderGrid(){
-  const pkgs=PKGS[curCat]||[]
-  document.getElementById('pkg-grid').innerHTML=pkgs.map(p=>'<div class="pkg" onclick="openSheet(\''+p.id+'\')">'+(BADGES[curCat]||'')+'<div class="pkg-size">'+p.size+'</div><div class="pkg-price">'+p.price+'<span> MT</span></div>'+(p.extra?'<div class="pkg-extra">'+p.extra+'</div>':'')+'</div>').join('')
-  const note=CATS[curCat]?.note
-  const ne=document.getElementById('cat-note')
-  if(note){ne.textContent='ℹ️ '+note;ne.classList.add('show')}else ne.classList.remove('show')
-  document.querySelectorAll('.tab').forEach((t,i)=>{const cats=['normal','premium','sete','mensal','diamante'];t.classList.toggle('active',cats[i]===curCat)})
+const CAT_NOTES = {
+  diarias: null,
+  semanais: 'ℹ️ Premium: renovável · +100MB ao renovar nos primeiros 3 dias.',
+  mensais:  'ℹ️ ⚠️ Não deve ter Txuna crédito activo antes de activar.',
+  infinitas:'ℹ️ ⚠️ Não deve ter Txuna crédito activo. Inclui chamadas + SMS ilimitadas.',
 }
-function setCat(id){curCat=id;renderGrid()}
+const CATS = ['diarias','semanais','mensais','infinitas']
+const CLABELS = {diarias:'Diárias',semanais:'Semanais',mensais:'Mensais',infinitas:'Infinitas'}
 
-function openSheet(id){
-  const p=Object.values(PKGS).flat().find(x=>x.id===id);if(!p)return
-  curPkg=p
-  document.getElementById('sh-size').textContent=p.size
-  document.getElementById('sh-cat').textContent=CATLABELS[curCat]||''
-  document.getElementById('sh-price').textContent=p.price
-  document.getElementById('sh-phone').value=''
-  document.getElementById('sh-err').style.display='none'
-  document.getElementById('sh-btn').disabled=false
-  document.getElementById('sh-btn').textContent='Pagar e Encomendar'
+let curCat = 'diarias', curIdx = 0, curPkg = null, evtSrc = null
+
+// ── Carousel ──
+const outer = document.getElementById('carousel-outer')
+
+function cardHtml(p) {
+  return '<div class="vcard">' +
+    '<div class="vcard-header">' +
+      '<span class="vcard-name">'+p.name+'</span>' +
+      '<button class="vcard-buy" onclick="openBuy(\''+p.id+'\');event.stopPropagation()">Activar</button>' +
+    '</div>' +
+    '<div class="vcard-info">' +
+      '<div class="vi-price"><span>'+p.price+' MT</span></div>' +
+      '<div class="vi-dur"><span>'+p.dur+'</span></div>' +
+    '</div>' +
+    '<div class="vcard-data">' +
+      '<div class="vdata-left">' +
+        '<div class="arrows"><span class="arr-up">▲</span><span class="arr-dn">▼</span></div>' +
+        '<span class="vdata-label">Dados</span>' +
+      '</div>' +
+      '<span class="vdata-size">'+p.size+'</span>' +
+    '</div>' +
+    (p.calls ? '<div class="vcard-extra"><div class="vextra-left"><span class="vextra-icon">📞</span><span class="vextra-label">Voz + SMS</span></div><span class="vextra-val">'+p.calls+'</span></div>' : '') +
+    '<div class="vcard-footer"><button class="share-btn" onclick="event.stopPropagation()">⋮</button></div>' +
+  '</div>'
+}
+
+function renderCarousel() {
+  const pkgs = PKGS[curCat] || []
+  outer.innerHTML = pkgs.map(p => '<div class="carousel-slide">'+cardHtml(p)+'</div>').join('')
+  outer.scrollLeft = 0
+  curIdx = 0
+  renderDots(pkgs.length)
+  const ne = document.getElementById('cat-note')
+  const note = CAT_NOTES[curCat]
+  if (note) { ne.textContent = note; ne.classList.add('show') } else ne.classList.remove('show')
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', CATS[i]===curCat))
+}
+
+function snapTo(idx) {
+  const total = (PKGS[curCat]||[]).length
+  curIdx = Math.max(0, Math.min(idx, total - 1))
+  outer.scrollTo({ left: curIdx * outer.clientWidth, behavior: 'smooth' })
+  renderDots(total)
+}
+
+function renderDots(n) {
+  document.getElementById('dots').innerHTML =
+    Array.from({length:n},(_,i)=>'<div class="dot'+(i===curIdx?' active':'')+'"></div>').join('')
+}
+
+function setCat(id) { curCat = id; renderCarousel() }
+
+// Update dots on native scroll (finger swipe)
+outer.addEventListener('scroll', () => {
+  if (!outer.clientWidth) return
+  const idx = Math.round(outer.scrollLeft / outer.clientWidth)
+  if (idx !== curIdx) { curIdx = idx; renderDots() }
+}, {passive: true})
+
+// ── Sheet ──
+function openBuy(id) {
+  const all = Object.values(PKGS).flat()
+  const p = all.find(x=>x.id===id); if(!p) return
+  curPkg = p
+  document.getElementById('sh-size').textContent = p.name
+  document.getElementById('sh-cat').textContent  = CLABELS[curCat]||'' + ' · ' + p.dur
+  document.getElementById('sh-price').textContent= p.price
+  document.getElementById('sh-phone').value = ''
+  document.getElementById('sh-err').style.display = 'none'
+  document.getElementById('sh-btn').disabled = false
+  document.getElementById('sh-btn').textContent = 'Pagar e Encomendar'
   shShow('buy')
   document.getElementById('overlay').classList.add('open')
   setTimeout(()=>document.getElementById('sheet').classList.add('open'),10)
 }
-function closeSheet(){
+function closeSheet() {
   document.getElementById('sheet').classList.remove('open')
   document.getElementById('overlay').classList.remove('open')
-  if(evtSrc){evtSrc.close();evtSrc=null}
-  setTimeout(()=>shShow('buy'),300)
+  if (evtSrc) { evtSrc.close(); evtSrc = null }
+  setTimeout(()=>shShow('buy'), 300)
 }
-function shShow(s){['buy','pending','success','failed'].forEach(x=>document.getElementById('s-'+x).style.display=(x===s?'block':'none'))}
+function shShow(s) { ['buy','pending','success','failed'].forEach(x=>document.getElementById('s-'+x).style.display=(x===s?'block':'none')) }
 
-async function pay(){
-  const phone=document.getElementById('sh-phone').value.trim()
-  const ee=document.getElementById('sh-err');ee.style.display='none'
-  if(!phone){ee.textContent='Introduza o número de telemóvel.';ee.style.display='block';return}
-  const btn=document.getElementById('sh-btn');btn.disabled=true;btn.textContent='A processar…'
-  try{
-    const r=await fetch('/api/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone,bundleId:curPkg.id})})
-    const d=await r.json()
-    if(!r.ok){ee.textContent=d.error||'Erro ao processar.';ee.style.display='block';btn.disabled=false;btn.textContent='Pagar e Encomendar';return}
-    document.getElementById('sh-pend-phone').textContent=phone
-    document.getElementById('sh-method-lbl').textContent=d.method==='mpesa'?'M-Pesa':'e-Mola'
-    document.getElementById('sh-ok-pkg').textContent=curPkg.size+' — '+curPkg.price+' MT'
-    shShow('pending');listenOrder(d.txId)
-  }catch{ee.textContent='Erro de ligação. Tente novamente.';ee.style.display='block';btn.disabled=false;btn.textContent='Pagar e Encomendar'}
+async function pay() {
+  const phone = document.getElementById('sh-phone').value.trim()
+  const ee = document.getElementById('sh-err'); ee.style.display='none'
+  if (!phone) { ee.textContent='Introduza o número de telemóvel.'; ee.style.display='block'; return }
+  const btn = document.getElementById('sh-btn'); btn.disabled=true; btn.textContent='A processar…'
+  try {
+    const r = await fetch('/api/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone,bundleId:curPkg.id})})
+    const d = await r.json()
+    if (!r.ok) { ee.textContent=d.error||'Erro ao processar.'; ee.style.display='block'; btn.disabled=false; btn.textContent='Pagar e Encomendar'; return }
+    document.getElementById('sh-pend-phone').textContent = phone
+    document.getElementById('sh-method-lbl').textContent = d.method==='mpesa'?'M-Pesa':'e-Mola'
+    document.getElementById('sh-ok-pkg').textContent = curPkg.name+' — '+curPkg.price+' MT'
+    shShow('pending'); listenOrder(d.txId)
+  } catch { ee.textContent='Erro de ligação. Tente novamente.'; ee.style.display='block'; btn.disabled=false; btn.textContent='Pagar e Encomendar' }
 }
-function listenOrder(txId){
-  if(evtSrc)evtSrc.close()
-  evtSrc=new EventSource('/events/'+txId)
-  evtSrc.onmessage=e=>{const d=JSON.parse(e.data);if(d.status==='succeeded'){evtSrc.close();shShow('success')}if(d.status==='failed'){evtSrc.close();document.getElementById('sh-fail-msg').textContent=d.error||'Tempo expirou.';shShow('failed')}}
-  evtSrc.onerror=()=>{evtSrc.close();setTimeout(()=>listenOrder(txId),3000)}
+function listenOrder(txId) {
+  if (evtSrc) evtSrc.close()
+  evtSrc = new EventSource('/events/'+txId)
+  evtSrc.onmessage = e => { const d=JSON.parse(e.data); if(d.status==='succeeded'){evtSrc.close();shShow('success')} if(d.status==='failed'){evtSrc.close();document.getElementById('sh-fail-msg').textContent=d.error||'Tempo expirou.';shShow('failed')} }
+  evtSrc.onerror = () => { evtSrc.close(); setTimeout(()=>listenOrder(txId),3000) }
 }
+
+// Init
+renderCarousel()
 </script>
 </body></html>`
 }
