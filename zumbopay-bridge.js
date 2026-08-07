@@ -179,6 +179,9 @@ async function router(req, res) {
 
   // ── Páginas públicas ──────────────────────────────────────────────────────
   if (method === 'GET' && path === '/')         return html(res, landingPage())
+  if (method === 'GET' && path === '/static/vodacom.webp') {
+    try { const img = await import('fs/promises').then(f=>f.readFile('./attached_assets/image_1786121779688.webp')); res.writeHead(200,{'Content-Type':'image/webp','Cache-Control':'max-age=86400'}); return res.end(img) } catch { res.writeHead(404); return res.end() }
+  }
   if (method === 'GET' && path === '/megas')    return html(res, megasPage())
   if (method === 'GET' && path === '/deposito') return html(res, depositPage())
   if (method === 'GET' && path === '/ping')     return json(res, { ok: true })
@@ -587,12 +590,38 @@ function megasPage() {
 body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;overflow-x:hidden;user-select:none;-webkit-user-select:none;}
 
 /* ── Nav ── */
-.nav{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#fff;border-bottom:1px solid #e5e5ea;position:sticky;top:0;z-index:50;}
-.nav-logo{display:flex;align-items:center;gap:8px;text-decoration:none;color:#1c1c1e;}
-.nav-logo-icon{width:28px;height:28px;background:#cc0000;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;}
+.nav{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:#fff;border-bottom:1px solid #e5e5ea;position:sticky;top:0;z-index:50;}
+.nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none;color:#1c1c1e;}
+.nav-logo-img{width:36px;height:36px;object-fit:contain;}
 .nav-logo-text{font-size:15px;font-weight:800;}
 .nav-logo-text span{color:#cc0000;}
-.nav-back{font-size:13px;color:#cc0000;text-decoration:none;font-weight:600;}
+.nav-right{display:flex;align-items:center;gap:4px;}
+.nav-icon-btn{background:none;border:none;cursor:pointer;padding:8px;color:#1c1c1e;display:flex;align-items:center;justify-content:center;border-radius:8px;}
+.nav-icon-btn:active{background:#f2f2f7;}
+.nav-icon-btn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+
+/* ── Search overlay ── */
+.search-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:none;backdrop-filter:blur(3px);}
+.search-overlay.open{display:flex;flex-direction:column;}
+.search-bar{background:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px;}
+.search-inp{flex:1;border:none;outline:none;font-size:16px;font-family:inherit;background:transparent;color:#1c1c1e;}
+.search-inp::placeholder{color:#8e8e93;}
+.search-close{background:none;border:none;cursor:pointer;font-size:22px;color:#8e8e93;padding:4px 8px;}
+
+/* ── Side drawer (menu) ── */
+.drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:300;display:none;}
+.drawer-overlay.open{display:block;}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:75%;max-width:280px;background:#fff;z-index:301;transform:translateX(100%);transition:transform .3s cubic-bezier(.32,.72,0,1);padding:0;overflow-y:auto;}
+.drawer.open{transform:translateX(0);}
+.drawer-head{padding:20px 20px 16px;border-bottom:1px solid #e5e5ea;display:flex;align-items:center;gap:12px;}
+.drawer-logo{width:40px;height:40px;object-fit:contain;}
+.drawer-brand{font-size:16px;font-weight:800;color:#1c1c1e;}
+.drawer-brand span{color:#cc0000;}
+.drawer-menu{list-style:none;padding:8px 0;}
+.drawer-menu li a{display:flex;align-items:center;gap:14px;padding:14px 20px;font-size:15px;color:#1c1c1e;text-decoration:none;font-weight:500;}
+.drawer-menu li a:active{background:#f2f2f7;}
+.drawer-menu li a .dm-icon{font-size:18px;width:24px;text-align:center;}
+.drawer-divider{height:1px;background:#e5e5ea;margin:4px 0;}
 
 /* ── Offer header ── */
 .offer-header{padding:24px 20px 32px;background:#fff;border-bottom:1px solid #e5e5ea;text-align:left;}
@@ -704,11 +733,44 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 
 <nav class="nav">
   <a href="/" class="nav-logo">
-    <div class="nav-logo-icon">🌐</div>
+    <img src="/static/vodacom.webp" alt="Net Serviços" class="nav-logo-img">
     <div class="nav-logo-text">Net <span>Serviços</span></div>
   </a>
-  <a href="/" class="nav-back">← Início</a>
+  <div class="nav-right">
+    <button class="nav-icon-btn" onclick="openSearch()" aria-label="Pesquisar">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    </button>
+    <button class="nav-icon-btn" onclick="openDrawer()" aria-label="Menu">
+      <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+  </div>
 </nav>
+
+<!-- Search overlay -->
+<div class="search-overlay" id="search-overlay" onclick="closeSearch(event)">
+  <div class="search-bar" onclick="event.stopPropagation()">
+    <svg style="width:20px;height:20px;stroke:#8e8e93;fill:none;stroke-width:2;stroke-linecap:round;flex-shrink:0" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input class="search-inp" id="search-inp" type="search" placeholder="Pesquisar pacote…" oninput="searchPkgs(this.value)">
+    <button class="search-close" onclick="closeSearch()">✕</button>
+  </div>
+  <div id="search-results" style="background:#fff;overflow-y:auto;flex:1"></div>
+</div>
+
+<!-- Side drawer -->
+<div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-head">
+    <img src="/static/vodacom.webp" alt="logo" class="drawer-logo">
+    <div class="drawer-brand">Net <span>Serviços</span></div>
+  </div>
+  <ul class="drawer-menu">
+    <li><a href="/"><span class="dm-icon">🏠</span>Início</a></li>
+    <li><a href="/megas"><span class="dm-icon">📶</span>Pacotes de Internet</a></li>
+    <li><a href="/deposito"><span class="dm-icon">💳</span>Depósito</a></li>
+    <div class="drawer-divider"></div>
+    <li><a href="#" onclick="closeDrawer()"><span class="dm-icon">✕</span>Fechar menu</a></li>
+  </ul>
+</div>
 
 <div class="offer-header">
   <h2 class="offer-title">Ofertas de Internet</h2>
@@ -842,6 +904,35 @@ function listenOrder(txId) {
   evtSrc.onmessage = e => { const d=JSON.parse(e.data); if(d.status==='succeeded'){evtSrc.close();shShow('success')} if(d.status==='failed'){evtSrc.close();document.getElementById('sh-fail-msg').textContent=d.error||'Tempo expirou.';shShow('failed')} }
   evtSrc.onerror = () => { evtSrc.close(); setTimeout(()=>listenOrder(txId),3000) }
 }
+
+// ── Search ──
+function openSearch() {
+  document.getElementById('search-overlay').classList.add('open')
+  setTimeout(()=>document.getElementById('search-inp').focus(),100)
+}
+function closeSearch(e) {
+  if (e && e.target !== document.getElementById('search-overlay')) return
+  document.getElementById('search-overlay').classList.remove('open')
+  document.getElementById('search-inp').value = ''
+  document.getElementById('search-results').innerHTML = ''
+}
+function searchPkgs(q) {
+  const res = document.getElementById('search-results')
+  if (!q.trim()) { res.innerHTML = ''; return }
+  const all = Object.values(PKGS_ALL).flat()
+  const found = all.filter(p => p.name.toLowerCase().includes(q.toLowerCase()) || String(p.price).includes(q) || p.size.toLowerCase().includes(q.toLowerCase()))
+  if (!found.length) { res.innerHTML = '<p style="padding:20px 16px;color:#8e8e93;font-size:14px">Nenhum pacote encontrado.</p>'; return }
+  res.innerHTML = found.map(p =>
+    '<div onclick="closeSearch();openBuy(\''+p.id+'\')" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #e5e5ea;cursor:pointer">' +
+    '<div><div style="font-size:15px;font-weight:600;color:#1c1c1e">'+p.name+'</div>' +
+    '<div style="font-size:12px;color:#8e8e93;margin-top:2px">'+p.size+' · '+p.dur+'</div></div>' +
+    '<div style="font-size:16px;font-weight:700;color:#cc0000">'+p.price+' MT</div></div>'
+  ).join('')
+}
+
+// ── Drawer ──
+function openDrawer()  { document.getElementById('drawer').classList.add('open'); document.getElementById('drawer-overlay').classList.add('open') }
+function closeDrawer() { document.getElementById('drawer').classList.remove('open'); document.getElementById('drawer-overlay').classList.remove('open') }
 
 // Init: diarias já visível por defeito (HTML pré-renderizado)
 </script>
