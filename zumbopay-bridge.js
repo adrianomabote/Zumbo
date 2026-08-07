@@ -1,19 +1,6 @@
 /**
- * ZumboPay Bridge — Servidor autónomo de bridge ZumboPay → MolaBet
- *
- * Como usar:
- *   node zumbopay-bridge.js
- *
- * URL a registar no ZumboPay (Painel → Programadores → Webhooks):
- *   https://<domínio-deste-servidor>/webhook
- *
- * Variáveis de ambiente (opcionais — já têm valores por defeito):
- *   PORT                  Porta do servidor (default: 4000)
- *   ZUMBO_WEBHOOK_SECRET  Secret HMAC do ZumboPay (default: 'teste.com')
- *   ZUMBO_API_KEY         API Key do ZumboPay
- *   ZUMBO_MERCHANT_ID     Merchant ID do ZumboPay
- *   MOLABET_URL           URL base do MolaBet (ex: https://molabet.replit.app)
- *   BRIDGE_PASSWORD       Senha para aceder ao dashboard (default: 'admin')
+ * ZumboPay Deposit App
+ * Fluxo: utilizador introduz telemóvel + valor → ZumboPay envia USSD/PIN → confirma pagamento
  */
 
 import express from 'express'
@@ -21,457 +8,691 @@ import { createHmac, timingSafeEqual, randomBytes } from 'crypto'
 import { createServer } from 'http'
 
 // ── Configuração ──────────────────────────────────────────────────────────────
-const PORT                = process.env.PORT                || 4000
-const ZUMBO_WEBHOOK_SECRET= process.env.ZUMBO_WEBHOOK_SECRET|| 'teste.com'
-const ZUMBO_API_KEY       = process.env.ZUMBO_API_KEY       || 'zk_live_a694231e0f188fe3599e4de8feda28b35714ed9b6fa3cd0e'
-const ZUMBO_MERCHANT_ID   = process.env.ZUMBO_MERCHANT_ID   || 'MCH_B29C53549C'
-const MOLABET_URL         = process.env.MOLABET_URL         || ''   // ex: https://molabet.replit.app
-const BRIDGE_PASSWORD     = process.env.BRIDGE_PASSWORD     || 'admin'
+const PORT               = process.env.PORT               || 5000
+const ZUMBO_API_KEY      = process.env.ZUMBO_API_KEY      || 'zk_live_a694231e0f188fe3599e4de8feda28b35714ed9b6fa3cd0e'
+const ZUMBO_MERCHANT_ID  = process.env.ZUMBO_MERCHANT_ID  || 'MCH_B29C53549C'
+const ZUMBO_WEBHOOK_SECRET = process.env.ZUMBO_WEBHOOK_SECRET || 'teste.com'
+const ZUMBO_API_BASE     = process.env.ZUMBO_API_BASE     || 'https://api.zumbopay.co.mz'
 
-// ── Armazenamento em memória ──────────────────────────────────────────────────
-const webhooks   = []   // todos os webhooks recebidos (max 500)
-const relayLog   = []   // log dos reenvios para o MolaBet (max 200)
-
-function pushWebhook(entry) {
-  webhooks.unshift(entry)
-  if (webhooks.length > 500) webhooks.pop()
-}
-function pushRelay(entry) {
-  relayLog.unshift(entry)
-  if (relayLog.length > 200) relayLog.pop()
-}
+// ── Armazenamento de transacções em memória ───────────────────────────────────
+const transactions = new Map() // id → { id, phone, amount, status, ts, ref }
 
 // ── App Express ───────────────────────────────────────────────────────────────
 const app = express()
+app.use(express.json())
 
-// ── SSE clients (para actualização em tempo real no browser) ─────────────────
-const sseClients = new Set()
-function broadcast(data) {
+// ── SSE clients ───────────────────────────────────────────────────────────────
+const sseClients = new Map() // txId → Set<res>
+function notifyTx(txId, data) {
+  const clients = sseClients.get(txId)
+  if (!clients) return
   const msg = `data: ${JSON.stringify(data)}\n\n`
-  for (const res of sseClients) {
+  for (const res of clients) {
     try { res.write(msg) } catch {}
   }
 }
 
-// ── Endpoint SSE (tempo real) ─────────────────────────────────────────────────
-app.get('/events', (req, res) => {
+// ── SSE por transacção ────────────────────────────────────────────────────────
+app.get('/events/:txId', (req, res) => {
+  const { txId } = req.params
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache')
   res.setHeader('Connection', 'keep-alive')
   res.flushHeaders()
-  sseClients.add(res)
-  req.on('close', () => sseClients.delete(res))
+  if (!sseClients.has(txId)) sseClients.set(txId, new Set())
+  sseClients.get(txId).add(res)
+  req.on('close', () => {
+    sseClients.get(txId)?.delete(res)
+  })
+  // enviar estado actual imediatamente
+  const tx = transactions.get(txId)
+  if (tx) res.write(`data: ${JSON.stringify({ status: tx.status })}\n\n`)
 })
 
-// ── Endpoint de health check ──────────────────────────────────────────────────
-app.get('/ping', (_req, res) => res.json({ ok: true, ts: new Date().toISOString() }))
+// ── Health check ──────────────────────────────────────────────────────────────
+app.get('/ping', (_req, res) => res.json({ ok: true }))
 
-// ── Endpoint de API (JSON) — lista transações ─────────────────────────────────
-app.get('/api/webhooks', (req, res) => {
-  const pwd = req.headers['x-bridge-password'] || req.query.password
-  if (pwd !== BRIDGE_PASSWORD) return res.status(401).json({ error: 'Senha inválida' })
-  res.json({ webhooks, relayLog })
+// ── Iniciar depósito ──────────────────────────────────────────────────────────
+app.post('/api/deposit', async (req, res) => {
+  const { phone, amount } = req.body || {}
+
+  if (!phone || !amount) {
+    return res.status(400).json({ error: 'Telemóvel e valor são obrigatórios' })
+  }
+
+  const phoneClean = String(phone).replace(/\s+/g, '')
+  const amountNum  = Number(amount)
+
+  if (isNaN(amountNum) || amountNum <= 0) {
+    return res.status(400).json({ error: 'Valor inválido' })
+  }
+
+  const txId = randomBytes(6).toString('hex')
+  const tx   = {
+    id:     txId,
+    phone:  phoneClean,
+    amount: amountNum,
+    status: 'pending',   // pending | succeeded | failed
+    ts:     new Date().toISOString(),
+    ref:    null,
+    error:  null,
+  }
+  transactions.set(txId, tx)
+
+  // Responder imediatamente com o txId
+  res.json({ txId, status: 'pending' })
+
+  // Iniciar colecta no ZumboPay em background
+  initiateZumboPayment(tx)
 })
 
-// ── Relay para o MolaBet ──────────────────────────────────────────────────────
-async function relayToMolaBet(rawBody, headers) {
-  if (!MOLABET_URL) {
-    pushRelay({ ts: new Date().toISOString(), status: 'skipped', reason: 'MOLABET_URL não configurado' })
-    return
-  }
-  const url = `${MOLABET_URL.replace(/\/$/, '')}/api/webhook/zumbopay`
-  try {
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-zumbopay-signature': headers['x-zumbopay-signature'] || '',
-        'x-bridge-relay': '1',
-      },
-      body: rawBody,
-    })
-    const text = await resp.text().catch(() => '')
-    pushRelay({ ts: new Date().toISOString(), status: resp.status, body: text.slice(0, 200) })
-    broadcast({ type: 'relay', status: resp.status })
-    console.log(`[Relay] → MolaBet ${url} | status=${resp.status}`)
-  } catch (err) {
-    pushRelay({ ts: new Date().toISOString(), status: 'error', reason: err.message })
-    broadcast({ type: 'relay', status: 'error' })
-    console.error('[Relay] Erro:', err.message)
-  }
-}
+// ── Estado de uma transacção ──────────────────────────────────────────────────
+app.get('/api/deposit/:txId', (req, res) => {
+  const tx = transactions.get(req.params.txId)
+  if (!tx) return res.status(404).json({ error: 'Transacção não encontrada' })
+  res.json(tx)
+})
 
-// ── Webhook endpoint — regista no ZumboPay ────────────────────────────────────
-app.post('/webhook', express.raw({ type: '*/*' }), async (req, res) => {
+// ── Webhook do ZumboPay ───────────────────────────────────────────────────────
+app.post('/webhook', express.raw({ type: '*/*' }), (req, res) => {
   const rawBody = req.body?.toString() || ''
   const sig     = req.headers['x-zumbopay-signature'] || ''
-  const ts      = new Date().toISOString()
 
-  // 1. Verificar assinatura HMAC
-  let sigOk = true
+  // Verificar assinatura
   if (ZUMBO_WEBHOOK_SECRET) {
     try {
-      const expBuf = Buffer.from(
-        createHmac('sha256', ZUMBO_WEBHOOK_SECRET).update(rawBody).digest('hex'), 'hex'
-      )
-      const sigBuf = Buffer.from(sig, 'hex')
-      sigOk = sigBuf.length > 0 && sigBuf.length === expBuf.length && timingSafeEqual(sigBuf, expBuf)
+      const expected = createHmac('sha256', ZUMBO_WEBHOOK_SECRET).update(rawBody).digest('hex')
+      const expBuf   = Buffer.from(expected, 'hex')
+      const sigBuf   = Buffer.from(sig, 'hex')
+      const ok = sigBuf.length > 0 && sigBuf.length === expBuf.length && timingSafeEqual(sigBuf, expBuf)
+      if (!ok) return res.status(401).json({ error: 'Assinatura inválida' })
     } catch {
-      sigOk = false
+      return res.status(401).json({ error: 'Assinatura inválida' })
     }
   }
 
-  // 2. Parse do payload
   let event = {}
   try { event = JSON.parse(rawBody) } catch {}
 
-  const entry = {
-    id:        randomBytes(4).toString('hex'),
-    ts,
-    event:     event.event || '?',
-    ref:       event.data?.source_id || event.data?.reference || event.data?.id || '—',
-    phone:     event.data?.channel_reference || event.customerPhone || event.data?.phone || '—',
-    amount:    event.data?.amount ?? '—',
-    currency:  event.data?.currency || 'MZN',
-    method:    event.data?.payment_method || event.transaction?.payment_method || '—',
-    sigOk,
-    raw:       rawBody.slice(0, 2000),
-    relayed:   false,
-    relayStatus: null,
-  }
+  const ref    = event.data?.source_id || event.data?.reference || event.data?.id
+  const status = event.event === 'payment.succeeded' ? 'succeeded'
+               : event.event === 'payment.failed'    ? 'failed'
+               : null
 
-  pushWebhook(entry)
-  broadcast({ type: 'webhook', entry })
-
-  console.log(`[Webhook] ${event.event} | ref=${entry.ref} | phone=${entry.phone} | amount=${entry.amount} | sigOk=${sigOk}`)
-
-  if (!sigOk) {
-    console.warn('[Webhook] Assinatura inválida')
-    res.status(401).json({ error: 'Assinatura inválida' })
-    // Ainda assim guardar para diagnóstico — mas não reenviar
-    return
-  }
-
-  // 3. Reenviar para o MolaBet em background
-  if (['payment.succeeded', 'payment.failed', 'payout.completed', 'payout.failed'].includes(event.event)) {
-    entry.relayed = true
-    relayToMolaBet(rawBody, req.headers).then(r => {
-      entry.relayStatus = 'done'
-    })
+  if (status && ref) {
+    // Procurar transacção pelo ref
+    for (const [txId, tx] of transactions) {
+      if (tx.ref === ref || tx.id === ref) {
+        tx.status = status
+        notifyTx(txId, { status })
+        break
+      }
+    }
   }
 
   res.json({ ok: true })
 })
 
-// ── Dashboard HTML ────────────────────────────────────────────────────────────
-function renderDashboard() {
-  return `<!DOCTYPE html>
+// ── Chamar a API do ZumboPay para iniciar colecta ─────────────────────────────
+async function initiateZumboPayment(tx) {
+  try {
+    const body = JSON.stringify({
+      amount:      tx.amount,
+      currency:    'MZN',
+      phone:       tx.phone,
+      merchant_id: ZUMBO_MERCHANT_ID,
+      reference:   tx.id,
+      description: 'Depósito',
+    })
+
+    const resp = await fetch(`${ZUMBO_API_BASE}/v1/collections`, {
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${ZUMBO_API_KEY}`,
+        'X-Api-Key':     ZUMBO_API_KEY,
+      },
+      body,
+    })
+
+    const data = await resp.json().catch(() => ({}))
+    console.log('[ZumboPay] POST /v1/collections →', resp.status, JSON.stringify(data))
+
+    if (resp.ok) {
+      tx.ref    = data.id || data.reference || data.source_id || tx.id
+      tx.status = 'pending'
+      notifyTx(tx.id, { status: 'pending' })
+
+      // Polling de estado (caso não haja webhook)
+      pollStatus(tx)
+    } else {
+      tx.status = 'failed'
+      tx.error  = data.message || data.error || `Erro ${resp.status}`
+      notifyTx(tx.id, { status: 'failed', error: tx.error })
+    }
+  } catch (err) {
+    console.error('[ZumboPay] Erro ao iniciar pagamento:', err.message)
+    tx.status = 'failed'
+    tx.error  = 'Erro de ligação ao ZumboPay'
+    notifyTx(tx.id, { status: 'failed', error: tx.error })
+  }
+}
+
+// ── Polling de estado ─────────────────────────────────────────────────────────
+async function pollStatus(tx, attempts = 0) {
+  if (tx.status !== 'pending') return
+  if (attempts > 20) {              // ~2 min timeout
+    tx.status = 'failed'
+    tx.error  = 'Tempo de espera esgotado. O PIN não foi introduzido.'
+    notifyTx(tx.id, { status: 'failed', error: tx.error })
+    return
+  }
+
+  await sleep(6000)
+  if (tx.status !== 'pending') return
+
+  try {
+    const ref  = tx.ref || tx.id
+    const resp = await fetch(`${ZUMBO_API_BASE}/v1/collections/${ref}`, {
+      headers: {
+        'Authorization': `Bearer ${ZUMBO_API_KEY}`,
+        'X-Api-Key':     ZUMBO_API_KEY,
+      },
+    })
+    const data = await resp.json().catch(() => ({}))
+    console.log(`[Poll] ${ref} → status=${data.status || '?'}`)
+
+    const s = (data.status || '').toLowerCase()
+    if (s === 'successful' || s === 'succeeded' || s === 'completed') {
+      tx.status = 'succeeded'
+      notifyTx(tx.id, { status: 'succeeded' })
+      return
+    }
+    if (s === 'failed' || s === 'rejected' || s === 'cancelled') {
+      tx.status = 'failed'
+      tx.error  = data.message || 'Pagamento recusado ou cancelado'
+      notifyTx(tx.id, { status: 'failed', error: tx.error })
+      return
+    }
+  } catch (err) {
+    console.warn('[Poll] Erro:', err.message)
+  }
+
+  pollStatus(tx, attempts + 1)
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
+
+// ── Página principal ──────────────────────────────────────────────────────────
+app.get('/', (_req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8')
+  res.send(html())
+})
+
+function html() { return `<!DOCTYPE html>
 <html lang="pt">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ZumboPay Bridge — Dashboard</title>
+<title>Depósito</title>
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
-  :root {
-    --bg: #0f1117;
-    --card: #1a1d27;
-    --border: #2a2d3a;
-    --green: #22c55e;
-    --red: #ef4444;
-    --yellow: #f59e0b;
-    --blue: #3b82f6;
-    --text: #e2e8f0;
-    --muted: #64748b;
-    --accent: #6366f1;
-  }
-  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; min-height: 100vh; }
-  header { background: var(--card); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; align-items: center; gap: 16px; }
-  header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
-  header h1 span { color: var(--accent); }
-  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
-  .badge.live { background: rgba(34,197,94,.15); color: var(--green); }
-  .badge.offline { background: rgba(239,68,68,.15); color: var(--red); }
-  .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: pulse 1.5s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-  .header-info { margin-left: auto; display: flex; gap: 12px; align-items: center; font-size: 12px; color: var(--muted); }
-  .header-info strong { color: var(--text); }
-  main { max-width: 1400px; margin: 0 auto; padding: 24px; }
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 16px; margin-bottom: 24px; }
-  .stat { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
-  .stat-label { font-size: 12px; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .5px; }
-  .stat-value { font-size: 28px; font-weight: 700; }
-  .stat-value.green { color: var(--green); }
-  .stat-value.red { color: var(--red); }
-  .stat-value.blue { color: var(--blue); }
-  .stat-value.yellow { color: var(--yellow); }
-  .section { background: var(--card); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 24px; overflow: hidden; }
-  .section-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
-  .section-title { font-size: 14px; font-weight: 600; }
-  .section-count { font-size: 12px; color: var(--muted); }
-  table { width: 100%; border-collapse: collapse; }
-  th { padding: 10px 16px; text-align: left; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--border); background: rgba(255,255,255,.02); }
-  td { padding: 10px 16px; border-bottom: 1px solid rgba(42,45,58,.6); vertical-align: middle; }
-  tr:last-child td { border-bottom: none; }
-  tr:hover td { background: rgba(255,255,255,.02); }
-  .pill { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
-  .pill.success { background: rgba(34,197,94,.12); color: var(--green); }
-  .pill.error { background: rgba(239,68,68,.12); color: var(--red); }
-  .pill.pending { background: rgba(245,158,11,.12); color: var(--yellow); }
-  .pill.info { background: rgba(59,130,246,.12); color: var(--blue); }
-  .pill.gray { background: rgba(100,116,139,.12); color: var(--muted); }
-  .mono { font-family: 'Courier New', monospace; font-size: 12px; color: var(--muted); }
-  .phone { font-weight: 600; color: var(--text); }
-  .amount { font-weight: 700; color: var(--green); }
-  .molabet-url { background: rgba(99,102,241,.08); border: 1px solid rgba(99,102,241,.2); border-radius: 8px; padding: 12px 16px; font-family: monospace; font-size: 13px; color: var(--accent); word-break: break-all; margin-top: 8px; }
-  .config-box { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 24px; }
-  .config-box h2 { font-size: 14px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
-  .config-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
-  .config-row:last-child { border-bottom: none; }
-  .config-key { color: var(--muted); font-size: 12px; }
-  .config-val { font-family: monospace; font-size: 12px; color: var(--text); }
-  .config-val.ok { color: var(--green); }
-  .config-val.warn { color: var(--yellow); }
-  .empty { padding: 40px; text-align: center; color: var(--muted); }
-  .relay-ok { color: var(--green); font-size: 11px; }
-  .relay-no { color: var(--muted); font-size: 11px; }
-  .sig-ok { color: var(--green); }
-  .sig-bad { color: var(--red); }
-  @media(max-width:700px){ th,td{ padding:8px 10px; font-size:12px; } .stats{ grid-template-columns:1fr 1fr; } }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+
+:root {
+  --bg:      #0b0d14;
+  --surface: #12151f;
+  --card:    #181c29;
+  --border:  #242840;
+  --accent:  #4f6ef7;
+  --accent2: #7c3aed;
+  --green:   #22c55e;
+  --red:     #ef4444;
+  --yellow:  #f59e0b;
+  --text:    #e8eaf6;
+  --muted:   #6b7280;
+  --radius:  16px;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+/* ── Logo / marca ── */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 36px;
+}
+.brand-icon {
+  width: 40px; height: 40px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+}
+.brand-name { font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
+.brand-name span { color: var(--accent); }
+
+/* ── Card ── */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 36px 32px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 24px 64px rgba(0,0,0,.4);
+}
+
+.card-title {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  letter-spacing: -0.4px;
+}
+.card-sub {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 28px;
+  line-height: 1.5;
+}
+
+/* ── Inputs ── */
+.field { margin-bottom: 18px; }
+.field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .6px;
+  margin-bottom: 8px;
+}
+.input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.input-icon {
+  position: absolute;
+  left: 14px;
+  font-size: 16px;
+  color: var(--muted);
+  pointer-events: none;
+}
+input {
+  width: 100%;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px 14px 42px;
+  color: var(--text);
+  font-size: 16px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color .2s;
+}
+input:focus { border-color: var(--accent); }
+input::placeholder { color: var(--muted); }
+
+/* Montante com prefixo */
+.prefix {
+  position: absolute;
+  left: 14px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+  pointer-events: none;
+}
+.input-amount { padding-left: 56px; font-size: 22px; font-weight: 700; }
+
+/* ── Botão ── */
+.btn {
+  width: 100%;
+  padding: 16px;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity .2s, transform .1s;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  color: #fff;
+  margin-top: 8px;
+  letter-spacing: .2px;
+}
+.btn:hover { opacity: .9; }
+.btn:active { transform: scale(.99); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ── Estados ── */
+#screen-form    { display: block; }
+#screen-pending { display: none; }
+#screen-success { display: none; }
+#screen-failed  { display: none; }
+
+/* Pending */
+.pending-box {
+  text-align: center;
+  padding: 12px 0 8px;
+}
+.spinner {
+  width: 56px; height: 56px;
+  border: 4px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 24px;
+}
+@keyframes spin { to { transform: rotate(360deg) } }
+.pending-title { font-size: 20px; font-weight: 700; margin-bottom: 10px; }
+.pending-sub {
+  font-size: 14px; color: var(--muted); line-height: 1.6;
+  margin-bottom: 24px;
+}
+.pending-phone {
+  display: inline-block;
+  background: rgba(79,110,247,.12);
+  border: 1px solid rgba(79,110,247,.25);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 20px;
+}
+.pending-amount {
+  font-size: 36px; font-weight: 800;
+  letter-spacing: -1px;
+  margin-bottom: 4px;
+}
+.pending-currency { font-size: 13px; color: var(--muted); margin-bottom: 28px; }
+.step-list {
+  list-style: none;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 20px;
+}
+.step-list li {
+  font-size: 13px;
+  color: var(--muted);
+  padding: 6px 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-bottom: 1px solid var(--border);
+  line-height: 1.5;
+}
+.step-list li:last-child { border-bottom: none; }
+.step-num {
+  min-width: 20px; height: 20px;
+  border-radius: 50%;
+  background: rgba(79,110,247,.18);
+  color: var(--accent);
+  font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  margin-top: 1px;
+}
+
+/* Result screens */
+.result-icon {
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 34px;
+  margin: 8px auto 24px;
+}
+.result-icon.ok  { background: rgba(34,197,94,.15); }
+.result-icon.bad { background: rgba(239,68,68,.15); }
+.result-title { font-size: 22px; font-weight: 700; margin-bottom: 10px; text-align: center; }
+.result-sub   { font-size: 14px; color: var(--muted); line-height: 1.6; text-align: center; margin-bottom: 28px; }
+.result-amount {
+  font-size: 38px; font-weight: 800;
+  letter-spacing: -1px;
+  text-align: center; margin-bottom: 4px;
+}
+.result-currency { font-size: 13px; color: var(--muted); text-align: center; margin-bottom: 28px; }
+
+.tag-ok  { color: var(--green); }
+.tag-bad { color: var(--red); }
+
+.btn-outline {
+  background: transparent;
+  border: 1.5px solid var(--border);
+  color: var(--text);
+}
+.btn-outline:hover { border-color: var(--accent); background: rgba(79,110,247,.08); }
+
+/* Error message */
+.error-msg {
+  background: rgba(239,68,68,.1);
+  border: 1px solid rgba(239,68,68,.25);
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 13px;
+  color: #fca5a5;
+  margin-bottom: 16px;
+  display: none;
+}
+
+@media (max-width: 460px) {
+  .card { padding: 28px 20px; }
+  body { padding: 16px; }
+}
 </style>
 </head>
 <body>
-<header>
-  <h1>ZumboPay <span>Bridge</span></h1>
-  <span class="badge live" id="statusBadge"><span class="dot"></span> Ligado</span>
-  <div class="header-info">
-    Webhook URL: <strong id="webhookUrl">…</strong>
-    &nbsp;·&nbsp; Relay MolaBet: <strong>${MOLABET_URL || 'não configurado'}</strong>
-  </div>
-</header>
 
-<main>
-  <!-- Configuração -->
-  <div class="config-box">
-    <h2>⚙️ Configuração ZumboPay</h2>
-    <div class="config-row">
-      <span class="config-key">API Key</span>
-      <span class="config-val ok">${ZUMBO_API_KEY.slice(0,12)}…${ZUMBO_API_KEY.slice(-6)}</span>
+<div class="brand">
+  <div class="brand-icon">💳</div>
+  <div class="brand-name">Zumbo<span>Pay</span></div>
+</div>
+
+<div class="card">
+
+  <!-- ── Formulário ── -->
+  <div id="screen-form">
+    <div class="card-title">Fazer Depósito</div>
+    <div class="card-sub">Introduza o seu número e o valor que deseja depositar.</div>
+
+    <div id="error-msg" class="error-msg"></div>
+
+    <div class="field">
+      <label>Número de telemóvel</label>
+      <div class="input-wrap">
+        <span class="input-icon">📱</span>
+        <input id="inp-phone" type="tel" placeholder="84 000 0000" maxlength="15" inputmode="tel">
+      </div>
     </div>
-    <div class="config-row">
-      <span class="config-key">Merchant ID</span>
-      <span class="config-val ok">${ZUMBO_MERCHANT_ID}</span>
+
+    <div class="field">
+      <label>Valor a depositar</label>
+      <div class="input-wrap">
+        <span class="prefix">MZN</span>
+        <input id="inp-amount" class="input-amount" type="number" placeholder="0.00" min="1" step="0.01" inputmode="decimal">
+      </div>
     </div>
-    <div class="config-row">
-      <span class="config-key">Webhook Secret</span>
-      <span class="config-val ok">${ZUMBO_WEBHOOK_SECRET ? '✓ configurado' : '✗ não definido'}</span>
-    </div>
-    <div class="config-row">
-      <span class="config-key">Relay → MolaBet</span>
-      <span class="config-val ${MOLABET_URL ? 'ok' : 'warn'}">${MOLABET_URL || '⚠ MOLABET_URL não definido — relay desactivado'}</span>
-    </div>
-    <div class="config-row">
-      <span class="config-key">URL a registar no ZumboPay (Webhooks)</span>
-      <span class="config-val" id="webhookUrlFull" style="color:var(--accent)">a carregar…</span>
-    </div>
+
+    <button class="btn" id="btn-deposit" onclick="startDeposit()">Depositar</button>
   </div>
 
-  <!-- Stats -->
-  <div class="stats">
-    <div class="stat">
-      <div class="stat-label">Total recebidos</div>
-      <div class="stat-value blue" id="statTotal">0</div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">Pagamentos confirmados</div>
-      <div class="stat-value green" id="statSucceeded">0</div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">Pagamentos falhados</div>
-      <div class="stat-value red" id="statFailed">0</div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">Payouts concluídos</div>
-      <div class="stat-value yellow" id="statPayouts">0</div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">Relays → MolaBet</div>
-      <div class="stat-value" id="statRelays">0</div>
+  <!-- ── Aguardando PIN ── -->
+  <div id="screen-pending">
+    <div class="pending-box">
+      <div class="spinner"></div>
+      <div class="pending-amount" id="p-amount"></div>
+      <div class="pending-currency">MZN</div>
+      <div class="pending-title">Aguardando confirmação</div>
+      <div class="pending-phone" id="p-phone"></div>
+      <div class="pending-sub">
+        Foi enviado um pedido de pagamento para o seu telemóvel.<br>
+        Introduza o seu <strong>PIN</strong> para confirmar.
+      </div>
+      <ol class="step-list">
+        <li><span class="step-num">1</span>Verifique o seu telemóvel — apareceu uma notificação do M-Pesa / e-Mola</li>
+        <li><span class="step-num">2</span>Seleccione <em>"Aceitar"</em> e introduza o seu PIN</li>
+        <li><span class="step-num">3</span>Esta página actualiza automaticamente após a confirmação</li>
+      </ol>
     </div>
   </div>
 
-  <!-- Tabela de webhooks -->
-  <div class="section">
-    <div class="section-header">
-      <span class="section-title">📨 Webhooks recebidos (tempo real)</span>
-      <span class="section-count" id="webhookCount">0 eventos</span>
+  <!-- ── Sucesso ── -->
+  <div id="screen-success">
+    <div class="result-icon ok">✓</div>
+    <div class="result-amount tag-ok" id="s-amount"></div>
+    <div class="result-currency">MZN</div>
+    <div class="result-title">Depósito confirmado!</div>
+    <div class="result-sub">
+      O seu pagamento foi processado com sucesso.<br>O valor já está disponível na sua conta.
     </div>
-    <div style="overflow-x:auto">
-      <table>
-        <thead>
-          <tr>
-            <th>Hora</th>
-            <th>Evento</th>
-            <th>Referência</th>
-            <th>Telefone</th>
-            <th>Valor</th>
-            <th>Método</th>
-            <th>Assinatura</th>
-            <th>Relay</th>
-          </tr>
-        </thead>
-        <tbody id="webhookTable">
-          <tr><td colspan="8" class="empty">Aguardando webhooks do ZumboPay…</td></tr>
-        </tbody>
-      </table>
-    </div>
+    <button class="btn" onclick="resetForm()">Novo depósito</button>
   </div>
 
-  <!-- Log de relays -->
-  <div class="section">
-    <div class="section-header">
-      <span class="section-title">🔁 Log de relays para MolaBet</span>
-      <span class="section-count" id="relayCount">0 relays</span>
+  <!-- ── Falhou ── -->
+  <div id="screen-failed">
+    <div class="result-icon bad">✗</div>
+    <div class="result-amount tag-bad" id="f-amount"></div>
+    <div class="result-currency">MZN</div>
+    <div class="result-title">Depósito não confirmado</div>
+    <div class="result-sub" id="f-reason">
+      Não foi possível processar o pagamento.<br>O PIN não foi introduzido ou o tempo expirou.
     </div>
-    <div style="overflow-x:auto">
-      <table>
-        <thead>
-          <tr>
-            <th>Hora</th>
-            <th>Status HTTP</th>
-            <th>Resposta</th>
-          </tr>
-        </thead>
-        <tbody id="relayTable">
-          <tr><td colspan="3" class="empty">Sem relays ainda…</td></tr>
-        </tbody>
-      </table>
-    </div>
+    <button class="btn" onclick="resetForm()">Tentar novamente</button>
+    <button class="btn btn-outline" onclick="resetForm()" style="margin-top:10px">Cancelar</button>
   </div>
-</main>
+
+</div>
 
 <script>
-// Preencher URL do webhook
-const origin = window.location.origin
-document.getElementById('webhookUrl').textContent = origin + '/webhook'
-document.getElementById('webhookUrlFull').textContent = origin + '/webhook'
+let currentTxId = null
+let evtSource   = null
 
-// Dados iniciais via API
-async function loadData() {
-  const r = await fetch('/api/webhooks?password=${BRIDGE_PASSWORD}').catch(() => null)
-  if (!r?.ok) return
-  const d = await r.json()
-  d.webhooks.forEach(e => prependWebhook(e))
-  d.relayLog.forEach(e => prependRelay(e))
-  updateStats()
-}
-
-function formatTs(ts) {
-  const d = new Date(ts)
-  return d.toLocaleTimeString('pt-PT', { hour:'2-digit', minute:'2-digit', second:'2-digit' })
-}
-
-function eventPill(ev) {
-  if (ev === 'payment.succeeded') return '<span class="pill success">✓ payment.succeeded</span>'
-  if (ev === 'payment.failed')    return '<span class="pill error">✗ payment.failed</span>'
-  if (ev === 'payout.completed')  return '<span class="pill info">↗ payout.completed</span>'
-  if (ev === 'payout.failed')     return '<span class="pill error">✗ payout.failed</span>'
-  return '<span class="pill gray">' + ev + '</span>'
-}
-
-function prependWebhook(e) {
-  const tbody = document.getElementById('webhookTable')
-  // remover placeholder
-  if (tbody.querySelector('.empty')) tbody.innerHTML = ''
-  const tr = document.createElement('tr')
-  tr.innerHTML = \`
-    <td class="mono">\${formatTs(e.ts)}</td>
-    <td>\${eventPill(e.event)}</td>
-    <td class="mono" style="max-width:160px;overflow:hidden;text-overflow:ellipsis" title="\${e.ref}">\${e.ref}</td>
-    <td class="phone">\${e.phone}</td>
-    <td class="amount">\${e.amount !== '—' ? Number(e.amount).toLocaleString('pt-PT',{minimumFractionDigits:2}) + ' ' + (e.currency||'MZN') : '—'}</td>
-    <td>\${e.method}</td>
-    <td>\${e.sigOk ? '<span class="sig-ok">✓ válida</span>' : '<span class="sig-bad">✗ inválida</span>'}</td>
-    <td>\${e.relayed ? '<span class="relay-ok">✓ reenviado</span>' : '<span class="relay-no">—</span>'}</td>
-  \`
-  tbody.prepend(tr)
-}
-
-function prependRelay(e) {
-  const tbody = document.getElementById('relayTable')
-  if (tbody.querySelector('.empty')) tbody.innerHTML = ''
-  const tr = document.createElement('tr')
-  const statusClass = (e.status >= 200 && e.status < 300) ? 'success' : (e.status === 'skipped' ? 'gray' : 'error')
-  tr.innerHTML = \`
-    <td class="mono">\${formatTs(e.ts)}</td>
-    <td><span class="pill \${statusClass}">\${e.status}</span></td>
-    <td class="mono" style="color:var(--muted);font-size:11px">\${e.reason || e.body || '—'}</td>
-  \`
-  tbody.prepend(tr)
-}
-
-function updateStats() {
-  const rows = document.getElementById('webhookTable').querySelectorAll('tr:not(.empty)')
-  document.getElementById('statTotal').textContent = rows.length
-  document.getElementById('webhookCount').textContent = rows.length + ' eventos'
-
-  // contar por tipo (a partir do texto do pill)
-  let s=0, f=0, p=0, rel=0
-  rows.forEach(tr => {
-    const ev = tr.querySelector('td:nth-child(2)')?.textContent || ''
-    if (ev.includes('payment.succeeded')) s++
-    if (ev.includes('payment.failed')) f++
-    if (ev.includes('payout.completed')) p++
-    const relay = tr.querySelector('td:nth-child(8)')?.textContent || ''
-    if (relay.includes('reenviado')) rel++
+function show(id) {
+  ['form','pending','success','failed'].forEach(s => {
+    document.getElementById('screen-' + s).style.display = s === id ? 'block' : 'none'
   })
-  document.getElementById('statSucceeded').textContent = s
-  document.getElementById('statFailed').textContent = f
-  document.getElementById('statPayouts').textContent = p
-  document.getElementById('statRelays').textContent = rel
-
-  const relayRows = document.getElementById('relayTable').querySelectorAll('tr:not(.empty)')
-  document.getElementById('relayCount').textContent = relayRows.length + ' relays'
 }
 
-// SSE para actualizações em tempo real
-const evtSource = new EventSource('/events')
-evtSource.onmessage = e => {
-  const d = JSON.parse(e.data)
-  if (d.type === 'webhook' && d.entry) {
-    prependWebhook(d.entry)
-    updateStats()
-  }
-  if (d.type === 'relay') {
-    // relay entra via loadData periódico para ter o body
-    setTimeout(loadData, 800)
+function fmt(v) {
+  return Number(v).toLocaleString('pt-MZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+async function startDeposit() {
+  const phone  = document.getElementById('inp-phone').value.trim()
+  const amount = document.getElementById('inp-amount').value.trim()
+  const errEl  = document.getElementById('error-msg')
+  errEl.style.display = 'none'
+
+  if (!phone) { showError('Introduza o número de telemóvel.'); return }
+  if (!amount || Number(amount) <= 0) { showError('Introduza um valor válido.'); return }
+
+  const btn = document.getElementById('btn-deposit')
+  btn.disabled = true
+  btn.textContent = 'A processar…'
+
+  try {
+    const r = await fetch('/api/deposit', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ phone, amount: Number(amount) })
+    })
+    const d = await r.json()
+    if (!r.ok) { showError(d.error || 'Erro ao iniciar depósito.'); btn.disabled = false; btn.textContent = 'Depositar'; return }
+
+    currentTxId = d.txId
+    document.getElementById('p-phone').textContent  = phone
+    document.getElementById('p-amount').textContent = fmt(amount)
+    document.getElementById('s-amount').textContent = fmt(amount)
+    document.getElementById('f-amount').textContent = fmt(amount)
+    show('pending')
+
+    listenStatus(d.txId)
+  } catch (e) {
+    showError('Erro de ligação. Tente novamente.')
+    btn.disabled = false
+    btn.textContent = 'Depositar'
   }
 }
-evtSource.onopen  = () => { document.getElementById('statusBadge').className = 'badge live'; document.getElementById('statusBadge').innerHTML = '<span class="dot"></span> Ligado' }
-evtSource.onerror = () => { document.getElementById('statusBadge').className = 'badge offline'; document.getElementById('statusBadge').innerHTML = '● Desligado' }
 
-// Carregar dados iniciais
-loadData()
-// Refrescar stats a cada 10s
-setInterval(loadData, 10000)
+function listenStatus(txId) {
+  if (evtSource) evtSource.close()
+  evtSource = new EventSource('/events/' + txId)
+  evtSource.onmessage = e => {
+    const d = JSON.parse(e.data)
+    if (d.status === 'succeeded') {
+      evtSource.close()
+      show('success')
+    } else if (d.status === 'failed') {
+      evtSource.close()
+      const reason = d.error || 'O PIN não foi introduzido ou o tempo expirou.'
+      document.getElementById('f-reason').textContent = reason
+      show('failed')
+    }
+  }
+  evtSource.onerror = () => {
+    // Fallback: polling
+    evtSource.close()
+    pollFallback(txId)
+  }
+}
+
+async function pollFallback(txId, n = 0) {
+  if (n > 20) {
+    document.getElementById('f-reason').textContent = 'Tempo de espera esgotado. Tente novamente.'
+    show('failed')
+    return
+  }
+  await new Promise(r => setTimeout(r, 5000))
+  try {
+    const r = await fetch('/api/deposit/' + txId)
+    const d = await r.json()
+    if (d.status === 'succeeded') { show('success'); return }
+    if (d.status === 'failed') {
+      document.getElementById('f-reason').textContent = d.error || 'O PIN não foi introduzido ou o tempo expirou.'
+      show('failed')
+      return
+    }
+  } catch {}
+  pollFallback(txId, n + 1)
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-msg')
+  el.textContent = msg
+  el.style.display = 'block'
+}
+
+function resetForm() {
+  if (evtSource) evtSource.close()
+  currentTxId = null
+  document.getElementById('inp-phone').value  = ''
+  document.getElementById('inp-amount').value = ''
+  document.getElementById('error-msg').style.display = 'none'
+  document.getElementById('btn-deposit').disabled    = false
+  document.getElementById('btn-deposit').textContent = 'Depositar'
+  show('form')
+}
+
+show('form')
 </script>
 </body>
 </html>`
 }
 
-// ── Rota do dashboard ─────────────────────────────────────────────────────────
-app.get('/', (_req, res) => {
-  res.setHeader('Content-Type', 'text/html; charset=utf-8')
-  res.send(renderDashboard())
-})
-
 // ── Iniciar servidor ──────────────────────────────────────────────────────────
 const server = createServer(app)
 server.listen(PORT, '0.0.0.0', () => {
-  console.log('─────────────────────────────────────────────')
-  console.log(`  ZumboPay Bridge a correr em :${PORT}`)
-  console.log(`  Dashboard:   http://localhost:${PORT}/`)
-  console.log(`  Webhook URL: http://localhost:${PORT}/webhook`)
-  console.log(`  Relay URL:   ${MOLABET_URL || '(não configurado — defina MOLABET_URL)'}`)
-  console.log('─────────────────────────────────────────────')
+  console.log(`ZumboPay Deposit a correr em :${PORT}`)
 })
