@@ -2,7 +2,7 @@ services:
   - type: web
     name: zumbopay-bridge
     runtime: node
-    buildCommand: npm install
+    buildCommand: npm ci
     startCommand: node zumbopay-bridge.js
     plan: free
     envVars:
