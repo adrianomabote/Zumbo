@@ -53,6 +53,22 @@ app.get('/events/:txId', (req, res) => {
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/ping', (_req, res) => res.json({ ok: true }))
 
+// ── Estado do webhook (para mostrar banner no UI) ─────────────────────────────
+app.get('/api/webhook-status', async (_req, res) => {
+  try {
+    const r    = await fetch(`${ZUMBO_BASE}/merchant/validate`, {
+      headers: { 'Authorization': `Bearer ${ZUMBO_API_KEY}`, 'X-Merchant-Id': ZUMBO_MERCHANT_ID },
+    })
+    const data = await r.json().catch(() => ({}))
+    const wh   = data?.data?.webhook
+    res.json({
+      registered: !!wh,
+      url:        wh?.url || null,
+      active:     wh?.is_active || false,
+    })
+  } catch { res.json({ registered: false, url: null, active: false }) }
+})
+
 // ── Normalizar número de telemóvel ────────────────────────────────────────────
 function normalizeMsisdn(phone) {
   const digits = String(phone).replace(/\D/g, '')
@@ -140,9 +156,14 @@ app.post('/webhook', express.raw({ type: '*/*' }), (req, res) => {
 
   if (status && ref) {
     for (const [txId, tx] of transactions) {
-      if (tx.ref === ref || tx.id === ref || ('dep-' + tx.id) === ref) {
+      // Comparar por referência ZumboPay, source_id, ou id interno
+      const sourceId = 'dep-' + tx.id
+      if (tx.ref === ref || tx.id === ref || sourceId === ref ||
+          tx.ref === event.data?.source_id || sourceId === event.data?.source_id) {
         tx.status = status
-        notifyTx(txId, { status, method: tx.method })
+        tx.error  = status === 'failed' ? (event.data?.message || 'Pagamento recusado ou cancelado.') : null
+        notifyTx(txId, { status, error: tx.error, method: tx.method })
+        console.log(`[Webhook] ✓ transacção ${txId} → ${status}`)
         break
       }
     }
@@ -449,6 +470,24 @@ input::placeholder { color: var(--muted); }
 </head>
 <body>
 
+<!-- BANNER DE CONFIGURAÇÃO DO WEBHOOK -->
+<div id="wh-banner" style="display:none;width:100%;max-width:520px;margin-bottom:20px;">
+  <div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.28);border-radius:14px;padding:16px 18px;">
+    <div style="display:flex;align-items:flex-start;gap:12px;">
+      <span style="font-size:20px;margin-top:1px">⚠️</span>
+      <div>
+        <div style="font-size:13px;font-weight:700;color:#f59e0b;margin-bottom:6px">Webhook não registado no ZumboPay</div>
+        <div style="font-size:12px;color:#9ca3af;line-height:1.6;margin-bottom:10px">
+          Para confirmar pagamentos, registe este URL no painel ZumboPay:<br>
+          <strong>Painel → Programadores → Webhooks</strong>
+        </div>
+        <div style="background:rgba(0,0,0,.3);border:1px solid rgba(245,158,11,.2);border-radius:8px;padding:8px 12px;font-family:monospace;font-size:12px;color:#f59e0b;word-break:break-all;" id="wh-url">a carregar…</div>
+        <div style="font-size:11px;color:#6b7280;margin-top:8px">Eventos: <code style="color:#9ca3af">payment.succeeded</code> e <code style="color:#9ca3af">payment.failed</code></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="brand">
   <div class="brand-icon">💳</div>
   <div class="brand-name">Zumbo<em>Pay</em></div>
@@ -541,6 +580,20 @@ input::placeholder { color: var(--muted); }
 
 <script>
 let evtSource = null
+
+// Verificar se webhook está registado
+async function checkWebhook() {
+  const webhookUrl = window.location.origin + '/webhook'
+  document.getElementById('wh-url').textContent = webhookUrl
+  try {
+    const r = await fetch('/api/webhook-status')
+    const d = await r.json()
+    if (!d.registered || !d.active) {
+      document.getElementById('wh-banner').style.display = 'block'
+    }
+  } catch { document.getElementById('wh-banner').style.display = 'block' }
+}
+checkWebhook()
 
 function show(id) {
   ['form','pending','success','failed'].forEach(s =>
