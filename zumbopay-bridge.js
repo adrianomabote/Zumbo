@@ -595,7 +595,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .nav-back{font-size:13px;color:#cc0000;text-decoration:none;font-weight:600;}
 
 /* ── Offer header ── */
-.offer-header{padding:24px 20px 20px;background:#fff;border-bottom:1px solid #e5e5ea;text-align:left;}
+.offer-header{padding:24px 20px 32px;background:#fff;border-bottom:1px solid #e5e5ea;text-align:left;}
 .offer-title{font-size:18px;font-weight:700;color:#1c1c1e;margin-bottom:10px;text-align:center;}
 .offer-desc{font-size:14px;color:#3a3a3c;line-height:1.6;}
 
