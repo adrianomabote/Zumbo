@@ -4,7 +4,7 @@
   "type": "module",
   "main": "zumbopay-bridge.js",
   "scripts": {
-    "start": "PORT=5000 node zumbopay-bridge.js"
+    "start": "node zumbopay-bridge.js"
   },
   "dependencies": {
     "express": "^4.19.2"

@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: zumbopay-bridge
+    runtime: node
+    buildCommand: npm install
+    startCommand: node zumbopay-bridge.js
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ZUMBO_API_KEY
+        sync: false
+      - key: ZUMBO_MERCHANT_ID
+        sync: false
+      - key: ZUMBO_WEBHOOK_SECRET
+        sync: false
+      - key: WALLET_MPESA
+        sync: false
+      - key: WALLET_EMOLA
+        sync: false
