@@ -207,11 +207,12 @@ async function initiateCharge(tx, sourceId, customerName) {
     }
 
     if (resp.status === 202) {
-      // A aguardar PIN do cliente
+      // A aguardar PIN do cliente — confirmação via webhook (instantâneo após PIN)
       tx.ref    = data.data?.reference || sourceId
       tx.status = 'pending'
       notifyTx(tx.id, { status: 'pending', method: tx.method })
-      pollStatus(tx)
+      // Timeout de segurança: 5 min sem resposta → falha
+      scheduleTimeout(tx)
       return
     }
 
@@ -229,49 +230,15 @@ async function initiateCharge(tx, sourceId, customerName) {
   }
 }
 
-// ── Polling de estado via GET /payments/:ref ──────────────────────────────────
-async function pollStatus(tx, attempts = 0) {
-  if (tx.status !== 'pending') return
-
-  // Timeout: ~2 min (20 × 6s)
-  if (attempts >= 20) {
+// ── Timeout de segurança (5 min) — webhook devia ter chegado antes ────────────
+function scheduleTimeout(tx) {
+  setTimeout(() => {
+    if (tx.status !== 'pending') return
     tx.status = 'failed'
-    tx.error  = 'Tempo esgotado. O PIN não foi introduzido.'
+    tx.error  = 'O PIN não foi introduzido dentro do tempo. Tente novamente.'
     notifyTx(tx.id, { status: 'failed', error: tx.error, method: tx.method })
-    return
-  }
-
-  await sleep(6000)
-  if (tx.status !== 'pending') return
-
-  const ref = tx.ref || tx.id
-  try {
-    const resp = await fetch(`${ZUMBO_BASE}/payments/${encodeURIComponent(ref)}`, {
-      headers: {
-        'Authorization': `Bearer ${ZUMBO_API_KEY}`,
-        'X-Merchant-Id': ZUMBO_MERCHANT_ID,
-      },
-    })
-    const data = await resp.json().catch(() => ({}))
-    const s    = (data.data?.status || '').toLowerCase()
-    console.log(`[Poll #${attempts}] ref=${ref} status=${s}`)
-
-    if (s === 'succeeded' || s === 'success' || s === 'completed' || s === 'paid') {
-      tx.status = 'succeeded'
-      notifyTx(tx.id, { status: 'succeeded', method: tx.method })
-      return
-    }
-    if (s === 'failed' || s === 'rejected' || s === 'cancelled' || s === 'expired') {
-      tx.status = 'failed'
-      tx.error  = data.data?.message || 'Pagamento recusado ou cancelado.'
-      notifyTx(tx.id, { status: 'failed', error: tx.error, method: tx.method })
-      return
-    }
-  } catch (err) {
-    console.warn(`[Poll #${attempts}] Erro:`, err.message)
-  }
-
-  pollStatus(tx, attempts + 1)
+    console.log(`[Timeout] ${tx.id} expirou após 5 min`)
+  }, 5 * 60 * 1000)
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
@@ -471,20 +438,28 @@ input::placeholder { color: var(--muted); }
 <body>
 
 <!-- BANNER DE CONFIGURAÇÃO DO WEBHOOK -->
-<div id="wh-banner" style="display:none;width:100%;max-width:520px;margin-bottom:20px;">
-  <div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.28);border-radius:14px;padding:16px 18px;">
-    <div style="display:flex;align-items:flex-start;gap:12px;">
-      <span style="font-size:20px;margin-top:1px">⚠️</span>
-      <div>
-        <div style="font-size:13px;font-weight:700;color:#f59e0b;margin-bottom:6px">Webhook não registado no ZumboPay</div>
-        <div style="font-size:12px;color:#9ca3af;line-height:1.6;margin-bottom:10px">
-          Para confirmar pagamentos, registe este URL no painel ZumboPay:<br>
-          <strong>Painel → Programadores → Webhooks</strong>
-        </div>
-        <div style="background:rgba(0,0,0,.3);border:1px solid rgba(245,158,11,.2);border-radius:8px;padding:8px 12px;font-family:monospace;font-size:12px;color:#f59e0b;word-break:break-all;" id="wh-url">a carregar…</div>
-        <div style="font-size:11px;color:#6b7280;margin-top:8px">Eventos: <code style="color:#9ca3af">payment.succeeded</code> e <code style="color:#9ca3af">payment.failed</code></div>
-      </div>
+<div id="wh-banner" style="display:none;width:100%;max-width:460px;margin-bottom:20px;">
+  <div style="background:rgba(245,158,11,.08);border:1.5px solid rgba(245,158,11,.3);border-radius:16px;padding:20px 20px 16px;">
+    <div style="font-size:13px;font-weight:700;color:#f59e0b;margin-bottom:4px;">⚠️ Configuração necessária — 1 passo</div>
+    <div style="font-size:12px;color:#9ca3af;line-height:1.6;margin-bottom:14px;">
+      Registe o webhook no ZumboPay para confirmar pagamentos.<br>
+      Após isso, confirmações são <strong style="color:#e5e7eb">instantâneas</strong> (2-5 seg após PIN).
     </div>
+
+    <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">1. Copie este URL</div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;">
+      <div id="wh-url" style="flex:1;background:rgba(0,0,0,.4);border:1px solid rgba(245,158,11,.2);border-radius:8px;padding:9px 12px;font-family:monospace;font-size:11px;color:#f59e0b;word-break:break-all;line-height:1.4;">a carregar…</div>
+      <button onclick="copyWebhookUrl()" id="btn-copy" style="flex-shrink:0;padding:8px 14px;border:1px solid rgba(245,158,11,.3);border-radius:8px;background:rgba(245,158,11,.12);color:#f59e0b;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:background .15s;" onmouseover="this.style.background='rgba(245,158,11,.2)'" onmouseout="this.style.background='rgba(245,158,11,.12)'">Copiar</button>
+    </div>
+
+    <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">2. Registe no ZumboPay</div>
+    <a href="https://zumbopay.com/app/developers" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:rgba(79,110,247,.1);border:1px solid rgba(79,110,247,.2);border-radius:8px;padding:10px 14px;text-decoration:none;">
+      <span style="font-size:13px;font-weight:600;color:#818cf8;">Painel ZumboPay → Programadores → Webhooks</span>
+      <span style="font-size:16px;">↗</span>
+    </a>
+    <div style="font-size:11px;color:#4b5563;margin-top:8px;">Eventos: <code style="color:#6b7280">payment.succeeded</code> &amp; <code style="color:#6b7280">payment.failed</code></div>
+
+    <button onclick="checkWebhook()" style="margin-top:12px;width:100%;padding:8px;border:1px solid rgba(100,116,139,.3);border-radius:8px;background:transparent;color:#6b7280;font-size:12px;font-family:inherit;cursor:pointer;" onmouseover="this.style.color='#9ca3af'" onmouseout="this.style.color='#6b7280'">✓ Já registei — verificar agora</button>
   </div>
 </div>
 
@@ -581,18 +556,46 @@ input::placeholder { color: var(--muted); }
 <script>
 let evtSource = null
 
+const WEBHOOK_URL = window.location.origin + '/webhook'
+
 // Verificar se webhook está registado
 async function checkWebhook() {
-  const webhookUrl = window.location.origin + '/webhook'
-  document.getElementById('wh-url').textContent = webhookUrl
+  document.getElementById('wh-url').textContent = WEBHOOK_URL
   try {
     const r = await fetch('/api/webhook-status')
     const d = await r.json()
     if (!d.registered || !d.active) {
       document.getElementById('wh-banner').style.display = 'block'
+    } else {
+      document.getElementById('wh-banner').style.display = 'none'
+      console.log('[Webhook] ✓ registado:', d.url)
     }
   } catch { document.getElementById('wh-banner').style.display = 'block' }
 }
+
+function copyWebhookUrl() {
+  navigator.clipboard.writeText(WEBHOOK_URL).then(() => {
+    const btn = document.getElementById('btn-copy')
+    btn.textContent = '✓ Copiado'
+    btn.style.background = 'rgba(34,197,94,.18)'
+    btn.style.color = '#22c55e'
+    btn.style.borderColor = 'rgba(34,197,94,.3)'
+    setTimeout(() => {
+      btn.textContent = 'Copiar'
+      btn.style.background = 'rgba(245,158,11,.12)'
+      btn.style.color = '#f59e0b'
+      btn.style.borderColor = 'rgba(245,158,11,.3)'
+    }, 2000)
+  }).catch(() => {
+    // fallback
+    const el = document.getElementById('wh-url')
+    const range = document.createRange()
+    range.selectNode(el)
+    window.getSelection().removeAllRanges()
+    window.getSelection().addRange(range)
+  })
+}
+
 checkWebhook()
 
 function show(id) {
@@ -656,18 +659,11 @@ function listen(txId) {
       show('failed')
     }
   }
-  evtSource.onerror = () => { evtSource.close(); pollFallback(txId) }
-}
-
-async function pollFallback(txId, n=0) {
-  if (n > 20) { document.getElementById('fail-reason').textContent = 'Tempo esgotado. Tente novamente.'; show('failed'); return }
-  await new Promise(r => setTimeout(r, 5000))
-  try {
-    const d = await (await fetch('/api/deposit/' + txId)).json()
-    if (d.status === 'succeeded') { show('success'); return }
-    if (d.status === 'failed')    { document.getElementById('fail-reason').textContent = d.error || 'Pagamento não confirmado.'; show('failed'); return }
-  } catch {}
-  pollFallback(txId, n + 1)
+  evtSource.onerror = () => {
+    // SSE caiu — reconectar após 3s
+    evtSource.close()
+    setTimeout(() => listen(txId), 3000)
+  }
 }
 
 function setErr(msg) {
