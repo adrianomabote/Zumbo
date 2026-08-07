@@ -9,15 +9,15 @@ import { createHmac, timingSafeEqual, randomBytes } from 'crypto'
 import { createServer } from 'http'
 
 // ── Configuração ──────────────────────────────────────────────────────────────
-const PORT                 = process.env.PORT                 || 5000
-const ZUMBO_API_KEY        = process.env.ZUMBO_API_KEY        || 'zk_live_a694231e0f188fe3599e4de8feda28b35714ed9b6fa3cd0e'
-const ZUMBO_MERCHANT_ID    = process.env.ZUMBO_MERCHANT_ID    || 'MCH_B29C53549C'
-const ZUMBO_WEBHOOK_SECRET = process.env.ZUMBO_WEBHOOK_SECRET || 'teste.com'
+const PORT                 = process.env.PORT || 5000   // Render define PORT automaticamente
+const ZUMBO_API_KEY        = 'zk_live_a694231e0f188fe3599e4de8feda28b35714ed9b6fa3cd0e'
+const ZUMBO_MERCHANT_ID    = 'MCH_B29C53549C'
+const ZUMBO_WEBHOOK_SECRET = 'teste.com'
 const ZUMBO_BASE           = 'https://zumbopay.com/api/public/v1'
 
 // wallet_id reais obtidos via GET /wallets
-const WALLET_MPESA = process.env.WALLET_MPESA || 'd9a21461-8ff3-4929-8015-efd89268a068'
-const WALLET_EMOLA = process.env.WALLET_EMOLA || '93a03d6d-f361-4602-90e1-c62889b45346'
+const WALLET_MPESA = 'd9a21461-8ff3-4929-8015-efd89268a068'
+const WALLET_EMOLA = '93a03d6d-f361-4602-90e1-c62889b45346'
 
 // ── Armazenamento em memória ──────────────────────────────────────────────────
 const transactions = new Map() // txId → { id, phone, msisdn, amount, status, ref, method, error, ts }
@@ -255,8 +255,39 @@ function page() { return `<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Depósito — ZumboPay</title>
+<script>
+// ── Protecção anti-cópia ──────────────────────────────────────────────────────
+(function(){
+  // Bloquear menu de contexto (botão direito)
+  document.addEventListener('contextmenu', e => e.preventDefault())
+
+  // Bloquear atalhos de teclado
+  document.addEventListener('keydown', function(e){
+    const k = e.key
+    const ctrl = e.ctrlKey || e.metaKey
+    // F12, Ctrl+Shift+I/J/C/K (DevTools), Ctrl+U (source), Ctrl+S (save), Ctrl+A (select all), Ctrl+C/X (copy/cut)
+    if (k === 'F12') { e.preventDefault(); return false }
+    if (ctrl && e.shiftKey && ['I','J','C','K'].includes(e.key.toUpperCase())) { e.preventDefault(); return false }
+    if (ctrl && ['u','U','s','S','a','A','c','C','x','X','p','P'].includes(k)) { e.preventDefault(); return false }
+  }, true)
+
+  // Bloquear copy, cut, selectstart e drag
+  ;['copy','cut','selectstart','dragstart'].forEach(ev =>
+    document.addEventListener(ev, e => e.preventDefault(), true)
+  )
+
+  // Detecção básica de DevTools aberto (tamanho de janela)
+  setInterval(function(){
+    const threshold = 160
+    if (window.outerWidth - window.innerWidth > threshold || window.outerHeight - window.innerHeight > threshold) {
+      document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#09090f;color:#5a6075;font-family:sans-serif;font-size:14px;">Acesso restrito.</div>'
+    }
+  }, 1000)
+})()
+</script>
 <style>
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+img, a { -webkit-user-drag: none; user-drag: none; }
 :root {
   --bg:      #09090f;
   --surface: #0f1018;
