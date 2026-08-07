@@ -469,7 +469,114 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
 }
 
 // ── PÁGINA: Megas ─────────────────────────────────────────────────────────────
-function megasPage() { return `<!DOCTYPE html>
+function megasPage() {
+  // ── Catálogo server-side ───────────────────────────────────────────────────
+  const CAT_DATA = {
+    diarias: {
+      note: null,
+      pkgs: [
+        {id:'n01',name:'Diário 10', size:'380 MB', price:10,  dur:'1 dia(s)'},
+        {id:'n02',name:'Diário 13', size:'512 MB', price:13,  dur:'1 dia(s)'},
+        {id:'n03',name:'Diário 17', size:'624 MB', price:17,  dur:'1 dia(s)'},
+        {id:'n04',name:'Diário 20', size:'780 MB', price:20,  dur:'1 dia(s)'},
+        {id:'n05',name:'Diário 25', size:'1 GB',   price:25,  dur:'1 dia(s)'},
+        {id:'n06',name:'Diário 28', size:'1.1 GB', price:28,  dur:'1 dia(s)'},
+        {id:'n07',name:'Diário 41', size:'1.6 GB', price:41,  dur:'1 dia(s)'},
+        {id:'n08',name:'Diário 50', size:'2 GB',   price:50,  dur:'1 dia(s)'},
+        {id:'n09',name:'Diário 75', size:'3 GB',   price:75,  dur:'1 dia(s)'},
+        {id:'n10',name:'Diário 100',size:'4 GB',   price:100, dur:'1 dia(s)'},
+        {id:'n11',name:'Diário 125',size:'5 GB',   price:125, dur:'1 dia(s)'},
+        {id:'n12',name:'Diário 150',size:'6 GB',   price:150, dur:'1 dia(s)'},
+        {id:'n13',name:'Diário 175',size:'7 GB',   price:175, dur:'1 dia(s)'},
+        {id:'n14',name:'Diário 200',size:'8 GB',   price:200, dur:'1 dia(s)'},
+        {id:'n15',name:'Diário 225',size:'9 GB',   price:225, dur:'1 dia(s)'},
+        {id:'n16',name:'Diário 250',size:'10 GB',  price:250, dur:'1 dia(s)'},
+      ]
+    },
+    semanais: {
+      note: 'ℹ️ Premium: renovável · +100MB ao renovar nos primeiros 3 dias.',
+      pkgs: [
+        {id:'p01',name:'Premium 57', size:'1.7 GB',price:57,  dur:'3 dia(s)'},
+        {id:'p02',name:'Premium 83', size:'2.6 GB',price:83,  dur:'3 dia(s)'},
+        {id:'p03',name:'Premium 100',size:'3.4 GB',price:100, dur:'3 dia(s)'},
+        {id:'p04',name:'Premium 135',size:'4 GB',  price:135, dur:'3 dia(s)'},
+        {id:'p05',name:'Premium 160',size:'5.4 GB',price:160, dur:'3 dia(s)'},
+        {id:'p06',name:'Premium 180',size:'6.2 GB',price:180, dur:'3 dia(s)'},
+        {id:'p07',name:'Premium 280',size:'9.5 GB',price:280, dur:'3 dia(s)'},
+        {id:'s01',name:'Semanal 49', size:'1.7 GB',price:49,  dur:'7 dia(s)'},
+        {id:'s02',name:'Semanal 85', size:'2.9 GB',price:85,  dur:'7 dia(s)'},
+        {id:'s03',name:'Semanal 90', size:'3.4 GB',price:90,  dur:'7 dia(s)'},
+        {id:'s04',name:'Semanal 145',size:'5.3 GB',price:145, dur:'7 dia(s)'},
+        {id:'s05',name:'Semanal 200',size:'7.2 GB',price:200, dur:'7 dia(s)'},
+        {id:'s06',name:'Semanal 290',size:'11 GB', price:290, dur:'7 dia(s)'},
+      ]
+    },
+    mensais: {
+      note: 'ℹ️ ⚠️ Não deve ter Txuna crédito activo antes de activar.',
+      pkgs: [
+        {id:'m01',name:'Mensal 95', size:'2.8 GB', price:95,  dur:'30 dia(s)'},
+        {id:'m02',name:'Mensal 195',size:'5.8 GB', price:195, dur:'30 dia(s)'},
+        {id:'m03',name:'Mensal 210',size:'7.8 GB', price:210, dur:'30 dia(s)'},
+        {id:'m04',name:'Mensal 320',size:'10.8 GB',price:320, dur:'30 dia(s)'},
+        {id:'m05',name:'Mensal 480',size:'17.8 GB',price:480, dur:'30 dia(s)'},
+        {id:'m06',name:'Mensal 575',size:'20.8 GB',price:575, dur:'30 dia(s)'},
+        {id:'m07',name:'Mensal 950',size:'32.8 GB',price:950, dur:'30 dia(s)'},
+      ]
+    },
+    infinitas: {
+      note: 'ℹ️ ⚠️ Não deve ter Txuna crédito activo. Inclui chamadas + SMS ilimitadas.',
+      pkgs: [
+        {id:'d01',name:'Diamante 450', size:'11 GB',price:450,  dur:'30 dia(s)',calls:'Chamadas + SMS ilim.'},
+        {id:'d02',name:'Diamante 580', size:'15 GB',price:580,  dur:'30 dia(s)',calls:'Chamadas + SMS ilim.'},
+        {id:'d03',name:'Diamante 720', size:'21 GB',price:720,  dur:'30 dia(s)',calls:'Chamadas + SMS ilim.'},
+        {id:'d04',name:'Diamante 970', size:'30 GB',price:970,  dur:'30 dia(s)',calls:'Chamadas + SMS ilim.'},
+        {id:'d05',name:'Diamante 1490',size:'50 GB',price:1490, dur:'30 dia(s)',calls:'Chamadas + SMS ilim.'},
+      ]
+    },
+  }
+  const CATS_ORDER = ['diarias','semanais','mensais','infinitas']
+
+  // Generate one slide card HTML
+  const slideHtml = p =>
+    `<div class="carousel-slide"><div class="vcard">` +
+    `<div class="vcard-header"><span class="vcard-name">${p.name}</span>` +
+    `<button class="vcard-buy" onclick="openBuy('${p.id}');event.stopPropagation()">Activar</button></div>` +
+    `<div class="vcard-info"><div class="vi-price"><span>${p.price} MT</span></div>` +
+    `<div class="vi-dur"><span>${p.dur}</span></div></div>` +
+    `<div class="vcard-data"><div class="vdata-left">` +
+    `<div class="arrows"><span class="arr-up">▲</span><span class="arr-dn">▼</span></div>` +
+    `<span class="vdata-label">Dados</span></div><span class="vdata-size">${p.size}</span></div>` +
+    (p.calls ? `<div class="vcard-extra"><div class="vextra-left"><span class="vextra-icon">📞</span>` +
+      `<span class="vextra-label">Voz + SMS</span></div><span class="vextra-val">${p.calls}</span></div>` : '') +
+    `<div class="vcard-footer"><button class="share-btn" onclick="event.stopPropagation()">⋮</button></div>` +
+    `</div></div>`
+
+  // Generate one full category section HTML
+  const sectionHtml = (catId, visible) => {
+    const {note, pkgs} = CAT_DATA[catId]
+    const slides = pkgs.map(slideHtml).join('')
+    const dots   = pkgs.map((_,i) => `<div class="dot${i===0?' active':''}"></div>`).join('')
+    const noteHtml = note ? `<div class="cat-note show">${note}</div>` : ''
+    return `<div class="cat-section" id="cat-${catId}"${visible ? '' : ' style="display:none"'}>` +
+      noteHtml +
+      `<div class="carousel-outer" id="co-${catId}">${slides}</div>` +
+      `<div class="dots" id="dots-${catId}">${dots}</div>` +
+      `</div>`
+  }
+
+  // Build all 4 sections
+  const allSections = CATS_ORDER.map((c, i) => sectionHtml(c, i === 0)).join('')
+
+  // JS catalog (for the buy sheet)
+  const jsPkgs = 'const PKGS_ALL={' +
+    CATS_ORDER.map(c =>
+      `"${c}":[${CAT_DATA[c].pkgs.map(p =>
+        `{id:"${p.id}",name:"${p.name}",size:"${p.size}",price:${p.price},dur:"${p.dur}"` +
+        (p.calls ? `,calls:"${p.calls}"` : '') + '}'
+      ).join(',')}]`
+    ).join(',') + '}'
+
+  return `<!DOCTYPE html>
 <html lang="pt"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <title>Megas — Net Serviços</title>
@@ -607,28 +714,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
   </div>
 </div>
 
-<div class="carousel-area">
-  <div class="cat-note" id="cat-note"></div>
-  <div class="carousel-outer" id="carousel-outer">${[
-    {id:'n01',name:'Diário 10',size:'380 MB',price:10,dur:'1 dia(s)'},
-    {id:'n02',name:'Diário 13',size:'512 MB',price:13,dur:'1 dia(s)'},
-    {id:'n03',name:'Diário 17',size:'624 MB',price:17,dur:'1 dia(s)'},
-    {id:'n04',name:'Diário 20',size:'780 MB',price:20,dur:'1 dia(s)'},
-    {id:'n05',name:'Diário 25',size:'1 GB',  price:25,dur:'1 dia(s)'},
-    {id:'n06',name:'Diário 28',size:'1.1 GB',price:28,dur:'1 dia(s)'},
-    {id:'n07',name:'Diário 41',size:'1.6 GB',price:41,dur:'1 dia(s)'},
-    {id:'n08',name:'Diário 50',size:'2 GB',  price:50,dur:'1 dia(s)'},
-    {id:'n09',name:'Diário 75',size:'3 GB',  price:75,dur:'1 dia(s)'},
-    {id:'n10',name:'Diário 100',size:'4 GB', price:100,dur:'1 dia(s)'},
-    {id:'n11',name:'Diário 125',size:'5 GB', price:125,dur:'1 dia(s)'},
-    {id:'n12',name:'Diário 150',size:'6 GB', price:150,dur:'1 dia(s)'},
-    {id:'n13',name:'Diário 175',size:'7 GB', price:175,dur:'1 dia(s)'},
-    {id:'n14',name:'Diário 200',size:'8 GB', price:200,dur:'1 dia(s)'},
-    {id:'n15',name:'Diário 225',size:'9 GB', price:225,dur:'1 dia(s)'},
-    {id:'n16',name:'Diário 250',size:'10 GB',price:250,dur:'1 dia(s)'},
-  ].map(p=>`<div class="carousel-slide"><div class="vcard"><div class="vcard-header"><span class="vcard-name">${p.name}</span><button class="vcard-buy" onclick="openBuy('${p.id}');event.stopPropagation()">Activar</button></div><div class="vcard-info"><div class="vi-price"><span>${p.price} MT</span></div><div class="vi-dur"><span>${p.dur}</span></div></div><div class="vcard-data"><div class="vdata-left"><div class="arrows"><span class="arr-up">▲</span><span class="arr-dn">▼</span></div><span class="vdata-label">Dados</span></div><span class="vdata-size">${p.size}</span></div><div class="vcard-footer"><button class="share-btn" onclick="event.stopPropagation()">⋮</button></div></div></div>`).join('')}</div>
-  <div class="dots" id="dots"></div>
-</div>
+<div class="carousel-area">${allSections}</div>
 
 <div class="overlay" id="overlay" onclick="closeSheet()"></div>
 <div class="sheet" id="sheet">
@@ -673,131 +759,37 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 </div>
 
 <script>
-// ── Catálogo ──
-const PKGS = {
-  diarias:[
-    {id:'n01',name:'Diário 10',size:'380 MB', price:10, dur:'1 dia(s)'},
-    {id:'n02',name:'Diário 13',size:'512 MB', price:13, dur:'1 dia(s)'},
-    {id:'n03',name:'Diário 17',size:'624 MB', price:17, dur:'1 dia(s)'},
-    {id:'n04',name:'Diário 20',size:'780 MB', price:20, dur:'1 dia(s)'},
-    {id:'n05',name:'Diário 25',size:'1 GB',   price:25, dur:'1 dia(s)'},
-    {id:'n06',name:'Diário 28',size:'1.1 GB', price:28, dur:'1 dia(s)'},
-    {id:'n07',name:'Diário 41',size:'1.6 GB', price:41, dur:'1 dia(s)'},
-    {id:'n08',name:'Diário 50',size:'2 GB',   price:50, dur:'1 dia(s)'},
-    {id:'n09',name:'Diário 75',size:'3 GB',   price:75, dur:'1 dia(s)'},
-    {id:'n10',name:'Diário 100',size:'4 GB',  price:100,dur:'1 dia(s)'},
-    {id:'n11',name:'Diário 125',size:'5 GB',  price:125,dur:'1 dia(s)'},
-    {id:'n12',name:'Diário 150',size:'6 GB',  price:150,dur:'1 dia(s)'},
-    {id:'n13',name:'Diário 175',size:'7 GB',  price:175,dur:'1 dia(s)'},
-    {id:'n14',name:'Diário 200',size:'8 GB',  price:200,dur:'1 dia(s)'},
-    {id:'n15',name:'Diário 225',size:'9 GB',  price:225,dur:'1 dia(s)'},
-    {id:'n16',name:'Diário 250',size:'10 GB', price:250,dur:'1 dia(s)'},
-  ],
-  semanais:[
-    {id:'p01',name:'Premium 57', size:'1.7 GB',price:57, dur:'3 dia(s)'},
-    {id:'p02',name:'Premium 83', size:'2.6 GB',price:83, dur:'3 dia(s)'},
-    {id:'p03',name:'Premium 100',size:'3.4 GB',price:100,dur:'3 dia(s)'},
-    {id:'p04',name:'Premium 135',size:'4 GB',  price:135,dur:'3 dia(s)'},
-    {id:'p05',name:'Premium 160',size:'5.4 GB',price:160,dur:'3 dia(s)'},
-    {id:'p06',name:'Premium 180',size:'6.2 GB',price:180,dur:'3 dia(s)'},
-    {id:'p07',name:'Premium 280',size:'9.5 GB',price:280,dur:'3 dia(s)'},
-    {id:'s01',name:'Semanal 49', size:'1.7 GB',price:49, dur:'7 dia(s)'},
-    {id:'s02',name:'Semanal 85', size:'2.9 GB',price:85, dur:'7 dia(s)'},
-    {id:'s03',name:'Semanal 90', size:'3.4 GB',price:90, dur:'7 dia(s)'},
-    {id:'s04',name:'Semanal 145',size:'5.3 GB',price:145,dur:'7 dia(s)'},
-    {id:'s05',name:'Semanal 200',size:'7.2 GB',price:200,dur:'7 dia(s)'},
-    {id:'s06',name:'Semanal 290',size:'11 GB', price:290,dur:'7 dia(s)'},
-  ],
-  mensais:[
-    {id:'m01',name:'Mensal 95', size:'2.8 GB', price:95, dur:'30 dia(s)'},
-    {id:'m02',name:'Mensal 195',size:'5.8 GB', price:195,dur:'30 dia(s)'},
-    {id:'m03',name:'Mensal 210',size:'7.8 GB', price:210,dur:'30 dia(s)'},
-    {id:'m04',name:'Mensal 320',size:'10.8 GB',price:320,dur:'30 dia(s)'},
-    {id:'m05',name:'Mensal 480',size:'17.8 GB',price:480,dur:'30 dia(s)'},
-    {id:'m06',name:'Mensal 575',size:'20.8 GB',price:575,dur:'30 dia(s)'},
-    {id:'m07',name:'Mensal 950',size:'32.8 GB',price:950,dur:'30 dia(s)'},
-  ],
-  infinitas:[
-    {id:'d01',name:'Diamante 450', size:'11 GB',price:450, dur:'30 dia(s)',calls:'Chamadas + SMS ilim.'},
-    {id:'d02',name:'Diamante 580', size:'15 GB',price:580, dur:'30 dia(s)',calls:'Chamadas + SMS ilim.'},
-    {id:'d03',name:'Diamante 720', size:'21 GB',price:720, dur:'30 dia(s)',calls:'Chamadas + SMS ilim.'},
-    {id:'d04',name:'Diamante 970', size:'30 GB',price:970, dur:'30 dia(s)',calls:'Chamadas + SMS ilim.'},
-    {id:'d05',name:'Diamante 1490',size:'50 GB',price:1490,dur:'30 dia(s)',calls:'Chamadas + SMS ilim.'},
-  ]
-}
-const CAT_NOTES = {
-  diarias: null,
-  semanais: 'ℹ️ Premium: renovável · +100MB ao renovar nos primeiros 3 dias.',
-  mensais:  'ℹ️ ⚠️ Não deve ter Txuna crédito activo antes de activar.',
-  infinitas:'ℹ️ ⚠️ Não deve ter Txuna crédito activo. Inclui chamadas + SMS ilimitadas.',
-}
-const CATS = ['diarias','semanais','mensais','infinitas']
+// ── Catálogo (para o sheet de compra) ──
+${jsPkgs}
 const CLABELS = {diarias:'Diárias',semanais:'Semanais',mensais:'Mensais',infinitas:'Infinitas'}
+const CATS_JS  = ['diarias','semanais','mensais','infinitas']
 
-let curCat = 'diarias', curIdx = 0, curPkg = null, evtSrc = null
+let curCat = 'diarias', curPkg = null, evtSrc = null
 
-// ── Carousel ──
-const outer = document.getElementById('carousel-outer')
-
-function cardHtml(p) {
-  return '<div class="vcard">' +
-    '<div class="vcard-header">' +
-      '<span class="vcard-name">'+p.name+'</span>' +
-      '<button class="vcard-buy" onclick="openBuy(\''+p.id+'\');event.stopPropagation()">Activar</button>' +
-    '</div>' +
-    '<div class="vcard-info">' +
-      '<div class="vi-price"><span>'+p.price+' MT</span></div>' +
-      '<div class="vi-dur"><span>'+p.dur+'</span></div>' +
-    '</div>' +
-    '<div class="vcard-data">' +
-      '<div class="vdata-left">' +
-        '<div class="arrows"><span class="arr-up">▲</span><span class="arr-dn">▼</span></div>' +
-        '<span class="vdata-label">Dados</span>' +
-      '</div>' +
-      '<span class="vdata-size">'+p.size+'</span>' +
-    '</div>' +
-    (p.calls ? '<div class="vcard-extra"><div class="vextra-left"><span class="vextra-icon">📞</span><span class="vextra-label">Voz + SMS</span></div><span class="vextra-val">'+p.calls+'</span></div>' : '') +
-    '<div class="vcard-footer"><button class="share-btn" onclick="event.stopPropagation()">⋮</button></div>' +
-  '</div>'
+// ── Tab switching (mostra/esconde secções pré-renderizadas) ──
+function setCat(id) {
+  curCat = id
+  CATS_JS.forEach(c => {
+    document.getElementById('cat-'+c).style.display = c === id ? 'block' : 'none'
+  })
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', CATS_JS[i] === id))
 }
 
-function renderCarousel() {
-  const pkgs = PKGS[curCat] || []
-  outer.innerHTML = pkgs.map(p => '<div class="carousel-slide">'+cardHtml(p)+'</div>').join('')
-  outer.scrollLeft = 0
-  curIdx = 0
-  renderDots(pkgs.length)
-  const ne = document.getElementById('cat-note')
-  const note = CAT_NOTES[curCat]
-  if (note) { ne.textContent = note; ne.classList.add('show') } else ne.classList.remove('show')
-  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', CATS[i]===curCat))
-}
-
-function snapTo(idx) {
-  const total = (PKGS[curCat]||[]).length
-  curIdx = Math.max(0, Math.min(idx, total - 1))
-  outer.scrollTo({ left: curIdx * outer.clientWidth, behavior: 'smooth' })
-  renderDots(total)
-}
-
-function renderDots(n) {
-  document.getElementById('dots').innerHTML =
-    Array.from({length:n},(_,i)=>'<div class="dot'+(i===curIdx?' active':'')+'"></div>').join('')
-}
-
-function setCat(id) { curCat = id; renderCarousel() }
-
-// Update dots on native scroll (finger swipe)
-outer.addEventListener('scroll', () => {
-  if (!outer.clientWidth) return
-  const total = (PKGS[curCat]||[]).length
-  const idx = Math.round(outer.scrollLeft / outer.clientWidth)
-  if (idx !== curIdx) { curIdx = idx; renderDots(total) }
-}, {passive: true})
+// ── Dots: actualizar ao deslizar (por carrossel) ──
+CATS_JS.forEach(cat => {
+  const co = document.getElementById('co-'+cat)
+  if (!co) return
+  co.addEventListener('scroll', () => {
+    if (!co.clientWidth) return
+    const idx = Math.round(co.scrollLeft / co.clientWidth)
+    const dots = document.querySelectorAll('#dots-'+cat+' .dot')
+    dots.forEach((d,i) => d.classList.toggle('active', i === idx))
+  }, {passive: true})
+})
 
 // ── Sheet ──
 function openBuy(id) {
-  const all = Object.values(PKGS).flat()
+  const all = Object.values(PKGS_ALL).flat()
   const p = all.find(x=>x.id===id); if(!p) return
   curPkg = p
   document.getElementById('sh-size').textContent = p.name
@@ -841,8 +833,7 @@ function listenOrder(txId) {
   evtSrc.onerror = () => { evtSrc.close(); setTimeout(()=>listenOrder(txId),3000) }
 }
 
-// Init
-renderCarousel()
+// Init: diarias já visível por defeito (HTML pré-renderizado)
 </script>
 </body></html>`
 }
