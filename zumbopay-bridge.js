@@ -1127,7 +1127,7 @@ ${allListHtml}
       </button>
     </div>
     <div class="mo-modal-body">
-      <div class="mo-modal-bread"><a href="/" class="mo-bread-link">Início</a> / <a href="/megas#mais-ofertas" class="mo-bread-link">Ofertas</a> / <span id="mo-modal-bread" class="mo-bread-current"></span></div>
+      <div class="mo-modal-bread"><a href="/" class="mo-bread-link">Início</a> / <a href="#mais-ofertas" class="mo-bread-link" onclick="closeOffer();event.preventDefault();setTimeout(()=>{document.getElementById('mais-ofertas').scrollIntoView({behavior:'smooth'})},180)">Ofertas</a> / <span id="mo-modal-bread" class="mo-bread-current"></span></div>
       <h2 class="mo-modal-name" id="mo-modal-name"></h2>
       <p class="mo-modal-text" id="mo-modal-text"></p>
     </div>
