@@ -384,7 +384,7 @@ function megasPage() {
     `</div></div>`
 
   // Labels for list section headers
-  const listLabels = {diarias:'Diário',semanais:'Semanal',mensais:'Mensal',infinitas:'Infinitas'}
+  const listLabels = {diarias:'Diário',semanais:'Semanal',mensais:'Mensal',infinitas:'Diamante'}
 
   // Helper to build one list card
   const pkgListItem = p =>
@@ -432,8 +432,7 @@ function megasPage() {
 <html lang="pt"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <title>Megas — Net Serviços</title>
-<link rel="icon" href="/static/vodacom.webp" type="image/webp">
-<link rel="icon" href="/static/vodacom.webp">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%23cc0000'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Arial,sans-serif' font-weight='bold' font-size='20' fill='%23fff'%3EN%3C/text%3E%3C/svg%3E" type="image/svg+xml">
 <script>(function(){document.addEventListener('contextmenu',e=>e.preventDefault());document.addEventListener('keydown',function(e){const c=e.ctrlKey||e.metaKey;if(e.key==='F12'){e.preventDefault();return false}if(c&&e.shiftKey&&['I','J','C','K'].includes(e.key.toUpperCase())){e.preventDefault();return false}if(c&&['u','U','s','S','a','A','c','C','x','X'].includes(e.key)){e.preventDefault();return false}},true);['copy','cut','selectstart','dragstart'].forEach(ev=>document.addEventListener(ev,e=>e.preventDefault(),true))})()
 </script>
 <style>
@@ -443,7 +442,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 /* ── Nav ── */
 .nav{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:#fff;border-bottom:1px solid #e5e5ea;position:sticky;top:0;z-index:50;}
 .nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none;color:#1c1c1e;}
-.nav-logo-img{width:36px;height:36px;object-fit:contain;}
+.nav-logo-img{width:36px;height:36px;object-fit:contain;background:#000;border-radius:8px;padding:3px;}
 .nav-logo-text{font-size:15px;font-weight:800;}
 .nav-logo-text span{color:#cc0000;}
 .nav-right{display:flex;align-items:center;gap:4px;}
@@ -554,7 +553,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .site-footer{background:#1c1c1e;border-top:none;padding:32px 20px 0;}
 .footer-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;}
 .footer-brand{display:flex;align-items:center;gap:10px;}
-.footer-logo-img{width:34px;height:34px;object-fit:contain;}
+.footer-logo-img{width:34px;height:34px;object-fit:contain;background:#000;border-radius:8px;padding:3px;}
 .footer-brand-name{font-size:16px;font-weight:800;color:#f2f2f7;}
 .footer-brand-name span{color:#cc0000;}
 .footer-links{display:flex;flex-direction:column;gap:12px;text-align:right;}
@@ -566,6 +565,10 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .footer-social a{width:40px;height:40px;border-radius:50%;background:#2c2c2e;display:flex;align-items:center;justify-content:center;color:#8e8e93;text-decoration:none;transition:background .15s,color .15s;flex-shrink:0;}
 .footer-social a:active{background:#cc0000;color:#fff;}
 .footer-social svg{width:18px;height:18px;fill:currentColor;flex-shrink:0;}
+.footer-contact{display:flex;flex-direction:column;gap:10px;margin-bottom:18px;}
+.footer-contact-link{display:flex;align-items:center;gap:10px;color:#8e8e93;text-decoration:none;font-size:13px;font-weight:500;}
+.footer-contact-link svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;}
+.footer-contact-wa{color:#25d366;}
 .footer-copy{font-size:12px;color:#48484a;line-height:1.7;}
 
 /* ── Note banner ── */
@@ -612,10 +615,12 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .sh-next{width:calc(100% - 32px);margin:16px 16px 36px;padding:17px;border:none;border-radius:14px;font-size:16px;font-weight:700;font-family:inherit;cursor:pointer;background:linear-gradient(135deg,#e53935,#cc0000);color:#fff;transition:opacity .2s;}
 .sh-next:disabled{opacity:.45;cursor:not-allowed;}
 .sh-next:active{opacity:.85;}
+.sh-hint{display:block;font-size:12px;color:#8e8e93;margin-top:-10px;margin-bottom:14px;padding:0 2px;}
 /* states: pending / success / failed */
 .sh-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 20px 44px;text-align:center;}
-#s-pending{min-height:65vh;display:flex;flex-direction:column;}
-#s-pending .sh-state{flex:1;justify-content:center;}
+.sheet.pending-full{top:0!important;border-radius:0!important;max-height:100vh!important;}
+#s-pending{height:100%;display:flex;flex-direction:column;}
+#s-pending .sh-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:80vh;}
 .voda-gif{width:220px;height:220px;object-fit:contain;display:block;}
 .voda-pin-msg{font-size:18px;font-weight:400;color:#1c1c1e;line-height:1.55;max-width:280px;margin-top:4px;}
 .res-icon{width:68px;height:68px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:30px;margin:4px auto 18px;}
@@ -682,7 +687,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
     <button class="tab active" onclick="setCat('diarias')">Diárias</button>
     <button class="tab" onclick="setCat('semanais')">Semanais</button>
     <button class="tab" onclick="setCat('mensais')">Mensais</button>
-    <button class="tab" onclick="setCat('infinitas')">Infinitas</button>
+    <button class="tab" onclick="setCat('infinitas')">Diamante</button>
   </div>
 </div>
 
@@ -716,6 +721,16 @@ ${allListHtml}
       </a>
       <a href="#" aria-label="LinkedIn">
         <svg viewBox="0 0 24 24"><path d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-2-2 2 2 0 00-2 2v7h-4v-7a6 6 0 016-6zM2 9h4v12H2z"/><circle cx="4" cy="4" r="2"/></svg>
+      </a>
+    </div>
+    <div class="footer-contact">
+      <a href="tel:876563910" class="footer-contact-link">
+        <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.09 9.8a19.79 19.79 0 01-3.07-8.67A2 2 0 012 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
+        <span>876 563 910 — Suporte</span>
+      </a>
+      <a href="https://wa.me/258876563910" target="_blank" rel="noopener" class="footer-contact-link footer-contact-wa">
+        <svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>
+        <span>876 563 910 — WhatsApp</span>
       </a>
     </div>
     <p class="footer-copy">© 2025 Net Serviços · Todos os direitos reservados</p>
@@ -753,7 +768,8 @@ ${allListHtml}
     <!-- Tab: Para Mim -->
     <div class="sh-panel" id="sh-tab-mim">
       <label class="sh-lbl">Introduza o seu número</label>
-      <input class="sh-inp" id="sh-phone" type="tel" placeholder="84/85/86/87 + 7 dígitos" maxlength="9" inputmode="numeric" autocomplete="off" oninput="detectVia(this.value,'via')">
+      <input class="sh-inp" id="sh-phone" type="tel" placeholder="Número de telemóvel" maxlength="9" inputmode="numeric" autocomplete="off" oninput="detectVia(this.value,'via')">
+      <span class="sh-hint">M-Pesa: 84 ou 85 · e-Mola: 86 ou 87</span>
       <div class="sh-via-lbl">Activar a oferta via</div>
       <div class="sh-via-btns">
         <button class="sh-via active" id="via-mpesa" onclick="selectVia('mpesa')">
@@ -768,9 +784,11 @@ ${allListHtml}
     <!-- Tab: Para Outro -->
     <div class="sh-panel" id="sh-tab-outro" style="display:none">
       <label class="sh-lbl">Introduza o seu número</label>
-      <input class="sh-inp" id="sh-phone-payer" type="tel" placeholder="84/85/86/87 + 7 dígitos" maxlength="9" inputmode="numeric" autocomplete="off" oninput="detectVia(this.value,'via2')">
+      <input class="sh-inp" id="sh-phone-payer" type="tel" placeholder="Número de telemóvel" maxlength="9" inputmode="numeric" autocomplete="off" oninput="detectVia(this.value,'via2')">
+      <span class="sh-hint">M-Pesa: 84 ou 85 · e-Mola: 86 ou 87</span>
       <label class="sh-lbl">Introduza o número do beneficiário</label>
-      <input class="sh-inp" id="sh-phone-bene" type="tel" placeholder="84/85/86/87 + 7 dígitos" maxlength="9" inputmode="numeric" autocomplete="off">
+      <input class="sh-inp" id="sh-phone-bene" type="tel" placeholder="Número de telemóvel" maxlength="9" inputmode="numeric" autocomplete="off">
+      <span class="sh-hint">M-Pesa: 84 ou 85 · e-Mola: 86 ou 87</span>
       <div class="sh-via-lbl">Activar a oferta via</div>
       <div class="sh-via-btns">
         <button class="sh-via active" id="via2-mpesa" onclick="selectVia2('mpesa')">
@@ -908,7 +926,11 @@ function closeSheet() {
   if (evtSrc) { evtSrc.close(); evtSrc = null }
   setTimeout(()=>shShow('buy'), 300)
 }
-function shShow(s) { ['buy','pending','success','failed'].forEach(x=>document.getElementById('s-'+x).style.display=(x===s?'block':'none')) }
+function shShow(s) {
+  ['buy','pending','success','failed'].forEach(x=>document.getElementById('s-'+x).style.display=(x===s?'block':'none'))
+  const sh=document.getElementById('sheet')
+  if(s==='pending'){sh.classList.add('pending-full')}else{sh.classList.remove('pending-full')}
+}
 
 async function pay() {
   const raw = shCurTab==='outro'
