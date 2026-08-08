@@ -268,16 +268,16 @@ async function router(req, res) {
       start_url:'/megas',scope:'/',display:'standalone',
       background_color:'#f2f2f7',theme_color:'#cc0000',orientation:'portrait-primary',
       icons:[
-        {src:'/static/icon-192.png',sizes:'192x192',type:'image/png',purpose:'any'},
-        {src:'/static/icon-512.png',sizes:'512x512',type:'image/png',purpose:'any'},
-        {src:'/static/icon-maskable-512.png',sizes:'512x512',type:'image/png',purpose:'maskable'}
+        {src:'/static/icon-192.png?v=2',sizes:'192x192',type:'image/png',purpose:'any'},
+        {src:'/static/icon-512.png?v=2',sizes:'512x512',type:'image/png',purpose:'any'},
+        {src:'/static/icon-maskable-512.png?v=2',sizes:'512x512',type:'image/png',purpose:'maskable'}
       ]
     })
     res.writeHead(200,{'Content-Type':'application/manifest+json','Cache-Control':'max-age=3600'}); return res.end(manifest)
   }
   if (method === 'GET' && path === '/sw.js') {
     const sw = `
-const CACHE='ns-v3';
+const CACHE='ns-v4';
 const PRECACHE=['/manifest.json','/static/icon-192.png','/static/icon-512.png','/static/vodafone-logo.jpg','/static/coins.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(PRECACHE)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
@@ -687,7 +687,7 @@ function megasPage() {
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Net Serviços">
-<link rel="apple-touch-icon" href="/static/icon-192.png">
+<link rel="apple-touch-icon" href="/static/icon-192.png?v=2">
 <script>(function(){document.addEventListener('contextmenu',e=>e.preventDefault());document.addEventListener('keydown',function(e){const c=e.ctrlKey||e.metaKey;if(e.key==='F12'){e.preventDefault();return false}if(c&&e.shiftKey&&['I','J','C','K'].includes(e.key.toUpperCase())){e.preventDefault();return false}if(c&&['u','U','s','S','a','A','c','C','x','X'].includes(e.key)){e.preventDefault();return false}},true);['copy','cut','selectstart','dragstart'].forEach(ev=>document.addEventListener(ev,e=>e.preventDefault(),true))})()
 </script>
 <style>
