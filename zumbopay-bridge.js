@@ -11,7 +11,7 @@ import { readFile, writeFile }                       from 'fs/promises'
 const PORT                 = process.env.PORT || 5000
 const ZUMBO_API_KEY        = process.env.ZUMBO_API_KEY        || 'zk_live_a694231e0f188fe3599e4de8feda28b35714ed9b6fa3cd0e'
 const ZUMBO_MERCHANT_ID    = process.env.ZUMBO_MERCHANT_ID    || 'MCH_B29C53549C'
-const ZUMBO_WEBHOOK_SECRET = process.env.ZUMBO_WEBHOOK_SECRET || 'teste.com'
+const ZUMBO_WEBHOOK_SECRET = process.env.ZUMBO_WEBHOOK_SECRET || 'whsec_f7174a0971a3fa3235023a9900bba143746aef817bb3f777'
 const ZUMBO_BASE           = 'https://zumbopay.com/api/public/v1'
 const SITE_URL             = process.env.SITE_URL || 'https://net-servicos.onrender.com'
 const WALLET_MPESA         = process.env.WALLET_MPESA         || 'd9a21461-8ff3-4929-8015-efd89268a068'
