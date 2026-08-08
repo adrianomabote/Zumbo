@@ -178,12 +178,11 @@ async function router(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
 
   // ── Páginas públicas ──────────────────────────────────────────────────────
-  if (method === 'GET' && path === '/')         return html(res, landingPage())
+  if (method === 'GET' && path === '/')         { res.writeHead(302,{'Location':'/megas'}); return res.end() }
   if (method === 'GET' && path === '/static/vodacom.webp') {
     try { const img = await import('fs/promises').then(f=>f.readFile('./attached_assets/image_1786121779688.webp')); res.writeHead(200,{'Content-Type':'image/webp','Cache-Control':'max-age=86400'}); return res.end(img) } catch { res.writeHead(404); return res.end() }
   }
   if (method === 'GET' && path === '/megas')    return html(res, megasPage())
-  if (method === 'GET' && path === '/deposito') return html(res, depositPage())
   if (method === 'GET' && path === '/ping')     return json(res, { ok: true })
 
   // ── SSE ───────────────────────────────────────────────────────────────────
@@ -209,30 +208,6 @@ async function router(req, res) {
       const wh = data?.data?.webhook
       return json(res, { registered:!!wh, url:wh?.url||null, active:wh?.is_active||false })
     } catch { return json(res, { registered:false, url:null, active:false }) }
-  }
-
-  // ── API depósito ──────────────────────────────────────────────────────────
-  if (method === 'POST' && path === '/api/deposit') {
-    let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
-    const { phone, amount, customer_name } = body
-    if (!phone || !amount) return json(res, { error:'Telemóvel e valor obrigatórios.' }, 400)
-    const msisdn = normalizeMsisdn(phone), meth = detectMethod(msisdn)
-    const n = Number(amount)
-    if (isNaN(n)||n<=0) return json(res, { error:'Valor inválido.' }, 400)
-    if (!meth) return json(res, { error:'Número inválido. Use 84/85 (M-Pesa) ou 86/87 (e-Mola).' }, 400)
-    const txId = randomBytes(6).toString('hex')
-    const tx = { id:txId, type:'deposit', phone, msisdn, amount:n, method:meth, status:'pending', ref:null, error:null, ts:new Date().toISOString() }
-    transactions.set(txId, tx)
-    trackOrder(tx)
-    json(res, { txId, status:'pending', method:meth })
-    initiateCharge(tx, `dep-${txId}`, customer_name || 'Cliente')
-    return
-  }
-
-  const depP = parseParams('/api/deposit/:txId', path)
-  if (method === 'GET' && depP) {
-    const tx = transactions.get(depP.txId)
-    return tx ? json(res, tx) : json(res, { error:'Não encontrado.' }, 404)
   }
 
   // ── API encomenda de megas ────────────────────────────────────────────────
@@ -321,155 +296,6 @@ async function router(req, res) {
   json(res, { error:'Not found.' }, 404)
 }
 
-// ── PÁGINA: Landing ───────────────────────────────────────────────────────────
-function landingPage() { return `<!DOCTYPE html>
-<html lang="pt"><head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Net Serviços — Internet & Pagamentos</title>
-<script>(function(){document.addEventListener('contextmenu',e=>e.preventDefault());document.addEventListener('keydown',function(e){const c=e.ctrlKey||e.metaKey;if(e.key==='F12'){e.preventDefault();return false}if(c&&e.shiftKey&&['I','J','C','K'].includes(e.key.toUpperCase())){e.preventDefault();return false}if(c&&['u','U','s','S','a','A','c','C','x','X'].includes(e.key)){e.preventDefault();return false}},true);['copy','cut','selectstart','dragstart'].forEach(ev=>document.addEventListener(ev,e=>e.preventDefault(),true))})()
-</script>
-<style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;user-select:none;-webkit-user-select:none;}
-:root{--bg:#07080f;--s:#0d0f1a;--card:#111422;--b:#1a1e35;--accent:#10b981;--blue:#3b82f6;--text:#e8eaf6;--muted:#4a5080;--r:16px;}
-body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;}
-
-/* nav */
-.nav{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--b);position:sticky;top:0;background:rgba(7,8,15,.9);backdrop-filter:blur(16px);z-index:50;}
-.nav-logo{display:flex;align-items:center;gap:10px;}
-.nav-logo-icon{width:38px;height:38px;background:linear-gradient(135deg,var(--accent),#059669);border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:19px;box-shadow:0 4px 16px rgba(16,185,129,.3);}
-.nav-logo-text{font-size:17px;font-weight:800;letter-spacing:-.3px;}
-.nav-logo-text span{color:var(--accent);}
-.nav-links{display:flex;gap:8px;}
-.nav-btn{padding:7px 16px;border-radius:8px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;text-decoration:none;border:1.5px solid var(--b);color:var(--muted);background:transparent;transition:all .15s;}
-.nav-btn:hover,.nav-btn.act{border-color:var(--accent);color:var(--accent);background:rgba(16,185,129,.07);}
-
-/* hero */
-.hero{padding:72px 24px 60px;text-align:center;background:radial-gradient(ellipse 80% 50% at 50% -10%,rgba(16,185,129,.12) 0%,transparent 70%);}
-.hero-tag{display:inline-flex;align-items:center;gap:6px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.2);border-radius:999px;padding:5px 14px;font-size:12px;font-weight:700;color:var(--accent);margin-bottom:24px;letter-spacing:.3px;}
-.hero-title{font-size:clamp(32px,6vw,56px);font-weight:900;letter-spacing:-1.5px;line-height:1.1;margin-bottom:18px;}
-.hero-title span{background:linear-gradient(135deg,var(--accent),#3b82f6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
-.hero-sub{font-size:16px;color:var(--muted);line-height:1.7;max-width:480px;margin:0 auto 40px;}
-.hero-btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;}
-.btn-primary{padding:14px 28px;border-radius:12px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;border:none;background:linear-gradient(135deg,var(--accent),#059669);color:#fff;text-decoration:none;box-shadow:0 8px 24px rgba(16,185,129,.35);transition:transform .15s,box-shadow .15s;}
-.btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 32px rgba(16,185,129,.45);}
-.btn-sec{padding:14px 28px;border-radius:12px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;border:1.5px solid var(--b);color:var(--text);text-decoration:none;background:var(--card);transition:border-color .15s;}
-.btn-sec:hover{border-color:var(--blue);}
-
-/* services */
-.section{padding:60px 24px;max-width:900px;margin:0 auto;}
-.sec-title{font-size:13px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;}
-.sec-h{font-size:clamp(22px,4vw,32px);font-weight:800;letter-spacing:-.5px;margin-bottom:40px;}
-.services{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
-@media(max-width:600px){.services{grid-template-columns:1fr;}}
-.svc{background:var(--card);border:1px solid var(--b);border-radius:20px;padding:28px 24px;text-decoration:none;color:var(--text);transition:border-color .2s,transform .15s,box-shadow .2s;display:block;}
-.svc:hover{border-color:var(--accent);transform:translateY(-3px);box-shadow:0 16px 48px rgba(0,0,0,.4);}
-.svc-icon{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:18px;}
-.svc-icon.green{background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.2);}
-.svc-icon.blue{background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.2);}
-.svc-title{font-size:18px;font-weight:800;margin-bottom:8px;}
-.svc-desc{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:18px;}
-.svc-link{font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;}
-.svc-link.green{color:var(--accent);}
-.svc-link.blue{color:var(--blue);}
-.svc-badge{display:inline-block;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.18);border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;color:var(--accent);margin-bottom:8px;}
-
-/* steps */
-.steps-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;}
-@media(max-width:600px){.steps-grid{grid-template-columns:1fr;}}
-.step{text-align:center;padding:24px 16px;}
-.step-n{width:44px;height:44px;border-radius:50%;background:var(--card);border:1.5px solid var(--b);font-size:18px;font-weight:900;color:var(--accent);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;}
-.step-t{font-size:14px;font-weight:700;margin-bottom:6px;}
-.step-d{font-size:12px;color:var(--muted);line-height:1.6;}
-
-/* stats */
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:40px 0;}
-@media(max-width:500px){.stats{grid-template-columns:1fr;}}
-.stat{background:var(--card);border:1px solid var(--b);border-radius:16px;padding:24px;text-align:center;}
-.stat-n{font-size:32px;font-weight:900;color:var(--accent);margin-bottom:4px;}
-.stat-l{font-size:12px;color:var(--muted);}
-
-/* footer */
-.footer{border-top:1px solid var(--b);padding:28px 24px;text-align:center;color:var(--muted);font-size:12px;}
-.footer strong{color:var(--text);}
-
-/* divider */
-.divider{height:1px;background:var(--b);margin:0 24px;}
-</style>
-</head><body>
-
-<nav class="nav">
-  <div class="nav-logo">
-    <div class="nav-logo-icon">🌐</div>
-    <div class="nav-logo-text">Net <span>Serviços</span></div>
-  </div>
-  <div class="nav-links">
-    <a href="/megas"    class="nav-btn">Megas</a>
-    <a href="/deposito" class="nav-btn">Depósito</a>
-  </div>
-</nav>
-
-<div class="hero">
-  <div class="hero-tag">✓ Vodacom · M-Pesa · e-Mola</div>
-  <h1 class="hero-title">Internet rápida,<br><span>pagamentos seguros</span></h1>
-  <p class="hero-sub">Compre pacotes de internet Vodacom ou faça depósitos directamente do seu telemóvel. Simples, rápido e seguro.</p>
-  <div class="hero-btns">
-    <a href="/megas"    class="btn-primary">🌐 Comprar Megas</a>
-    <a href="/deposito" class="btn-sec">💳 Fazer Depósito</a>
-  </div>
-</div>
-
-<div class="divider"></div>
-
-<div class="section">
-  <div class="sec-title">Os nossos serviços</div>
-  <div class="sec-h">Escolha o que precisa</div>
-  <div class="services">
-    <a href="/megas" class="svc">
-      <div class="svc-icon green">🌐</div>
-      <div class="svc-badge">Vodacom</div>
-      <div class="svc-title">Megas de Internet</div>
-      <div class="svc-desc">Pacotes Normal, Premium 3 Dias, 7 Dias, Mensal e Diamante. A partir de 10 MT.</div>
-      <div class="svc-link green">Ver todos os pacotes →</div>
-    </a>
-    <a href="/deposito" class="svc">
-      <div class="svc-icon blue">💳</div>
-      <div class="svc-title">Depósito Directo</div>
-      <div class="svc-desc">Deposite fundos directamente via M-Pesa ou e-Mola com confirmação instantânea.</div>
-      <div class="svc-link blue">Fazer depósito →</div>
-    </a>
-  </div>
-</div>
-
-<div class="divider"></div>
-
-<div class="section">
-  <div class="sec-title">Como funciona</div>
-  <div class="sec-h">3 passos simples</div>
-  <div class="steps-grid">
-    <div class="step">
-      <div class="step-n">1</div>
-      <div class="step-t">Escolha o pacote</div>
-      <div class="step-d">Seleccione a categoria e o pacote que melhor se adapta à sua necessidade.</div>
-    </div>
-    <div class="step">
-      <div class="step-n">2</div>
-      <div class="step-t">Confirme o PIN</div>
-      <div class="step-d">Recebe um pedido no telemóvel via M-Pesa ou e-Mola. Introduza o seu PIN.</div>
-    </div>
-    <div class="step">
-      <div class="step-n">3</div>
-      <div class="step-t">Pronto!</div>
-      <div class="step-d">O pacote é activado em 5–15 minutos após confirmação do pagamento.</div>
-    </div>
-  </div>
-</div>
-
-<div class="footer">
-  <strong>Net Serviços</strong> &nbsp;·&nbsp; Internet & Pagamentos em Moçambique &nbsp;·&nbsp; Válido para Vodacom
-</div>
-
-</body></html>`
-}
 
 // ── PÁGINA: Megas ─────────────────────────────────────────────────────────────
 function megasPage() {
@@ -557,28 +383,35 @@ function megasPage() {
   // Labels for list section headers
   const listLabels = {diarias:'Diário',semanais:'Semanal',mensais:'Mensal',infinitas:'Infinitas'}
 
-  // Generate one full category section HTML
+  // Helper to build one list card
+  const pkgListItem = p =>
+    `<div class="pkg-item" onclick="openBuy('${p.id}')">` +
+    `<div class="pkg-item-top"><span class="pkg-item-name">${p.name}</span>` +
+    `<span class="pkg-item-price">${p.price} MT<span class="pkg-item-arr"> ›</span></span></div>` +
+    `<div class="pkg-item-sep"></div>` +
+    `<div class="pkg-item-data">` +
+    `<svg class="pkg-item-icon" viewBox="0 0 24 24"><path d="M7 16V4"/><path d="M4 7l3-3 3 3"/><path d="M17 8v12"/><path d="M14 17l3 3 3-3"/></svg>` +
+    `<span class="pkg-item-size">${p.size}</span></div></div>`
+
+  // Generate one carousel section (no list — list is rendered separately below)
   const sectionHtml = (catId, visible) => {
     const {note, pkgs} = CAT_DATA[catId]
     const slides = pkgs.map(slideHtml).join('')
     const dots   = pkgs.map((_,i) => `<div class="dot${i===0?' active':''}"></div>`).join('')
     const noteHtml = note ? `<div class="cat-note show">${note}</div>` : ''
-    const listItems = pkgs.map(p =>
-      `<div class="pkg-item" onclick="openBuy('${p.id}')">` +
-      `<div class="pkg-item-top"><span class="pkg-item-name">${p.name}</span>` +
-      `<span class="pkg-item-price">${p.price} MT<span class="pkg-item-arr"> ›</span></span></div>` +
-      `<div class="pkg-item-sep"></div>` +
-      `<div class="pkg-item-data">` +
-      `<svg class="pkg-item-icon" viewBox="0 0 24 24"><path d="M7 16V4"/><path d="M4 7l3-3 3 3"/><path d="M17 8v12"/><path d="M14 17l3 3 3-3"/></svg>` +
-      `<span class="pkg-item-size">${p.size}</span></div></div>`
-    ).join('')
     return `<div class="cat-section" id="cat-${catId}"${visible ? '' : ' style="display:none"'}>` +
       noteHtml +
       `<div class="carousel-outer" id="co-${catId}">${slides}</div>` +
       `<div class="dots" id="dots-${catId}">${dots}</div>` +
-      `<div class="pkg-list"><div class="pkg-list-head">${listLabels[catId]||''}</div>${listItems}</div>` +
       `</div>`
   }
+
+  // Combined list of ALL categories — always visible below carousel
+  const allListHtml = '<div class="pkg-list">' +
+    CATS_ORDER.map(catId =>
+      `<div class="pkg-list-head">${listLabels[catId]||''}</div>` +
+      CAT_DATA[catId].pkgs.map(pkgListItem).join('')
+    ).join('') + '</div>'
 
   // Build all 4 sections
   const allSections = CATS_ORDER.map((c, i) => sectionHtml(c, i === 0)).join('')
@@ -806,7 +639,6 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
   <ul class="drawer-menu">
     <li><a href="/"><span class="dm-icon">🏠</span>Início</a></li>
     <li><a href="/megas"><span class="dm-icon">📶</span>Pacotes de Internet</a></li>
-    <li><a href="/deposito"><span class="dm-icon">💳</span>Depósito</a></li>
     <div class="drawer-divider"></div>
     <li><a href="#" onclick="closeDrawer()"><span class="dm-icon">✕</span>Fechar menu</a></li>
   </ul>
@@ -827,6 +659,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 </div>
 
 <div class="carousel-area">${allSections}</div>
+${allListHtml}
 
 <footer class="site-footer">
   <div class="footer-top">
@@ -835,13 +668,11 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
       <div class="footer-brand-name">Net <span>Serviços</span></div>
     </div>
     <div class="footer-links">
-      <a href="/">Início</a>
       <a href="/megas">Pacotes de Internet</a>
-      <a href="/deposito">Fazer Depósito</a>
     </div>
   </div>
   <div class="footer-bottom">
-    <p class="footer-copy">© 2025 Net Serviços · Todos os direitos reservados<br>Powered by ZumboPay · Mozambique 🇲🇿</p>
+    <p class="footer-copy">© 2025 Net Serviços · Todos os direitos reservados</p>
   </div>
 </footer>
 
@@ -996,358 +827,6 @@ function closeDrawer() { document.getElementById('drawer').classList.remove('ope
 </body></html>`
 }
 
-// ── PÁGINA: Depósito ──────────────────────────────────────────────────────────
-function depositPage() { return `<!DOCTYPE html>
-<html lang="pt"><head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Depósito — Net Serviços</title>
-<script>(function(){document.addEventListener('contextmenu',e=>e.preventDefault());document.addEventListener('keydown',function(e){const c=e.ctrlKey||e.metaKey;if(e.key==='F12'){e.preventDefault();return false}if(c&&e.shiftKey&&['I','J','C','K'].includes(e.key.toUpperCase())){e.preventDefault();return false}if(c&&['u','U','s','S','a','A','c','C','x','X'].includes(e.key)){e.preventDefault();return false}},true);['copy','cut','selectstart','dragstart'].forEach(ev=>document.addEventListener(ev,e=>e.preventDefault(),true))})()
-</script>
-<style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;user-select:none;-webkit-user-select:none;}
-:root{--bg:#07080f;--s:#0d0f1a;--card:#111422;--b:#1a1e35;--accent:#3b82f6;--green:#10b981;--red:#ef4444;--text:#e8eaf6;--muted:#4a5080;--r:18px;}
-body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:24px;}
-.nav-top{width:100%;max-width:460px;display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;}
-.nav-logo{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:800;text-decoration:none;color:var(--text);}
-.nav-logo-icon{width:30px;height:30px;background:linear-gradient(135deg,var(--green),#059669);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:14px;}
-.nav-logo span{color:var(--green);}
-.nav-back{font-size:12px;color:var(--muted);text-decoration:none;padding:6px 12px;border:1px solid var(--b);border-radius:8px;}
-.nav-back:hover{color:var(--text);border-color:var(--accent);}
-.brand-wrap{text-align:center;margin-bottom:24px;}
-.brand-icon{width:54px;height:54px;background:linear-gradient(135deg,var(--accent),#6366f1);border-radius:15px;display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 12px;box-shadow:0 8px 24px rgba(59,130,246,.3);}
-.brand-name{font-size:20px;font-weight:800;}
-.brand-name span{color:var(--accent);}
-.card{background:var(--card);border:1px solid var(--b);border-radius:var(--r);padding:32px 28px;width:100%;max-width:420px;box-shadow:0 24px 64px rgba(0,0,0,.5);}
-.card-title{font-size:20px;font-weight:800;margin-bottom:4px;}
-.card-sub{font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:24px;}
-.field{margin-bottom:18px;}
-.lbl{display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:7px;}
-.inp-w{position:relative;}
-.ico{position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:15px;color:var(--muted);pointer-events:none;}
-input{width:100%;background:var(--s);border:1.5px solid var(--b);border-radius:12px;padding:12px 13px 12px 40px;color:var(--text);font-size:15px;font-family:inherit;outline:none;transition:border-color .15s;}
-input:focus{border-color:var(--accent);}
-input::placeholder{color:var(--muted);}
-.prefix-w input{padding-left:52px;font-size:20px;font-weight:700;}
-.pfx{position:absolute;left:13px;font-size:12px;font-weight:700;color:var(--accent);pointer-events:none;}
-.hint{font-size:11px;color:var(--muted);margin-top:5px;}
-.btn{width:100%;padding:14px;border:none;border-radius:12px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;background:linear-gradient(135deg,var(--accent),#6366f1);color:#fff;margin-top:6px;transition:opacity .2s;}
-.btn:hover{opacity:.9;}.btn:active{transform:scale(.99);}.btn:disabled{opacity:.4;cursor:not-allowed;}
-.btn-g{background:transparent;border:1.5px solid var(--b);color:var(--muted);margin-top:10px;}
-.btn-g:hover{border-color:var(--accent);color:var(--text);}
-#s-form,#s-pending,#s-success,#s-failed{display:none;}
-.mb{display:inline-flex;align-items:center;gap:5px;padding:4px 11px;border-radius:999px;font-size:11px;font-weight:700;margin-bottom:18px;}
-.mb.m{background:rgba(16,185,129,.1);color:var(--green);border:1px solid rgba(16,185,129,.18);}
-.mb.e{background:rgba(245,158,11,.1);color:#f59e0b;border:1px solid rgba(245,158,11,.18);}
-.spinner{width:52px;height:52px;border:4px solid var(--b);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite;margin:8px auto 22px;}
-@keyframes spin{to{transform:rotate(360deg)}}
-.big-amt{font-size:38px;font-weight:900;letter-spacing:-1px;}
-.big-sub{font-size:13px;color:var(--muted);margin-bottom:24px;}
-.pend-ph{display:inline-block;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.2);border-radius:8px;padding:4px 13px;font-size:14px;font-weight:700;color:var(--accent);margin-bottom:18px;}
-.psteps{list-style:none;background:var(--s);border:1px solid var(--b);border-radius:12px;padding:12px 16px;text-align:left;}
-.psteps li{font-size:12px;color:var(--muted);padding:6px 0;display:flex;align-items:flex-start;gap:8px;border-bottom:1px solid var(--b);}
-.psteps li:last-child{border-bottom:none;}
-.sn{min-width:18px;height:18px;border-radius:50%;background:rgba(59,130,246,.15);color:var(--accent);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
-.res-icon{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:30px;margin:8px auto 18px;}
-.res-icon.ok{background:rgba(16,185,129,.12);}
-.res-icon.bad{background:rgba(239,68,68,.12);}
-.res-t{font-size:20px;font-weight:700;margin-bottom:6px;}
-.res-s{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:22px;}
-.err-box{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:10px;padding:10px 14px;font-size:13px;color:#fca5a5;margin-bottom:14px;display:none;}
-.tag-ok{color:var(--green);}.tag-bad{color:var(--red);}
-.center{text-align:center;}
-@media(max-width:460px){.card{padding:24px 18px;}}
-</style>
-</head><body>
-
-<div class="nav-top">
-  <a href="/" class="nav-logo"><div class="nav-logo-icon">🌐</div><div class="nav-logo" style="font-size:15px;font-weight:800">Net <span>Serviços</span></div></a>
-  <a href="/" class="nav-back">← Início</a>
-</div>
-
-<div class="brand-wrap">
-  <div class="brand-icon">💳</div>
-  <div class="brand-name">Fazer <span>Depósito</span></div>
-</div>
-
-<div class="card">
-  <div id="s-form">
-    <p class="card-sub">Introduza o número de telemóvel e o valor. Receberá um pedido de PIN.</p>
-    <div class="err-box" id="err"></div>
-    <div class="field">
-      <label class="lbl">Nome (opcional)</label>
-      <div class="inp-w"><span class="ico">👤</span><input id="i-name" type="text" placeholder="O seu nome"></div>
-    </div>
-    <div class="field">
-      <label class="lbl">Número de telemóvel</label>
-      <div class="inp-w"><span class="ico">📱</span><input id="i-phone" type="tel" placeholder="84 000 0000" maxlength="15" inputmode="tel"></div>
-      <div class="hint">84/85 → M-Pesa · 86/87 → e-Mola</div>
-    </div>
-    <div class="field">
-      <label class="lbl">Valor a depositar</label>
-      <div class="inp-w prefix-w"><span class="pfx">MZN</span><input id="i-amount" type="number" placeholder="0" min="1" step="1" inputmode="decimal"></div>
-    </div>
-    <button class="btn" id="btn-dep" onclick="submit()">Depositar</button>
-  </div>
-
-  <div id="s-pending">
-    <div class="spinner"></div>
-    <div class="center">
-      <div class="big-amt" id="p-amt"></div>
-      <div class="big-sub">MZN</div>
-      <div id="p-method" class="mb"></div>
-      <div style="font-size:18px;font-weight:700;margin-bottom:6px">Aguardando PIN</div>
-      <div class="pend-ph" id="p-phone"></div>
-      <p style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.6">Introduza o <strong style="color:var(--text)">PIN</strong> no pedido recebido.</p>
-      <ul class="psteps">
-        <li><span class="sn">1</span>Verifique o telemóvel — pedido <span id="step-m">M-Pesa</span> recebido</li>
-        <li><span class="sn">2</span>Seleccione "Aceitar" e introduza o PIN</li>
-        <li><span class="sn">3</span>Esta página actualiza automaticamente</li>
-      </ul>
-    </div>
-  </div>
-
-  <div id="s-success">
-    <div class="center">
-      <div class="res-icon ok">✓</div>
-      <div class="big-amt tag-ok" id="ok-amt"></div>
-      <div class="big-sub">MZN</div>
-      <div class="res-t">Depósito confirmado!</div>
-      <p class="res-s">O pagamento foi processado com sucesso.</p>
-      <button class="btn" onclick="reset()">Novo depósito</button>
-    </div>
-  </div>
-
-  <div id="s-failed">
-    <div class="center">
-      <div class="res-icon bad">✗</div>
-      <div class="big-amt tag-bad" id="fail-amt"></div>
-      <div class="big-sub">MZN</div>
-      <div class="res-t">Não confirmado</div>
-      <p class="res-s" id="fail-reason">O PIN não foi introduzido.</p>
-      <button class="btn" onclick="reset()">Tentar novamente</button>
-      <button class="btn btn-g" onclick="reset()">Cancelar</button>
-    </div>
-  </div>
-</div>
-
-<script>
-let es=null
-function show(id){['form','pending','success','failed'].forEach(s=>document.getElementById('s-'+s).style.display=(s===id?'block':'none'))}
-function fmt(v){return Number(v).toLocaleString('pt-MZ',{minimumFractionDigits:2,maximumFractionDigits:2})}
-async function submit(){
-  const phone=document.getElementById('i-phone').value.trim()
-  const amount=document.getElementById('i-amount').value.trim()
-  const name=document.getElementById('i-name').value.trim()
-  const ee=document.getElementById('err');ee.style.display='none'
-  if(!phone)return setErr('Introduza o número de telemóvel.')
-  if(!amount||Number(amount)<=0)return setErr('Introduza um valor válido.')
-  const btn=document.getElementById('btn-dep');btn.disabled=true;btn.textContent='A processar…'
-  try{
-    const r=await fetch('/api/deposit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone,amount:Number(amount),customer_name:name||undefined})})
-    const d=await r.json()
-    if(!r.ok){setErr(d.error||'Erro.');btn.disabled=false;btn.textContent='Depositar';return}
-    const fa=fmt(amount)
-    document.getElementById('p-amt').textContent=fa
-    document.getElementById('ok-amt').textContent=fa
-    document.getElementById('fail-amt').textContent=fa
-    document.getElementById('p-phone').textContent=phone
-    const me=document.getElementById('p-method'),sm=document.getElementById('step-m')
-    if(d.method==='mpesa'){me.className='mb m';me.textContent='M-Pesa';sm.textContent='M-Pesa'}
-    if(d.method==='emola'){me.className='mb e';me.textContent='e-Mola';sm.textContent='e-Mola'}
-    show('pending');listen(d.txId)
-  }catch{setErr('Erro de ligação. Tente novamente.');btn.disabled=false;btn.textContent='Depositar'}
-}
-function listen(txId){
-  if(es)es.close()
-  es=new EventSource('/events/'+txId)
-  es.onmessage=e=>{const d=JSON.parse(e.data);if(d.status==='succeeded'){es.close();show('success')}if(d.status==='failed'){es.close();document.getElementById('fail-reason').textContent=d.error||'Tempo expirou.';show('failed')}}
-  es.onerror=()=>{es.close();setTimeout(()=>listen(txId),3000)}
-}
-function setErr(m){const e=document.getElementById('err');e.textContent=m;e.style.display='block'}
-function reset(){if(es){es.close();es=null};document.getElementById('i-phone').value='';document.getElementById('i-amount').value='';document.getElementById('i-name').value='';document.getElementById('err').style.display='none';const b=document.getElementById('btn-dep');b.disabled=false;b.textContent='Depositar';show('form')}
-show('form')
-</script>
-</body></html>`
-}
-
-// ── PÁGINA: Admin Login ───────────────────────────────────────────────────────
-function adminLoginPage(err = '') { return `<!DOCTYPE html>
-<html lang="pt"><head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Admin — Net Serviços</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0;}
-body{background:#07080f;color:#e8eaf6;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
-.card{background:#111422;border:1px solid #1a1e35;border-radius:18px;padding:40px 32px;width:100%;max-width:380px;}
-.icon{width:56px;height:56px;background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 20px;}
-h1{font-size:20px;font-weight:800;text-align:center;margin-bottom:4px;}
-.sub{font-size:13px;color:#4a5080;text-align:center;margin-bottom:28px;}
-.err{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:10px;padding:10px 14px;font-size:13px;color:#fca5a5;margin-bottom:16px;text-align:center;}
-label{display:block;font-size:11px;font-weight:700;color:#4a5080;text-transform:uppercase;letter-spacing:.7px;margin-bottom:7px;}
-input{width:100%;background:#0d0f1a;border:1.5px solid #1a1e35;border-radius:12px;padding:12px 14px;color:#e8eaf6;font-size:15px;font-family:inherit;outline:none;margin-bottom:16px;}
-input:focus{border-color:#f59e0b;}
-button{width:100%;padding:13px;border:none;border-radius:12px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;}
-button:hover{opacity:.9;}
-</style></head><body>
-<div class="card">
-  <div class="icon">🔒</div>
-  <h1>Painel Admin</h1>
-  <p class="sub">Net Serviços · Área restrita</p>
-  ${err ? `<div class="err">${err}</div>` : ''}
-  <form method="POST" action="/admin/office">
-    <label>Senha de acesso</label>
-    <input type="password" name="password" placeholder="••••••••••" autofocus>
-    <button type="submit">Entrar</button>
-  </form>
-</div>
-<script>
-document.querySelector('form').addEventListener('submit',async function(e){
-  e.preventDefault()
-  const pwd=this.password.value
-  const r=await fetch('/admin/office',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pwd})})
-  if(r.redirected){window.location.href=r.url}else if(r.ok){window.location.href='/admin/office'}else{const d=await r.json().catch(()=>({}));alert(d.error||'Senha incorrecta.')}
-})
-</script>
-</body></html>`
-}
-
-// ── PÁGINA: Admin Dashboard ───────────────────────────────────────────────────
-function adminDashboard(filter = 'all') {
-  const today   = new Date().toISOString().slice(0,10)
-  const todayOrders = orders.filter(o => o.ts.startsWith(today))
-  const pending  = orders.filter(o => o.status === 'pending' || o.status === 'succeeded').length
-  const revenue  = todayOrders.filter(o => o.status==='succeeded'||o.status==='activated').reduce((s,o)=>s+o.amount,0)
-  const total    = todayOrders.length
-  const filtered = filter === 'all' ? orders
-                 : filter === 'pending' ? orders.filter(o=>o.status==='pending'||o.status==='succeeded')
-                 : orders.filter(o=>o.status===filter)
-
-  const rows = filtered.slice(0, 200).map(o => {
-    const dt   = new Date(o.ts)
-    const time = dt.toLocaleTimeString('pt-MZ',{hour:'2-digit',minute:'2-digit'})
-    const date = dt.toLocaleDateString('pt-MZ',{day:'2-digit',month:'2-digit'})
-    const status = o.status === 'pending'  ? '<span class="badge pend">⏳ Pendente</span>'
-                 : o.status === 'succeeded'? '<span class="badge succ">✓ Pago</span>'
-                 : o.status === 'activated'? '<span class="badge actv">✓ Activado</span>'
-                 : '<span class="badge fail">✗ Falhou</span>'
-    const typeLabel = o.type === 'bundle' ? `🌐 ${o.bundleLabel||'-'}` : '💳 Depósito'
-    const action = (o.status === 'succeeded' && o.type === 'bundle')
-      ? `<button class="act-btn" onclick="activate('${o.txId}', this)">Activar</button>`
-      : ''
-    return `<tr>
-      <td>${date} ${time}</td>
-      <td>${o.phone}</td>
-      <td>${typeLabel}</td>
-      <td style="font-weight:700">${o.amount} MT</td>
-      <td>${o.method==='mpesa'?'M-Pesa':'e-Mola'}</td>
-      <td>${status}</td>
-      <td>${action}</td>
-    </tr>`
-  }).join('')
-
-  return `<!DOCTYPE html>
-<html lang="pt"><head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Admin — Net Serviços</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0;}
-body{background:#07080f;color:#e8eaf6;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;}
-.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;border-bottom:1px solid #1a1e35;background:#0d0f1a;}
-.topbar-left{display:flex;align-items:center;gap:10px;}
-.tb-icon{width:34px;height:34px;background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;}
-.tb-title{font-size:16px;font-weight:800;}
-.tb-sub{font-size:11px;color:#4a5080;}
-.tb-right{display:flex;align-items:center;gap:10px;}
-.logout{font-size:12px;color:#4a5080;text-decoration:none;padding:6px 12px;border:1px solid #1a1e35;border-radius:8px;}
-.logout:hover{color:#e8eaf6;border-color:#f59e0b;}
-.main{padding:24px;max-width:1100px;margin:0 auto;}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px;}
-@media(max-width:600px){.stats{grid-template-columns:1fr;}}
-.stat{background:#111422;border:1px solid #1a1e35;border-radius:14px;padding:20px;}
-.stat-n{font-size:28px;font-weight:900;margin-bottom:4px;}
-.stat-l{font-size:12px;color:#4a5080;}
-.stat-n.amber{color:#f59e0b;}.stat-n.green{color:#10b981;}.stat-n.blue{color:#3b82f6;}
-.filters{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;}
-.filter-btn{padding:7px 14px;border-radius:8px;border:1.5px solid #1a1e35;background:transparent;color:#4a5080;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;}
-.filter-btn.active,.filter-btn:hover{border-color:#f59e0b;color:#f59e0b;background:rgba(245,158,11,.07);}
-.refresh-btn{margin-left:auto;padding:7px 14px;border-radius:8px;border:1.5px solid #1a1e35;background:transparent;color:#4a5080;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;}
-.refresh-btn:hover{color:#e8eaf6;border-color:#3b82f6;}
-.table-wrap{background:#111422;border:1px solid #1a1e35;border-radius:14px;overflow:hidden;}
-table{width:100%;border-collapse:collapse;}
-thead th{padding:12px 14px;text-align:left;font-size:11px;font-weight:700;color:#4a5080;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #1a1e35;white-space:nowrap;}
-tbody tr{border-bottom:1px solid #1a1e35;transition:background .1s;}
-tbody tr:hover{background:rgba(255,255,255,.02);}
-tbody tr:last-child{border-bottom:none;}
-td{padding:12px 14px;font-size:13px;white-space:nowrap;}
-.badge{display:inline-block;padding:3px 9px;border-radius:6px;font-size:11px;font-weight:700;}
-.badge.pend{background:rgba(245,158,11,.1);color:#f59e0b;border:1px solid rgba(245,158,11,.2);}
-.badge.succ{background:rgba(16,185,129,.1);color:#10b981;border:1px solid rgba(16,185,129,.2);}
-.badge.actv{background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.3);}
-.badge.fail{background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.2);}
-.act-btn{padding:5px 12px;border-radius:7px;border:1px solid rgba(16,185,129,.3);background:rgba(16,185,129,.1);color:#10b981;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;}
-.act-btn:hover{background:rgba(16,185,129,.2);}
-.empty{padding:48px;text-align:center;color:#4a5080;font-size:14px;}
-.section-title{font-size:14px;font-weight:700;margin-bottom:12px;color:#e8eaf6;}
-</style></head><body>
-
-<div class="topbar">
-  <div class="topbar-left">
-    <div class="tb-icon">🔧</div>
-    <div><div class="tb-title">Painel Admin</div><div class="tb-sub">Net Serviços</div></div>
-  </div>
-  <div class="tb-right">
-    <a href="/" target="_blank" class="logout">🌐 Site</a>
-    <a href="/admin/logout" class="logout">Sair →</a>
-  </div>
-</div>
-
-<div class="main">
-  <div class="stats">
-    <div class="stat"><div class="stat-n amber">${pending}</div><div class="stat-l">Pendentes / Por activar</div></div>
-    <div class="stat"><div class="stat-n green">${revenue} MT</div><div class="stat-l">Receita hoje</div></div>
-    <div class="stat"><div class="stat-n blue">${total}</div><div class="stat-l">Encomendas hoje</div></div>
-  </div>
-
-  <div class="section-title">Encomendas</div>
-  <div class="filters">
-    <button class="filter-btn${filter==='all'?' active':''}"     onclick="setFilter('all')">Todas</button>
-    <button class="filter-btn${filter==='pending'?' active':''}" onclick="setFilter('pending')">Pendentes</button>
-    <button class="filter-btn${filter==='activated'?' active':''}" onclick="setFilter('activated')">Activadas</button>
-    <button class="filter-btn${filter==='failed'?' active':''}"  onclick="setFilter('failed')">Falhadas</button>
-    <button class="refresh-btn" onclick="location.reload()">↻ Actualizar</button>
-  </div>
-
-  <div class="table-wrap">
-    <table>
-      <thead><tr>
-        <th>Data/Hora</th><th>Telemóvel</th><th>Pacote</th><th>Valor</th><th>Método</th><th>Estado</th><th>Acção</th>
-      </tr></thead>
-      <tbody>
-        ${rows || '<tr><td colspan="7" class="empty">Nenhuma encomenda encontrada.</td></tr>'}
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<script>
-function setFilter(f){window.location.href='/admin/office?filter='+f}
-
-async function activate(txId, btn){
-  if(!confirm('Marcar como activado?')) return
-  btn.disabled=true; btn.textContent='...'
-  try{
-    const r=await fetch('/admin/activate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({txId})})
-    const d=await r.json()
-    if(d.ok){btn.closest('tr').querySelector('.badge').outerHTML='<span class="badge actv">✓ Activado</span>';btn.remove()}
-    else{alert(d.error||'Erro.');btn.disabled=false;btn.textContent='Activar'}
-  }catch{alert('Erro de ligação.');btn.disabled=false;btn.textContent='Activar'}
-}
-
-// Auto-refresh a cada 60s
-setTimeout(()=>location.reload(), 60000)
-</script>
-</body></html>`
-}
 
 // ── Servidor ──────────────────────────────────────────────────────────────────
 await loadOrders()
