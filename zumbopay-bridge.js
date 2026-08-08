@@ -809,7 +809,10 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .mo-modal-close{position:absolute;top:14px;right:14px;width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,.45);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;}
 .mo-modal-close svg{width:18px;height:18px;stroke:#fff;}
 .mo-modal-body{padding:24px 20px 48px;background:#f9f9f9;flex:1;}
-.mo-modal-bread{font-size:12px;color:#cc0000;margin-bottom:20px;line-height:1.4;}
+.mo-modal-bread{font-size:12px;color:#636366;margin-bottom:20px;line-height:1.4;}
+.mo-bread-link{color:#636366;text-decoration:none;}
+.mo-bread-link:active{text-decoration:underline;}
+.mo-bread-current{color:#cc0000;font-weight:700;}
 .mo-modal-name{font-size:22px;font-weight:800;color:#1c1c1e;margin-bottom:14px;text-align:center;}
 .mo-modal-text{font-size:15px;color:#3a3a3c;line-height:1.7;text-align:justify;}
 
@@ -1047,7 +1050,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 ${allListHtml}
 
 <!-- ── Veja mais ofertas ── -->
-<section class="more-offers">
+<section class="more-offers" id="mais-ofertas">
   <h2 class="more-offers-title">Veja mais ofertas</h2>
   <div class="more-offers-list">
 
@@ -1124,7 +1127,7 @@ ${allListHtml}
       </button>
     </div>
     <div class="mo-modal-body">
-      <div class="mo-modal-bread">Início / Ofertas / <span id="mo-modal-bread"></span></div>
+      <div class="mo-modal-bread"><a href="/" class="mo-bread-link">Início</a> / <a href="/megas#mais-ofertas" class="mo-bread-link">Ofertas</a> / <span id="mo-modal-bread" class="mo-bread-current"></span></div>
       <h2 class="mo-modal-name" id="mo-modal-name"></h2>
       <p class="mo-modal-text" id="mo-modal-text"></p>
     </div>
