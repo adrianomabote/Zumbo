@@ -556,7 +556,8 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .site-footer{background:#1c1c1e;border-top:none;padding:32px 20px 0;}
 .footer-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;}
 .footer-brand{display:flex;align-items:center;gap:10px;}
-.footer-logo-img{width:34px;height:34px;object-fit:contain;border-radius:8px;}
+.footer-logo-wrap{width:36px;height:36px;border-radius:8px;background:#1c1c1e;overflow:hidden;flex-shrink:0;}
+.footer-logo-img{width:36px;height:36px;object-fit:contain;display:block;mix-blend-mode:screen;}
 .footer-brand-name{font-size:16px;font-weight:800;color:#f2f2f7;}
 .footer-brand-name span{color:#cc0000;}
 .footer-links{display:flex;flex-direction:column;gap:12px;text-align:right;}
@@ -568,19 +569,18 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .footer-social a{width:40px;height:40px;border-radius:50%;background:#2c2c2e;display:flex;align-items:center;justify-content:center;color:#8e8e93;text-decoration:none;transition:background .15s,color .15s;flex-shrink:0;}
 .footer-social a:active{background:#cc0000;color:#fff;}
 .footer-social svg{width:18px;height:18px;fill:currentColor;flex-shrink:0;}
-.footer-support{margin-bottom:28px;}
-.footer-support-title{font-size:11px;font-weight:700;color:#636366;letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px;}
-.footer-support-cards{display:flex;flex-direction:column;gap:10px;}
-.footer-support-card{display:flex;align-items:center;gap:14px;background:#2c2c2e;border-radius:14px;padding:14px 16px;text-decoration:none;transition:background .15s;}
+.footer-support{margin-bottom:24px;}
+.footer-support-title{font-size:11px;font-weight:700;color:#636366;letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px;}
+.footer-support-cards{display:flex;gap:10px;}
+.footer-support-card{flex:1;display:flex;align-items:center;gap:10px;background:#2c2c2e;border-radius:12px;padding:10px 12px;text-decoration:none;transition:background .15s;min-width:0;}
 .footer-support-card:active{background:#3a3a3c;}
-.footer-support-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.footer-support-icon svg{width:20px;height:20px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.footer-support-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.footer-support-icon svg{width:16px;height:16px;}
 .footer-support-icon.phone{background:#cc0000;}
+.footer-support-icon.phone svg{stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
 .footer-support-icon.whatsapp{background:#25d366;}
-.footer-support-icon.whatsapp svg{stroke:#fff;}
-.footer-support-info{display:flex;flex-direction:column;gap:2px;}
-.footer-support-label{font-size:11px;color:#636366;font-weight:500;}
-.footer-support-number{font-size:15px;font-weight:700;color:#f2f2f7;letter-spacing:.02em;}
+.footer-support-icon.whatsapp svg{fill:#fff;}
+.footer-support-label{font-size:12px;font-weight:600;color:#f2f2f7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .footer-copy{font-size:12px;color:#48484a;line-height:1.7;}
 
 /* ── Note banner ── */
@@ -709,7 +709,7 @@ ${allListHtml}
 <footer class="site-footer">
   <div class="footer-top">
     <div class="footer-brand">
-      <img src="/static/vodafone-logo.jpg" alt="Net Serviços" class="footer-logo-img">
+      <div class="footer-logo-wrap"><img src="/static/vodafone-logo.jpg" alt="Net Serviços" class="footer-logo-img"></div>
       <div class="footer-brand-name">Net <span>Serviços</span></div>
     </div>
     <div class="footer-links">
@@ -742,19 +742,13 @@ ${allListHtml}
           <div class="footer-support-icon phone">
             <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.09 9.8a19.79 19.79 0 01-3.07-8.67A2 2 0 012 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
           </div>
-          <div class="footer-support-info">
-            <span class="footer-support-label">Linha de Suporte</span>
-            <span class="footer-support-number">876 563 910</span>
-          </div>
+          <span class="footer-support-label">Suporte Técnico</span>
         </a>
         <a href="https://wa.me/258876563910" target="_blank" rel="noopener" class="footer-support-card">
           <div class="footer-support-icon whatsapp">
-            <svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>
+            <svg viewBox="0 0 24 24" fill="#fff"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.118 1.528 5.847L.057 23.882a.5.5 0 00.606.63l6.266-1.643A11.94 11.94 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.686-.528-5.204-1.443l-.374-.22-3.878 1.018 1.037-3.785-.241-.389A9.96 9.96 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
           </div>
-          <div class="footer-support-info">
-            <span class="footer-support-label">WhatsApp</span>
-            <span class="footer-support-number">876 563 910</span>
-          </div>
+          <span class="footer-support-label">Falar no WhatsApp</span>
         </a>
       </div>
     </div>
