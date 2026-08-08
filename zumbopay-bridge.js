@@ -259,6 +259,33 @@ async function router(req, res) {
   if (method === 'GET' && path === '/static/offer-jackpot.webp') {
     try { const img = await import('fs/promises').then(f=>f.readFile('./attached_assets/image_(4)_1786184888721.webp')); res.writeHead(200,{'Content-Type':'image/webp','Cache-Control':'max-age=86400'}); return res.end(img) } catch { res.writeHead(404); return res.end() }
   }
+  if (method === 'GET' && path === '/static/icon.svg') {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="100" fill="#cc0000"/><text x="256" y="340" text-anchor="middle" font-family="Arial,sans-serif" font-weight="bold" font-size="300" fill="#fff">N</text></svg>`
+    res.writeHead(200,{'Content-Type':'image/svg+xml','Cache-Control':'max-age=86400'}); return res.end(svg)
+  }
+  if (method === 'GET' && path === '/manifest.json') {
+    const manifest = JSON.stringify({
+      name:'Net Serviços',short_name:'Net Serviços',
+      description:'Pacotes de internet Vodacom com pagamento M-Pesa',
+      start_url:'/megas',scope:'/',display:'standalone',
+      background_color:'#f2f2f7',theme_color:'#cc0000',orientation:'portrait-primary',
+      icons:[
+        {src:'/static/icon.svg',sizes:'any',type:'image/svg+xml',purpose:'any'},
+        {src:'/static/icon.svg',sizes:'any',type:'image/svg+xml',purpose:'maskable'}
+      ]
+    })
+    res.writeHead(200,{'Content-Type':'application/manifest+json','Cache-Control':'max-age=3600'}); return res.end(manifest)
+  }
+  if (method === 'GET' && path === '/sw.js') {
+    const sw = `
+const CACHE='ns-v1';
+const PRECACHE=['/megas','/manifest.json','/static/icon.svg','/static/vodafone-logo.jpg','/static/coins.png'];
+self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(PRECACHE)).then(()=>self.skipWaiting()))});
+self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
+self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;const url=new URL(e.request.url);if(url.pathname.startsWith('/api/')||url.pathname.startsWith('/admin'))return;e.respondWith(caches.match(e.request).then(cached=>{const fresh=fetch(e.request).then(r=>{if(r&&r.status===200){const c=r.clone();caches.open(CACHE).then(ca=>ca.put(e.request,c))}return r}).catch(()=>null);return cached||fresh}))});
+`
+    res.writeHead(200,{'Content-Type':'application/javascript','Cache-Control':'no-cache'}); return res.end(sw)
+  }
   if (method === 'GET' && path === '/megas')    return html(res, megasPage())
   if (method === 'GET' && path === '/ping')     return json(res, { ok: true })
 
@@ -637,7 +664,14 @@ function megasPage() {
 <html lang="pt"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <title>Megas — Net Serviços</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%23cc0000'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Arial,sans-serif' font-weight='bold' font-size='20' fill='%23fff'%3EN%3C/text%3E%3C/svg%3E" type="image/svg+xml">
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#cc0000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Net Serviços">
+<link rel="apple-touch-icon" href="/static/icon.svg">
 <script>(function(){document.addEventListener('contextmenu',e=>e.preventDefault());document.addEventListener('keydown',function(e){const c=e.ctrlKey||e.metaKey;if(e.key==='F12'){e.preventDefault();return false}if(c&&e.shiftKey&&['I','J','C','K'].includes(e.key.toUpperCase())){e.preventDefault();return false}if(c&&['u','U','s','S','a','A','c','C','x','X'].includes(e.key)){e.preventDefault();return false}},true);['copy','cut','selectstart','dragstart'].forEach(ev=>document.addEventListener(ev,e=>e.preventDefault(),true))})()
 </script>
 <style>
@@ -784,6 +818,19 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .footer-support-icon.whatsapp svg{fill:#fff;}
 .footer-support-label{font-size:12px;font-weight:600;color:#f2f2f7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .footer-copy{font-size:12px;color:#48484a;line-height:1.7;}
+
+/* ── Banner instalar PWA ── */
+.pwa-banner{display:none;position:fixed;bottom:0;left:0;right:0;z-index:400;background:#fff;border-top:1px solid #e5e5ea;padding:12px 16px;align-items:center;gap:12px;box-shadow:0 -4px 20px rgba(0,0,0,.12);}
+.pwa-banner.show{display:flex;}
+.pwa-banner-icon{flex-shrink:0;width:44px;height:44px;border-radius:10px;overflow:hidden;background:#cc0000;display:flex;align-items:center;justify-content:center;}
+.pwa-banner-icon img{width:100%;height:100%;object-fit:cover;}
+.pwa-banner-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.pwa-banner-text strong{font-size:14px;font-weight:700;color:#1c1c1e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pwa-banner-text span{font-size:12px;color:#636366;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pwa-banner-install{flex-shrink:0;padding:8px 18px;border-radius:8px;background:#cc0000;color:#fff;font-size:13px;font-weight:700;font-family:inherit;border:none;cursor:pointer;}
+.pwa-banner-install:active{background:#a00000;}
+.pwa-banner-close{flex-shrink:0;background:none;border:none;cursor:pointer;padding:6px;color:#636366;display:flex;align-items:center;justify-content:center;}
+.pwa-banner-close svg{width:18px;height:18px;}
 
 /* ── Veja mais ofertas ── */
 .more-offers{padding:32px 16px 8px;max-width:480px;margin:0 auto;}
@@ -1116,6 +1163,21 @@ ${allListHtml}
 
   </div>
 </section>
+
+<!-- ── Banner instalar app ── -->
+<div class="pwa-banner" id="pwa-banner">
+  <div class="pwa-banner-icon">
+    <img src="/static/icon.svg" alt="Net Serviços">
+  </div>
+  <div class="pwa-banner-text">
+    <strong>Net Serviços</strong>
+    <span>Instala a app no teu telemóvel</span>
+  </div>
+  <button class="pwa-banner-install" id="pwa-install-btn">Instalar</button>
+  <button class="pwa-banner-close" id="pwa-dismiss-btn" aria-label="Fechar">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+  </button>
+</div>
 
 <!-- Modal de detalhe de oferta -->
 <div class="mo-modal" id="mo-modal" onclick="if(event.target===this)closeOffer()">
@@ -1724,7 +1786,35 @@ function searchPkgs(q) {
 function openDrawer()  { document.getElementById('drawer').classList.add('open'); document.getElementById('drawer-overlay').classList.add('open') }
 function closeDrawer() { document.getElementById('drawer').classList.remove('open'); document.getElementById('drawer-overlay').classList.remove('open') }
 
-// ── Mais ofertas ────────────────────────────────────────────────────────────
+// ── PWA Install ─────────────────────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(()=>{}))
+}
+let _pwaPrompt = null
+const _pwaBanner = document.getElementById('pwa-banner')
+const _pwaKey = 'pwa-dismissed'
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault()
+  _pwaPrompt = e
+  if (!sessionStorage.getItem(_pwaKey)) _pwaBanner.classList.add('show')
+})
+window.addEventListener('appinstalled', () => {
+  _pwaBanner.classList.remove('show')
+  _pwaPrompt = null
+})
+document.getElementById('pwa-install-btn').addEventListener('click', async () => {
+  if (!_pwaPrompt) return
+  _pwaBanner.classList.remove('show')
+  _pwaPrompt.prompt()
+  const { outcome } = await _pwaPrompt.userChoice
+  if (outcome === 'accepted') _pwaPrompt = null
+})
+document.getElementById('pwa-dismiss-btn').addEventListener('click', () => {
+  _pwaBanner.classList.remove('show')
+  sessionStorage.setItem(_pwaKey, '1')
+})
+
+// ── Mais ofertas ─────────────────────────────────────────────────────────────
 const OFFERS = {
   soprati: {
     name: 'Ofertas SóPraTi',
