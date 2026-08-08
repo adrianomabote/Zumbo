@@ -853,8 +853,8 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 /* ── Método de pagamento (via-btns) ── */
 .via-section{padding:4px 0 12px;}
 .via-section-lbl{font-size:11px;font-weight:700;color:#8e8e93;text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;padding:0 2px;}
-.via-btns{display:inline-flex;gap:8px;}
-.via-btn{width:auto;}
+.via-btns{display:flex;gap:8px;width:100%;}
+.via-btn{flex:1;}
 .via-btn{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;border:1.5px solid #e5e5ea;background:#fff;cursor:pointer;font-family:inherit;text-align:left;transition:border-color .15s,background .15s;width:100%;}
 .via-btn.active{border-color:#cc0000;background:#fff0f0;}
 .via-btn:disabled{opacity:.45;cursor:not-allowed;}
