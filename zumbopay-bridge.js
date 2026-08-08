@@ -58,7 +58,7 @@ const BUNDLES = new Map([
 
 // ── Base de dados permanente (opcional — resolve o disco efémero do Render) ──
 // Cole aqui o "External Database URL" do PostgreSQL criado no Render:
-const HARD_DB_URL = ''
+const HARD_DB_URL = 'postgresql://net_servicos_user:OoCF0ddLF0HWwFKeBH1MqTzmwrA7cOcj@dpg-d9rmltqjnfac73826050-a.oregon-postgres.render.com/net_servicos'
 const APP_DB_URL  = process.env.APP_DB_URL || process.env.DATABASE_URL || HARD_DB_URL
 let dbPool = null
 if (APP_DB_URL) {
