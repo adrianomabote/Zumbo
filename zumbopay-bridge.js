@@ -15,7 +15,7 @@ const ZUMBO_WEBHOOK_SECRET = 'teste.com'
 const ZUMBO_BASE           = 'https://zumbopay.com/api/public/v1'
 const WALLET_MPESA         = 'd9a21461-8ff3-4929-8015-efd89268a068'
 const WALLET_EMOLA         = '93a03d6d-f361-4602-90e1-c62889b45346'
-const ADMIN_PASS           = 'office2025'
+const ADMIN_PASS           = '00220022aA1'
 const ORDERS_FILE          = './orders.json'
 
 function adminToken() {
@@ -571,8 +571,8 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .footer-social svg{width:18px;height:18px;fill:currentColor;flex-shrink:0;}
 .footer-support{margin-bottom:24px;}
 .footer-support-title{font-size:11px;font-weight:700;color:#636366;letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px;}
-.footer-support-cards{display:flex;gap:10px;}
-.footer-support-card{flex:1;display:flex;align-items:center;gap:10px;background:#2c2c2e;border-radius:12px;padding:10px 12px;text-decoration:none;transition:background .15s;min-width:0;}
+.footer-support-cards{display:flex;flex-direction:column;gap:8px;}
+.footer-support-card{display:flex;align-items:center;gap:12px;background:#2c2c2e;border-radius:10px;padding:9px 14px;text-decoration:none;transition:background .15s;}
 .footer-support-card:active{background:#3a3a3c;}
 .footer-support-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .footer-support-icon svg{width:16px;height:16px;}
@@ -984,6 +984,148 @@ function closeDrawer() { document.getElementById('drawer').classList.remove('ope
 </body></html>`
 }
 
+
+// ── Admin: Login ──────────────────────────────────────────────────────────────
+function adminLoginPage(err = '') {
+  return `<!DOCTYPE html><html lang="pt"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin — Net Serviços</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;}
+.card{background:#fff;border-radius:18px;padding:36px 28px;width:100%;max-width:340px;box-shadow:0 2px 16px rgba(0,0,0,.08);}
+.logo{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:28px;}
+.logo img{width:36px;height:36px;object-fit:contain;border-radius:8px;}
+.logo-text{font-size:18px;font-weight:800;color:#1c1c1e;}
+.logo-text span{color:#cc0000;}
+h2{font-size:17px;font-weight:700;color:#1c1c1e;margin-bottom:6px;text-align:center;}
+p{font-size:13px;color:#636366;text-align:center;margin-bottom:24px;}
+label{display:block;font-size:13px;font-weight:600;color:#1c1c1e;margin-bottom:7px;}
+input{width:100%;border:1.5px solid #c7c7cc;border-radius:12px;padding:14px;font-size:15px;font-family:inherit;color:#1c1c1e;outline:none;transition:border-color .15s;margin-bottom:16px;}
+input:focus{border-color:#cc0000;}
+.err{background:#fff0f0;border:1px solid #ffcdd2;border-radius:10px;padding:10px 14px;font-size:13px;color:#cc0000;margin-bottom:14px;display:${err?'block':'none'};}
+button{width:100%;padding:15px;border:none;border-radius:12px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;background:#cc0000;color:#fff;}
+button:active{opacity:.85;}
+</style></head><body>
+<div class="card">
+  <div class="logo">
+    <img src="/static/vodacom.webp" alt="logo">
+    <div class="logo-text">Net <span>Serviços</span></div>
+  </div>
+  <h2>Área Reservada</h2>
+  <p>Acesso exclusivo a administradores</p>
+  <form method="POST" action="/admin/office" onsubmit="handleLogin(event)">
+    <label for="pw">Senha</label>
+    <input type="password" id="pw" name="password" placeholder="••••••••••" autocomplete="current-password" required>
+    <div class="err">${err}</div>
+    <button type="submit">Entrar</button>
+  </form>
+</div>
+<script>
+function handleLogin(e){
+  e.preventDefault()
+  const pw=document.getElementById('pw').value
+  fetch('/admin/office',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})})
+    .then(r=>r.redirected?window.location.href=r.url:r.text().then(t=>{document.open();document.write(t);document.close()}))
+    .catch(()=>{})
+}
+</script>
+</body></html>`
+}
+
+// ── Admin: Dashboard ──────────────────────────────────────────────────────────
+function adminDashboard(filter = 'all') {
+  const filtered = filter === 'all' ? orders : orders.filter(o => o.status === filter)
+  const counts = { all: orders.length, pending: 0, succeeded: 0, failed: 0, activated: 0 }
+  orders.forEach(o => { if (counts[o.status] !== undefined) counts[o.status]++ })
+
+  const statusLabel = { pending:'Pendente', succeeded:'Pago', failed:'Falhou', activated:'Activado' }
+  const statusColor = { pending:'#b45309', succeeded:'#166534', failed:'#991b1b', activated:'#1d4ed8' }
+  const statusBg    = { pending:'#fef9c3', succeeded:'#dcfce7', failed:'#fee2e2', activated:'#dbeafe' }
+  const methodLabel = { mpesa:'M-Pesa', emola:'e-Mola' }
+
+  const statCards = [
+    {label:'Total',key:'all',icon:'📋'},
+    {label:'Pago',key:'succeeded',icon:'✅'},
+    {label:'Pendente',key:'pending',icon:'⏳'},
+    {label:'Falhou',key:'failed',icon:'❌'},
+  ].map(s => `
+    <a href="/admin/office?filter=${s.key}" class="stat${filter===s.key?' stat-active':''}">
+      <span class="stat-icon">${s.icon}</span>
+      <span class="stat-num">${counts[s.key]}</span>
+      <span class="stat-lbl">${s.label}</span>
+    </a>`).join('')
+
+  const rows = filtered.length === 0
+    ? `<div class="empty">Nenhum registo encontrado.</div>`
+    : filtered.map(o => {
+        const dt = new Date(o.ts)
+        const dateStr = dt.toLocaleDateString('pt-MZ',{day:'2-digit',month:'short'}) + ' ' + dt.toLocaleTimeString('pt-MZ',{hour:'2-digit',minute:'2-digit'})
+        const sc = statusColor[o.status]||'#636366', sb = statusBg[o.status]||'#f2f2f7'
+        return `<div class="order-card">
+          <div class="order-top">
+            <div>
+              <div class="order-phone">${o.phone}</div>
+              <div class="order-meta">${o.bundleLabel||'—'} · ${methodLabel[o.method]||o.method} · ${dateStr}</div>
+            </div>
+            <div class="order-right">
+              <div class="order-amount">${o.amount} MT</div>
+              <span class="badge" style="color:${sc};background:${sb}">${statusLabel[o.status]||o.status}</span>
+            </div>
+          </div>
+        </div>`
+      }).join('')
+
+  return `<!DOCTYPE html><html lang="pt"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin — Net Serviços</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;color:#1c1c1e;}
+/* Nav */
+.nav{background:#fff;border-bottom:1px solid #e5e5ea;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;}
+.nav-brand{display:flex;align-items:center;gap:10px;}
+.nav-brand img{width:32px;height:32px;object-fit:contain;border-radius:6px;}
+.nav-brand-text{font-size:15px;font-weight:800;color:#1c1c1e;}
+.nav-brand-text span{color:#cc0000;}
+.nav-badge{font-size:11px;font-weight:600;color:#636366;background:#f2f2f7;border-radius:6px;padding:3px 8px;margin-left:6px;}
+.logout{font-size:13px;font-weight:600;color:#cc0000;text-decoration:none;padding:7px 14px;border-radius:10px;border:1.5px solid #cc0000;}
+.logout:active{background:#fff0f0;}
+/* Content */
+.content{max-width:640px;margin:0 auto;padding:20px 16px 40px;}
+/* Stat grid */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px;}
+.stat{background:#fff;border-radius:14px;padding:14px 10px;text-decoration:none;display:flex;flex-direction:column;align-items:center;gap:4px;border:2px solid transparent;transition:border-color .15s;}
+.stat-active{border-color:#cc0000;}
+.stat-icon{font-size:20px;}
+.stat-num{font-size:22px;font-weight:800;color:#1c1c1e;}
+.stat-lbl{font-size:11px;color:#636366;font-weight:600;}
+/* Orders */
+.section-title{font-size:13px;font-weight:700;color:#636366;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;}
+.order-card{background:#fff;border-radius:14px;padding:14px 16px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,.06);}
+.order-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+.order-phone{font-size:15px;font-weight:700;color:#1c1c1e;margin-bottom:4px;}
+.order-meta{font-size:12px;color:#636366;line-height:1.5;}
+.order-right{text-align:right;flex-shrink:0;}
+.order-amount{font-size:15px;font-weight:700;color:#1c1c1e;margin-bottom:6px;}
+.badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;display:inline-block;}
+.empty{text-align:center;padding:40px 0;color:#8e8e93;font-size:14px;}
+</style></head><body>
+<nav class="nav">
+  <div class="nav-brand">
+    <img src="/static/vodacom.webp" alt="logo">
+    <span class="nav-brand-text">Net <span>Serviços</span></span>
+    <span class="nav-badge">Admin</span>
+  </div>
+  <a href="/admin/logout" class="logout">Sair</a>
+</nav>
+<div class="content">
+  <div class="stats">${statCards}</div>
+  <div class="section-title">Encomendas${filter!=='all'?' — '+statusLabel[filter]:''}</div>
+  ${rows}
+</div>
+</body></html>`
+}
 
 // ── Servidor ──────────────────────────────────────────────────────────────────
 await loadOrders()
