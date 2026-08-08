@@ -67,7 +67,8 @@ async function saveOrders() {
 }
 function trackOrder(tx, extra = {}) {
   const rec = {
-    txId: tx.id, type: tx.type || 'deposit', phone: tx.phone,
+    txId: tx.id, type: tx.type || 'bundle', phone: tx.phone,
+    beneficiaryPhone: tx.beneficiaryPhone || null,
     bundleId: tx.bundleId || null, bundleLabel: tx.bundleLabel || null,
     amount: tx.amount, method: tx.method, status: 'pending',
     ts: tx.ts, activatedAt: null, ...extra,
@@ -219,13 +220,13 @@ async function router(req, res) {
   // ── API encomenda de megas ────────────────────────────────────────────────
   if (method === 'POST' && path === '/api/order') {
     let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
-    const { phone, bundleId } = body
+    const { phone, beneficiaryPhone, bundleId } = body
     const bundle = BUNDLES.get(bundleId)
     if (!bundle) return json(res, { error:'Pacote inválido.' }, 400)
     const msisdn = normalizeMsisdn(phone), meth = detectMethod(msisdn)
-    if (!meth) return json(res, { error:'Número inválido. Use 84/85 (M-Pesa) ou 86/87 (e-Mola).' }, 400)
+    if (!meth) return json(res, { error:'Número inválido. Use 84 ou 85.' }, 400)
     const txId = randomBytes(6).toString('hex')
-    const tx = { id:txId, type:'bundle', bundleId, bundleLabel:bundle.label, phone, msisdn, amount:bundle.price, method:meth, status:'pending', ref:null, error:null, ts:new Date().toISOString() }
+    const tx = { id:txId, type:'bundle', bundleId, bundleLabel:bundle.label, phone, beneficiaryPhone: beneficiaryPhone||null, msisdn, amount:bundle.price, method:meth, status:'pending', ref:null, error:null, ts:new Date().toISOString() }
     transactions.set(txId, tx)
     trackOrder(tx)
     json(res, { txId, status:'pending', method:meth })
@@ -925,17 +926,26 @@ function shShow(s) {
 }
 
 async function pay() {
-  const raw = shCurTab==='outro'
-    ? document.getElementById('sh-phone-payer').value.trim()
-    : document.getElementById('sh-phone').value.trim()
-  const phone = raw.replace(/\D/g,'')
   const ee = document.getElementById('sh-err'); ee.style.display='none'
-  if (!phone) { ee.textContent='Introduza o número de telemóvel.'; ee.style.display='block'; return }
-  if (phone.length !== 9) { ee.textContent='O número deve ter exactamente 9 dígitos.'; ee.style.display='block'; return }
-  if (!/^(84|85|86|87)/.test(phone)) { ee.textContent='Número inválido. Use 84/85 (M-Pesa) ou 86/87 (e-Mola).'; ee.style.display='block'; return }
+  let phone, beneficiaryPhone=null
+  if (shCurTab==='outro') {
+    phone = document.getElementById('sh-phone-payer').value.trim().replace(/\D/g,'')
+    const bene = document.getElementById('sh-phone-bene').value.trim().replace(/\D/g,'')
+    if (!phone) { ee.textContent='Introduza o seu número de pagamento.'; ee.style.display='block'; return }
+    if (phone.length!==9||!/^(84|85|86|87)/.test(phone)) { ee.textContent='Número de pagamento inválido. Use 84 ou 85.'; ee.style.display='block'; return }
+    if (!bene) { ee.textContent='Introduza o número do beneficiário.'; ee.style.display='block'; return }
+    if (bene.length!==9) { ee.textContent='Número do beneficiário deve ter 9 dígitos.'; ee.style.display='block'; return }
+    beneficiaryPhone = bene
+  } else {
+    phone = document.getElementById('sh-phone').value.trim().replace(/\D/g,'')
+    if (!phone) { ee.textContent='Introduza o número de telemóvel.'; ee.style.display='block'; return }
+    if (phone.length!==9) { ee.textContent='O número deve ter exactamente 9 dígitos.'; ee.style.display='block'; return }
+    if (!/^(84|85|86|87)/.test(phone)) { ee.textContent='Número inválido. Use 84 ou 85.'; ee.style.display='block'; return }
+  }
   const btn = document.getElementById('sh-btn'); btn.disabled=true; btn.textContent='A processar…'
   try {
-    const r = await fetch('/api/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone,bundleId:curPkg.id})})
+    const payload={phone,bundleId:curPkg.id}; if(beneficiaryPhone) payload.beneficiaryPhone=beneficiaryPhone
+    const r = await fetch('/api/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
     const d = await r.json()
     if (!r.ok) { ee.textContent=d.error||'Erro ao processar.'; ee.style.display='block'; btn.disabled=false; btn.textContent='Próximo'; return }
     document.getElementById('sh-method-lbl').textContent = d.method==='mpesa'?'M-Pesa':'e-Mola'
@@ -1035,95 +1045,312 @@ function handleLogin(e){
 
 // ── Admin: Dashboard ──────────────────────────────────────────────────────────
 function adminDashboard(filter = 'all') {
-  const filtered = filter === 'all' ? orders : orders.filter(o => o.status === filter)
-  const counts = { all: orders.length, pending: 0, succeeded: 0, failed: 0, activated: 0 }
-  orders.forEach(o => { if (counts[o.status] !== undefined) counts[o.status]++ })
+  const counts = { all:0, pending:0, succeeded:0, activated:0, failed:0 }
+  let totalReceived = 0
+  orders.forEach(o => {
+    counts.all++
+    if (counts[o.status] !== undefined) counts[o.status]++
+    if (o.status==='succeeded'||o.status==='activated') totalReceived += (o.amount||0)
+  })
 
-  const statusLabel = { pending:'Pendente', succeeded:'Pago', failed:'Falhou', activated:'Activado' }
-  const statusColor = { pending:'#b45309', succeeded:'#166534', failed:'#991b1b', activated:'#1d4ed8' }
-  const statusBg    = { pending:'#fef9c3', succeeded:'#dcfce7', failed:'#fee2e2', activated:'#dbeafe' }
-  const methodLabel = { mpesa:'M-Pesa', emola:'e-Mola' }
+  const filterMap = {
+    all: orders,
+    pending: orders.filter(o=>o.status==='pending'),
+    succeeded: orders.filter(o=>o.status==='succeeded'),
+    activated: orders.filter(o=>o.status==='activated'),
+    failed: orders.filter(o=>o.status==='failed'),
+  }
+  const filtered = filterMap[filter] || orders
 
-  const statCards = [
-    {label:'Total',key:'all',icon:'📋'},
-    {label:'Pago',key:'succeeded',icon:'✅'},
-    {label:'Pendente',key:'pending',icon:'⏳'},
-    {label:'Falhou',key:'failed',icon:'❌'},
-  ].map(s => `
-    <a href="/admin/office?filter=${s.key}" class="stat${filter===s.key?' stat-active':''}">
-      <span class="stat-icon">${s.icon}</span>
-      <span class="stat-num">${counts[s.key]}</span>
-      <span class="stat-lbl">${s.label}</span>
+  const SL = { pending:'A aguardar pagamento', succeeded:'Pagamento confirmado', activated:'Activado', failed:'Falhado' }
+  const SC = { pending:'#92400e', succeeded:'#065f46', activated:'#1e3a8a', failed:'#991b1b' }
+  const SBG= { pending:'#fef3c7', succeeded:'#d1fae5', activated:'#dbeafe', failed:'#fee2e2' }
+  const ML = { mpesa:'M-Pesa', emola:'e-Mola' }
+
+  const navItems = [
+    { f:'all',       label:'Todas as transacções',    icon:'M3 7h18M3 12h18M3 17h18' },
+    { f:'succeeded', label:'Pendentes de Activação',  icon:'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
+    { f:'activated', label:'Activações Confirmadas',  icon:'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
+    { f:'pending',   label:'A aguardar Pagamento',    icon:'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
+    { f:'failed',    label:'Pagamentos Falhados',     icon:'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z' },
+  ]
+
+  const sidebarLinks = navItems.map(n=>`
+    <a href="/admin/office?filter=${n.f}" class="nav-link${filter===n.f?' active':''}">
+      <svg viewBox="0 0 24 24"><path d="${n.icon}" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
+      <span>${n.label}</span>
+      <span class="nav-count">${filterMap[n.f]?.length||0}</span>
     </a>`).join('')
 
-  const rows = filtered.length === 0
-    ? `<div class="empty">Nenhum registo encontrado.</div>`
+  const pageTitle = navItems.find(n=>n.f===filter)?.label || 'Todas as transacções'
+
+  const cards = filtered.length === 0
+    ? `<div class="empty"><div class="empty-icon">📭</div><p>Nenhuma transacção encontrada.</p></div>`
     : filtered.map(o => {
         const dt = new Date(o.ts)
-        const dateStr = dt.toLocaleDateString('pt-MZ',{day:'2-digit',month:'short'}) + ' ' + dt.toLocaleTimeString('pt-MZ',{hour:'2-digit',minute:'2-digit'})
-        const sc = statusColor[o.status]||'#636366', sb = statusBg[o.status]||'#f2f2f7'
-        return `<div class="order-card">
-          <div class="order-top">
-            <div>
-              <div class="order-phone">${o.phone}</div>
-              <div class="order-meta">${o.bundleLabel||'—'} · ${methodLabel[o.method]||o.method} · ${dateStr}</div>
-            </div>
-            <div class="order-right">
-              <div class="order-amount">${o.amount} MT</div>
-              <span class="badge" style="color:${sc};background:${sb}">${statusLabel[o.status]||o.status}</span>
-            </div>
-          </div>
-        </div>`
+        const ds = dt.toLocaleDateString('pt-MZ',{day:'2-digit',month:'short',year:'numeric'})
+          + ' ' + dt.toLocaleTimeString('pt-MZ',{hour:'2-digit',minute:'2-digit'})
+        const benef = o.beneficiaryPhone || o.phone
+        const isForOther = o.beneficiaryPhone && o.beneficiaryPhone !== o.phone
+        const canActivate = o.status === 'succeeded'
+        return `<div class="order-card" id="card-${o.txId}">
+  <div class="card-header">
+    <div class="card-left">
+      <div class="card-badge-row">
+        <span class="badge" style="color:${SC[o.status]||'#636366'};background:${SBG[o.status]||'#f2f2f7'}">${SL[o.status]||o.status}</span>
+        <span class="method-tag">${ML[o.method]||o.method}</span>
+      </div>
+      <div class="card-date">${ds}</div>
+    </div>
+    <div class="card-amount">${o.amount} <span>MT</span></div>
+  </div>
+  <div class="card-divider"></div>
+  <div class="card-body">
+    <div class="info-row">
+      <span class="info-label">Pagador</span>
+      <span class="info-value">${o.phone}</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Beneficiário ${isForOther?'<em>(outro)</em>':''}</span>
+      <div class="info-value bene-row">
+        <span class="bene-num">${benef}</span>
+        <button class="copy-btn" onclick="copyNum('${benef}',this)" title="Copiar número">
+          <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          Copiar
+        </button>
+      </div>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Oferta</span>
+      <span class="info-value">${o.bundleLabel||'—'}</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">ID Transacção</span>
+      <span class="info-value mono">${o.txId}</span>
+    </div>
+  </div>
+  ${canActivate ? `<div class="card-footer">
+    <button class="activate-btn" onclick="activateOrder('${o.txId}',this)">
+      <svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
+      Marcar como Activado
+    </button>
+  </div>` : ''}
+</div>`
       }).join('')
 
   return `<!DOCTYPE html><html lang="pt"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Admin — Net Serviços</title>
+<title>Painel Admin — Net Serviços</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;color:#1c1c1e;}
-/* Nav */
-.nav{background:#fff;border-bottom:1px solid #e5e5ea;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;}
-.nav-brand{display:flex;align-items:center;gap:10px;}
-.nav-brand img{width:32px;height:32px;object-fit:contain;border-radius:6px;}
-.nav-brand-text{font-size:15px;font-weight:800;color:#1c1c1e;}
-.nav-brand-text span{color:#cc0000;}
-.nav-badge{font-size:11px;font-weight:600;color:#636366;background:#f2f2f7;border-radius:6px;padding:3px 8px;margin-left:6px;}
-.logout{font-size:13px;font-weight:600;color:#cc0000;text-decoration:none;padding:7px 14px;border-radius:10px;border:1.5px solid #cc0000;}
-.logout:active{background:#fff0f0;}
-/* Content */
-.content{max-width:640px;margin:0 auto;padding:20px 16px 40px;}
-/* Stat grid */
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px;}
-.stat{background:#fff;border-radius:14px;padding:14px 10px;text-decoration:none;display:flex;flex-direction:column;align-items:center;gap:4px;border:2px solid transparent;transition:border-color .15s;}
-.stat-active{border-color:#cc0000;}
-.stat-icon{font-size:20px;}
-.stat-num{font-size:22px;font-weight:800;color:#1c1c1e;}
-.stat-lbl{font-size:11px;color:#636366;font-weight:600;}
-/* Orders */
-.section-title{font-size:13px;font-weight:700;color:#636366;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;}
-.order-card{background:#fff;border-radius:14px;padding:14px 16px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,.06);}
-.order-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
-.order-phone{font-size:15px;font-weight:700;color:#1c1c1e;margin-bottom:4px;}
-.order-meta{font-size:12px;color:#636366;line-height:1.5;}
-.order-right{text-align:right;flex-shrink:0;}
-.order-amount{font-size:15px;font-weight:700;color:#1c1c1e;margin-bottom:6px;}
-.badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;display:inline-block;}
-.empty{text-align:center;padding:40px 0;color:#8e8e93;font-size:14px;}
-</style></head><body>
-<nav class="nav">
-  <div class="nav-brand">
-    <img src="/static/vodacom.webp" alt="logo">
-    <span class="nav-brand-text">Net <span>Serviços</span></span>
-    <span class="nav-badge">Admin</span>
+body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;color:#1c1c1e;display:flex;flex-direction:column;}
+
+/* ── Layout ── */
+.layout{display:flex;flex:1;min-height:0;}
+
+/* ── Topbar ── */
+.topbar{background:#fff;border-bottom:1px solid #e5e5ea;padding:0 20px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;flex-shrink:0;}
+.topbar-left{display:flex;align-items:center;gap:12px;}
+.menu-btn{background:none;border:none;cursor:pointer;padding:8px;border-radius:8px;color:#1c1c1e;display:flex;align-items:center;}
+.menu-btn:active{background:#f2f2f7;}
+.menu-btn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;}
+.topbar-brand{display:flex;align-items:center;gap:8px;}
+.topbar-brand img{width:30px;height:30px;object-fit:contain;border-radius:6px;}
+.topbar-brand-name{font-size:15px;font-weight:800;color:#1c1c1e;}
+.topbar-brand-name span{color:#cc0000;}
+.topbar-badge{font-size:11px;font-weight:700;color:#fff;background:#cc0000;border-radius:6px;padding:2px 7px;margin-left:4px;}
+.topbar-right{display:flex;align-items:center;gap:12px;}
+.revenue-pill{font-size:13px;font-weight:700;color:#065f46;background:#d1fae5;padding:5px 12px;border-radius:20px;}
+.logout-btn{font-size:13px;font-weight:600;color:#cc0000;text-decoration:none;padding:6px 14px;border-radius:9px;border:1.5px solid #ffcdd2;}
+.logout-btn:active{background:#fff0f0;}
+
+/* ── Sidebar ── */
+.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:150;}
+.sidebar-overlay.open{display:block;}
+.sidebar{width:264px;background:#fff;border-right:1px solid #e5e5ea;display:flex;flex-direction:column;flex-shrink:0;position:sticky;top:56px;height:calc(100vh - 56px);overflow-y:auto;}
+@media(max-width:720px){
+  .sidebar{position:fixed;top:0;left:0;height:100vh;z-index:200;transform:translateX(-100%);transition:transform .28s cubic-bezier(.32,.72,0,1);}
+  .sidebar.open{transform:translateX(0);}
+}
+.sidebar-section{padding:12px 12px 4px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#8e8e93;}
+.nav-link{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:11px;text-decoration:none;color:#3a3a3c;font-size:14px;font-weight:500;margin:2px 8px;transition:background .12s,color .12s;}
+.nav-link svg{width:18px;height:18px;stroke:currentColor;fill:none;flex-shrink:0;}
+.nav-link span:first-of-type{flex:1;}
+.nav-link:active,.nav-link.active{background:#fff0f0;color:#cc0000;font-weight:700;}
+.nav-link.active svg{stroke:#cc0000;}
+.nav-count{font-size:11px;font-weight:700;color:#8e8e93;background:#f2f2f7;border-radius:20px;padding:2px 7px;margin-left:auto;flex-shrink:0;}
+.nav-link.active .nav-count{color:#cc0000;background:#ffe4e4;}
+.sidebar-footer{margin-top:auto;padding:16px;}
+.sidebar-logout{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:11px;text-decoration:none;color:#cc0000;font-size:14px;font-weight:600;border:1.5px solid #ffcdd2;justify-content:center;}
+.sidebar-logout:active{background:#fff0f0;}
+
+/* ── Main ── */
+.main{flex:1;min-width:0;overflow-x:hidden;}
+.content{max-width:700px;margin:0 auto;padding:24px 16px 60px;}
+
+/* ── Stats ── */
+.stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:28px;}
+@media(min-width:540px){.stats-grid{grid-template-columns:repeat(4,1fr);}}
+.stat-card{background:#fff;border-radius:16px;padding:18px 16px;box-shadow:0 1px 4px rgba(0,0,0,.06);border-left:4px solid transparent;}
+.stat-card.s-conf{border-color:#10b981;}
+.stat-card.s-act{border-color:#3b82f6;}
+.stat-card.s-pend{border-color:#f59e0b;}
+.stat-card.s-fail{border-color:#ef4444;}
+.stat-num{font-size:28px;font-weight:800;color:#1c1c1e;line-height:1;}
+.stat-lbl{font-size:12px;color:#636366;font-weight:600;margin-top:4px;}
+
+/* ── Section header ── */
+.section-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.section-title{font-size:13px;font-weight:700;color:#636366;text-transform:uppercase;letter-spacing:.07em;}
+.section-count{font-size:13px;font-weight:700;color:#cc0000;background:#fff0f0;border-radius:20px;padding:2px 10px;}
+
+/* ── Order card ── */
+.order-card{background:#fff;border-radius:16px;margin-bottom:12px;box-shadow:0 1px 5px rgba(0,0,0,.07);overflow:hidden;}
+.card-header{display:flex;align-items:flex-start;justify-content:space-between;padding:14px 16px 10px;}
+.card-badge-row{display:flex;align-items:center;gap:8px;margin-bottom:4px;}
+.card-date{font-size:11px;color:#8e8e93;}
+.card-amount{font-size:22px;font-weight:800;color:#1c1c1e;white-space:nowrap;}
+.card-amount span{font-size:13px;font-weight:600;color:#636366;}
+.card-divider{height:1px;background:#f2f2f7;margin:0 16px;}
+.card-body{padding:12px 16px;display:flex;flex-direction:column;gap:8px;}
+.info-row{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.info-label{font-size:12px;color:#8e8e93;font-weight:500;flex-shrink:0;}
+.info-label em{font-style:normal;color:#cc0000;font-size:10px;font-weight:700;}
+.info-value{font-size:13px;font-weight:600;color:#1c1c1e;text-align:right;}
+.info-value.mono{font-family:monospace;font-size:11px;color:#636366;}
+.bene-row{display:flex;align-items:center;gap:8px;}
+.bene-num{font-size:14px;font-weight:700;color:#1c1c1e;}
+.copy-btn{display:flex;align-items:center;gap:5px;background:#f2f2f7;border:none;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600;color:#636366;cursor:pointer;font-family:inherit;flex-shrink:0;transition:background .12s,color .12s;}
+.copy-btn svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.copy-btn:active,.copy-btn.copied{background:#d1fae5;color:#065f46;}
+.card-footer{padding:10px 16px 14px;}
+.activate-btn{width:100%;padding:13px;border:none;border-radius:12px;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;display:flex;align-items:center;justify-content:center;gap:8px;transition:opacity .15s;}
+.activate-btn svg{width:18px;height:18px;stroke:#fff;fill:none;stroke-width:2;}
+.activate-btn:active{opacity:.85;}
+.activate-btn:disabled{opacity:.45;cursor:not-allowed;}
+
+/* ── Badges & tags ── */
+.badge{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;display:inline-block;}
+.method-tag{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:#f2f2f7;color:#636366;display:inline-block;}
+
+/* ── Empty ── */
+.empty{text-align:center;padding:60px 20px;color:#8e8e93;}
+.empty-icon{font-size:48px;margin-bottom:12px;}
+.empty p{font-size:14px;}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:#1c1c1e;color:#fff;font-size:13px;font-weight:600;padding:10px 20px;border-radius:20px;z-index:999;opacity:0;transition:all .25s;pointer-events:none;white-space:nowrap;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+</style>
+</head><body>
+
+<!-- Topbar -->
+<header class="topbar">
+  <div class="topbar-left">
+    <button class="menu-btn" onclick="toggleSidebar()" aria-label="Menu">
+      <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="topbar-brand">
+      <img src="/static/vodacom.webp" alt="logo">
+      <span class="topbar-brand-name">Net <span>Serviços</span></span>
+      <span class="topbar-badge">Admin</span>
+    </div>
   </div>
-  <a href="/admin/logout" class="logout">Sair</a>
-</nav>
-<div class="content">
-  <div class="stats">${statCards}</div>
-  <div class="section-title">Encomendas${filter!=='all'?' — '+statusLabel[filter]:''}</div>
-  ${rows}
+  <div class="topbar-right">
+    <span class="revenue-pill">💰 ${totalReceived.toLocaleString('pt-MZ')} MT recebidos</span>
+    <a href="/admin/logout" class="logout-btn">Sair</a>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- Sidebar overlay (mobile) -->
+  <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-section">Principal</div>
+    ${sidebarLinks}
+    <div class="sidebar-footer">
+      <a href="/admin/logout" class="sidebar-logout">
+        <svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+        Terminar Sessão
+      </a>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <main class="main">
+    <div class="content">
+
+      <!-- Stats -->
+      <div class="stats-grid">
+        <div class="stat-card s-conf">
+          <div class="stat-num">${counts.succeeded}</div>
+          <div class="stat-lbl">Pagamentos Confirmados</div>
+        </div>
+        <div class="stat-card s-act">
+          <div class="stat-num">${counts.activated}</div>
+          <div class="stat-lbl">Activações Concluídas</div>
+        </div>
+        <div class="stat-card s-pend">
+          <div class="stat-num">${counts.pending}</div>
+          <div class="stat-lbl">A aguardar Pagamento</div>
+        </div>
+        <div class="stat-card s-fail">
+          <div class="stat-num">${counts.failed}</div>
+          <div class="stat-lbl">Pagamentos Falhados</div>
+        </div>
+      </div>
+
+      <!-- Orders -->
+      <div class="section-hd">
+        <span class="section-title">${pageTitle}</span>
+        <span class="section-count">${filtered.length} registos</span>
+      </div>
+      ${cards}
+    </div>
+  </main>
 </div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+function toggleSidebar(){
+  document.getElementById('sidebar').classList.toggle('open')
+  document.getElementById('sidebarOverlay').classList.toggle('open')
+}
+function showToast(msg,ok=true){
+  const t=document.getElementById('toast')
+  t.textContent=msg; t.style.background=ok?'#1c1c1e':'#cc0000'
+  t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500)
+}
+function copyNum(num,btn){
+  navigator.clipboard.writeText(num).then(()=>{
+    btn.classList.add('copied'); btn.textContent='✓ Copiado'
+    showToast('Número copiado: '+num)
+    setTimeout(()=>{btn.classList.remove('copied');btn.innerHTML='<svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copiar'},2000)
+  }).catch(()=>{
+    prompt('Copie o número:',num)
+  })
+}
+async function activateOrder(txId,btn){
+  if(!confirm('Confirma que os megas foram enviados para o beneficiário?')) return
+  btn.disabled=true; btn.textContent='A guardar…'
+  try {
+    const r=await fetch('/admin/activate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({txId})})
+    const d=await r.json()
+    if(r.ok){
+      showToast('Activação registada com sucesso!')
+      const card=document.getElementById('card-'+txId)
+      if(card){
+        card.querySelector('.card-footer').remove()
+        card.querySelector('.badge').textContent='Activado'
+        card.querySelector('.badge').style.cssText='color:#1e3a8a;background:#dbeafe'
+      }
+    } else { showToast(d.error||'Erro ao guardar.',false); btn.disabled=false; btn.textContent='Marcar como Activado' }
+  } catch { showToast('Erro de ligação.',false); btn.disabled=false; btn.textContent='Marcar como Activado' }
+}
+</script>
 </body></html>`
 }
 
