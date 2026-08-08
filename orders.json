@@ -1,5 +1,18 @@
 [
   {
+    "txId": "e4f1dda4aeb6",
+    "type": "bundle",
+    "phone": "842222222",
+    "beneficiaryPhone": null,
+    "bundleId": "d04",
+    "bundleLabel": "30 GB",
+    "amount": 970,
+    "method": "mpesa",
+    "status": "pending",
+    "ts": "2026-08-08T08:09:21.616Z",
+    "activatedAt": null
+  },
+  {
     "txId": "9f0d6b5e75b4",
     "type": "bundle",
     "phone": "841234889",

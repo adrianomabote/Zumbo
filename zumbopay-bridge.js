@@ -9,13 +9,13 @@ import { readFile, writeFile }                       from 'fs/promises'
 
 // ── Configuração ──────────────────────────────────────────────────────────────
 const PORT                 = process.env.PORT || 5000
-const ZUMBO_API_KEY        = 'zk_live_a694231e0f188fe3599e4de8feda28b35714ed9b6fa3cd0e'
-const ZUMBO_MERCHANT_ID    = 'MCH_B29C53549C'
-const ZUMBO_WEBHOOK_SECRET = 'teste.com'
+const ZUMBO_API_KEY        = process.env.ZUMBO_API_KEY        || 'zk_live_a694231e0f188fe3599e4de8feda28b35714ed9b6fa3cd0e'
+const ZUMBO_MERCHANT_ID    = process.env.ZUMBO_MERCHANT_ID    || 'MCH_B29C53549C'
+const ZUMBO_WEBHOOK_SECRET = process.env.ZUMBO_WEBHOOK_SECRET || 'teste.com'
 const ZUMBO_BASE           = 'https://zumbopay.com/api/public/v1'
-const WALLET_MPESA         = 'd9a21461-8ff3-4929-8015-efd89268a068'
-const WALLET_EMOLA         = '93a03d6d-f361-4602-90e1-c62889b45346'
-const ADMIN_PASS           = '00220022aA1'
+const WALLET_MPESA         = process.env.WALLET_MPESA         || 'd9a21461-8ff3-4929-8015-efd89268a068'
+const WALLET_EMOLA         = process.env.WALLET_EMOLA         || '93a03d6d-f361-4602-90e1-c62889b45346'
+const ADMIN_PASS           = process.env.ADMIN_PASS           || '00220022aA1'
 const ORDERS_FILE          = './orders.json'
 
 function adminToken() {
@@ -54,9 +54,39 @@ const BUNDLES = new Map([
 ])
 
 // ── Estado em memória ─────────────────────────────────────────────────────────
-const transactions = new Map()
-const sseClients   = new Map()
-let   orders       = []           // persiste em ORDERS_FILE
+const transactions  = new Map()
+const sseClients    = new Map()
+let   orders        = []           // persiste em ORDERS_FILE
+
+// ── Anti-brute-force: login ───────────────────────────────────────────────────
+const loginAttempts = new Map()   // ip → { count, lockedUntil }
+const MAX_ATTEMPTS  = 5
+const LOCK_MS       = 15 * 60 * 1000
+
+function checkBruteForce(ip) {
+  const rec = loginAttempts.get(ip)
+  if (!rec) return null
+  if (rec.lockedUntil && Date.now() < rec.lockedUntil) {
+    const mins = Math.ceil((rec.lockedUntil - Date.now()) / 60000)
+    return `Acesso bloqueado por ${mins} min. Demasiadas tentativas incorrectas.`
+  }
+  if (rec.lockedUntil && Date.now() >= rec.lockedUntil) loginAttempts.delete(ip)
+  return null
+}
+function recordFailedLogin(ip) {
+  const rec = loginAttempts.get(ip) || { count: 0, lockedUntil: null }
+  if (rec.lockedUntil && Date.now() >= rec.lockedUntil) { rec.count = 0; rec.lockedUntil = null }
+  rec.count++
+  if (rec.count >= MAX_ATTEMPTS) { rec.lockedUntil = Date.now() + LOCK_MS; rec.count = 0 }
+  loginAttempts.set(ip, rec)
+  return MAX_ATTEMPTS - rec.count
+}
+function clearLoginAttempts(ip) { loginAttempts.delete(ip) }
+function safeEqual(a, b) {
+  const ha = createHmac('sha256', 'cmp').update(a).digest()
+  const hb = createHmac('sha256', 'cmp').update(b).digest()
+  return timingSafeEqual(ha, hb)
+}
 
 // ── Persistência de encomendas ────────────────────────────────────────────────
 async function loadOrders() {
@@ -272,12 +302,18 @@ async function router(req, res) {
       return html(res, adminDashboard(q.filter || 'all'))
     }
     if (method === 'POST') {
+      const ip = (req.headers['x-forwarded-for']||'').split(',')[0].trim() || req.socket?.remoteAddress || 'unknown'
+      const lockMsg = checkBruteForce(ip)
+      if (lockMsg) return html(res, adminLoginPage(lockMsg))
       let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
-      if (body.password === ADMIN_PASS) {
+      if (body.password && safeEqual(body.password, ADMIN_PASS)) {
+        clearLoginAttempts(ip)
         const token = adminToken()
-        return redirect(res, '/admin/office', { 'Set-Cookie': `nsa=${token}; Path=/; HttpOnly; SameSite=Strict` })
+        return redirect(res, '/admin/office', { 'Set-Cookie': `nsa=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400` })
       }
-      return html(res, adminLoginPage('Senha incorrecta.'))
+      const remaining = recordFailedLogin(ip)
+      const hint = remaining > 0 ? ` ${remaining} tentativa(s) restante(s).` : ' Conta bloqueada por 15 min.'
+      return html(res, adminLoginPage('Senha incorrecta.' + hint))
     }
   }
 
@@ -298,6 +334,30 @@ async function router(req, res) {
   if (method === 'GET' && path === '/admin/orders.json') {
     if (!checkAdminCookie(req)) return json(res, { error:'Não autorizado.' }, 401)
     return json(res, orders)
+  }
+
+  // ── API pública de transações (Bearer token = ADMIN_PASS ou cookie admin) ────
+  if (method === 'GET' && path === '/api/transactions') {
+    const auth  = req.headers['authorization'] || ''
+    const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+    const authed = checkAdminCookie(req) || (token && safeEqual(token, ADMIN_PASS))
+    if (!authed) return json(res, { error:'Não autorizado. Inclua o header: Authorization: Bearer <senha_admin>' }, 401)
+    const q     = parseQuery(req)
+    const page  = Math.max(1, parseInt(q.page)  || 1)
+    const limit = Math.min(100, Math.max(1, parseInt(q.limit) || 50))
+    const total = orders.length
+    const data  = orders.slice((page - 1) * limit, page * limit).map(o => ({
+      id:          o.txId,
+      phone:       o.phone,
+      beneficiary: o.beneficiaryPhone || o.phone,
+      amount:      o.amount,
+      method:      o.method,
+      bundle:      o.bundleLabel || null,
+      status:      o.status,
+      ts:          o.ts,
+      activatedAt: o.activatedAt || null,
+    }))
+    return json(res, { ok:true, total, page, limit, pages: Math.ceil(total/limit), data })
   }
 
   json(res, { error:'Not found.' }, 404)
@@ -1054,37 +1114,88 @@ function adminDashboard(filter = 'all') {
   })
 
   const filterMap = {
-    all: orders,
-    pending: orders.filter(o=>o.status==='pending'),
+    all:       orders,
+    zumbo:     orders,
+    pending:   orders.filter(o=>o.status==='pending'),
     succeeded: orders.filter(o=>o.status==='succeeded'),
     activated: orders.filter(o=>o.status==='activated'),
-    failed: orders.filter(o=>o.status==='failed'),
+    failed:    orders.filter(o=>o.status==='failed'),
   }
-  const filtered = filterMap[filter] || orders
+  const filtered = filterMap[filter] ?? orders
 
   const SL = { pending:'A aguardar pagamento', succeeded:'Pagamento confirmado', activated:'Activado', failed:'Falhado' }
   const SC = { pending:'#92400e', succeeded:'#065f46', activated:'#1e3a8a', failed:'#991b1b' }
   const SBG= { pending:'#fef3c7', succeeded:'#d1fae5', activated:'#dbeafe', failed:'#fee2e2' }
   const ML = { mpesa:'M-Pesa', emola:'e-Mola' }
 
-  const navItems = [
-    { f:'all',       label:'Todas as transacções',    icon:'M3 7h18M3 12h18M3 17h18' },
-    { f:'succeeded', label:'Pendentes de Activação',  icon:'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
-    { f:'activated', label:'Activações Confirmadas',  icon:'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
-    { f:'pending',   label:'A aguardar Pagamento',    icon:'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
-    { f:'failed',    label:'Pagamentos Falhados',     icon:'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z' },
+  const navSections = [
+    { label: 'ZumboPay', items: [
+      { f:'zumbo', label:'Transações ZumboPay', icon:'M12 2a10 10 0 100 20A10 10 0 0012 2zm1 14H11v-4H9l3-6 3 6h-2v4z' },
+    ]},
+    { label: 'Encomendas', items: [
+      { f:'all',       label:'Todas as transacções',   icon:'M3 7h18M3 12h18M3 17h18' },
+      { f:'succeeded', label:'Pendentes de Activação', icon:'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
+      { f:'activated', label:'Activações Confirmadas', icon:'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
+      { f:'pending',   label:'A aguardar Pagamento',   icon:'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
+      { f:'failed',    label:'Pagamentos Falhados',    icon:'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z' },
+    ]},
   ]
+  const allNavItems = navSections.flatMap(s=>s.items)
 
-  const sidebarLinks = navItems.map(n=>`
+  const sidebarLinks = navSections.map(s=>
+    `<div class="sidebar-section">${s.label}</div>` +
+    s.items.map(n=>`
     <a href="/admin/office?filter=${n.f}" class="nav-link${filter===n.f?' active':''}">
       <svg viewBox="0 0 24 24"><path d="${n.icon}" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
       <span>${n.label}</span>
       <span class="nav-count">${filterMap[n.f]?.length||0}</span>
     </a>`).join('')
+  ).join('')
 
-  const pageTitle = navItems.find(n=>n.f===filter)?.label || 'Todas as transacções'
+  const pageTitle = allNavItems.find(n=>n.f===filter)?.label || 'Todas as transacções'
 
-  const cards = filtered.length === 0
+  // ── Vista especial: tabela ZumboPay ─────────────────────────────────────────
+  const zumboTable = filter === 'zumbo'
+    ? (filtered.length === 0
+        ? `<div class="empty"><div class="empty-icon">📭</div><p>Nenhuma transacção encontrada.</p></div>`
+        : `<div class="zumbo-panel">
+  <div class="zumbo-info">
+    <svg viewBox="0 0 24 24" style="width:15px;height:15px;stroke:#065f46;fill:none;stroke-width:2;stroke-linecap:round;flex-shrink:0"><path d="M12 2a10 10 0 100 20A10 10 0 0012 2zm0 9v4m0-7h.01"/></svg>
+    Todas as cobranças processadas via ZumboPay neste projecto. Endpoint API:
+    <code>/api/transactions</code> com header <code>Authorization: Bearer &lt;senha_admin&gt;</code>
+  </div>
+  <div class="ztable-wrap">
+  <table class="ztable">
+    <thead><tr>
+      <th>Data / Hora</th><th>Número (Pagador)</th><th>Beneficiário</th><th>Oferta</th><th>Valor</th><th>Método</th><th>Estado</th>
+    </tr></thead>
+    <tbody>
+    ${filtered.map(o=>{
+      const dt  = new Date(o.ts)
+      const ds  = dt.toLocaleDateString('pt-MZ',{day:'2-digit',month:'short',year:'numeric'})
+                + ' ' + dt.toLocaleTimeString('pt-MZ',{hour:'2-digit',minute:'2-digit'})
+      const benef = o.beneficiaryPhone || o.phone
+      const sc  = {pending:'#92400e',succeeded:'#065f46',activated:'#1e3a8a',failed:'#991b1b'}
+      const sbg = {pending:'#fef3c7',succeeded:'#d1fae5',activated:'#dbeafe',failed:'#fee2e2'}
+      const sl  = {pending:'Aguardar',succeeded:'Confirmado',activated:'Activado',failed:'Falhado'}
+      return `<tr>
+        <td class="zt-date">${ds}</td>
+        <td class="zt-phone">${o.phone}</td>
+        <td class="zt-phone">${benef}${benef!==o.phone?' <em>(outro)</em>':''}</td>
+        <td>${o.bundleLabel||'—'}</td>
+        <td class="zt-amount">${o.amount} MT</td>
+        <td><span class="method-tag">${o.method==='mpesa'?'M-Pesa':'e-Mola'}</span></td>
+        <td><span class="badge" style="color:${sc[o.status]||'#636366'};background:${sbg[o.status]||'#f2f2f7'}">${sl[o.status]||o.status}</span></td>
+      </tr>`
+    }).join('')}
+    </tbody>
+  </table>
+  </div>
+</div>`)
+    : null
+
+  const cards = zumboTable !== null ? zumboTable
+    : filtered.length === 0
     ? `<div class="empty"><div class="empty-icon">📭</div><p>Nenhuma transacção encontrada.</p></div>`
     : filtered.map(o => {
         const dt = new Date(o.ts)
@@ -1247,6 +1358,23 @@ body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:1
 .empty-icon{font-size:48px;margin-bottom:12px;}
 .empty p{font-size:14px;}
 
+/* ── ZumboPay table view ── */
+.zumbo-panel{max-width:900px;}
+.zumbo-info{display:flex;align-items:flex-start;gap:8px;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:12px;padding:12px 14px;font-size:12px;color:#065f46;margin-bottom:18px;line-height:1.5;}
+.zumbo-info code{background:#d1fae5;padding:1px 6px;border-radius:4px;font-size:11px;font-family:monospace;}
+.ztable-wrap{overflow-x:auto;border-radius:14px;border:1px solid #e5e5ea;background:#fff;box-shadow:0 1px 5px rgba(0,0,0,.07);}
+.ztable{width:100%;border-collapse:collapse;font-size:13px;}
+.ztable thead tr{background:#f9f9fb;}
+.ztable th{padding:11px 14px;text-align:left;font-size:11px;font-weight:700;color:#636366;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #e5e5ea;white-space:nowrap;}
+.ztable td{padding:11px 14px;border-bottom:1px solid #f2f2f7;vertical-align:middle;}
+.ztable tr:last-child td{border-bottom:none;}
+.ztable tr:hover td{background:#fafafa;}
+.zt-date{font-size:11px;color:#636366;white-space:nowrap;}
+.zt-phone{font-weight:700;font-size:13px;color:#1c1c1e;}
+.zt-phone em{font-style:normal;font-size:10px;color:#cc0000;font-weight:700;margin-left:3px;}
+.zt-amount{font-weight:800;color:#1c1c1e;white-space:nowrap;}
+@media(max-width:640px){.content{max-width:100%;}.zumbo-panel{max-width:100%;}}
+
 /* ── Toast ── */
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:#1c1c1e;color:#fff;font-size:13px;font-weight:600;padding:10px 20px;border-radius:20px;z-index:999;opacity:0;transition:all .25s;pointer-events:none;white-space:nowrap;}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
@@ -1278,7 +1406,6 @@ body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:1
 
   <!-- Sidebar -->
   <aside class="sidebar" id="sidebar">
-    <div class="sidebar-section">Principal</div>
     ${sidebarLinks}
     <div class="sidebar-footer">
       <a href="/admin/logout" class="sidebar-logout">
