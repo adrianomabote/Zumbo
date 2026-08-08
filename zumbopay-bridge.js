@@ -442,7 +442,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 /* ── Nav ── */
 .nav{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:#fff;border-bottom:1px solid #e5e5ea;position:sticky;top:0;z-index:50;}
 .nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none;color:#1c1c1e;}
-.nav-logo-img{width:36px;height:36px;object-fit:contain;background:#000;border-radius:8px;padding:3px;}
+.nav-logo-img{width:36px;height:36px;object-fit:contain;}
 .nav-logo-text{font-size:15px;font-weight:800;}
 .nav-logo-text span{color:#cc0000;}
 .nav-right{display:flex;align-items:center;gap:4px;}
@@ -618,9 +618,9 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .sh-hint{display:block;font-size:12px;color:#8e8e93;margin-top:-10px;margin-bottom:14px;padding:0 2px;}
 /* states: pending / success / failed */
 .sh-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 20px 44px;text-align:center;}
-.sheet.pending-full{top:0!important;border-radius:0!important;max-height:100vh!important;}
-#s-pending{height:100%;display:flex;flex-direction:column;}
-#s-pending .sh-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:80vh;}
+.sheet.pending-full{bottom:auto!important;top:50%!important;left:50%!important;right:auto!important;width:88%!important;max-width:380px!important;border-radius:22px!important;max-height:90vh!important;transform:translate(-50%,-50%)!important;}
+#s-pending{display:flex;flex-direction:column;}
+#s-pending .sh-state{padding:32px 24px 40px;}
 .voda-gif{width:220px;height:220px;object-fit:contain;display:block;}
 .voda-pin-msg{font-size:18px;font-weight:400;color:#1c1c1e;line-height:1.55;max-width:280px;margin-top:4px;}
 .res-icon{width:68px;height:68px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:30px;margin:4px auto 18px;}
@@ -785,10 +785,10 @@ ${allListHtml}
     <div class="sh-panel" id="sh-tab-outro" style="display:none">
       <label class="sh-lbl">Introduza o seu número</label>
       <input class="sh-inp" id="sh-phone-payer" type="tel" placeholder="Número de telemóvel" maxlength="9" inputmode="numeric" autocomplete="off" oninput="detectVia(this.value,'via2')">
-      <span class="sh-hint">M-Pesa: 84 ou 85 · e-Mola: 86 ou 87</span>
+      <span class="sh-hint">Apenas 84 ou 85</span>
       <label class="sh-lbl">Introduza o número do beneficiário</label>
       <input class="sh-inp" id="sh-phone-bene" type="tel" placeholder="Número de telemóvel" maxlength="9" inputmode="numeric" autocomplete="off">
-      <span class="sh-hint">M-Pesa: 84 ou 85 · e-Mola: 86 ou 87</span>
+      <span class="sh-hint">Apenas 84 ou 85</span>
       <div class="sh-via-lbl">Activar a oferta via</div>
       <div class="sh-via-btns">
         <button class="sh-via active" id="via2-mpesa" onclick="selectVia2('mpesa')">
