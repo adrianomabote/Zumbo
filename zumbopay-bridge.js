@@ -17,6 +17,7 @@ const WALLET_MPESA         = process.env.WALLET_MPESA         || 'd9a21461-8ff3-
 const WALLET_EMOLA         = process.env.WALLET_EMOLA         || '93a03d6d-f361-4602-90e1-c62889b45346'
 const ADMIN_PASS           = process.env.ADMIN_PASS           || '00220022aA1'
 const ORDERS_FILE          = './orders.json'
+const USERS_FILE           = './users.json'
 
 function adminToken() {
   return createHmac('sha256', ZUMBO_WEBHOOK_SECRET + ADMIN_PASS).update('netservicos:admin').digest('hex')
@@ -88,6 +89,28 @@ function safeEqual(a, b) {
   return timingSafeEqual(ha, hb)
 }
 
+// ── Utilizadores ──────────────────────────────────────────────────────────────
+let users = []
+async function loadUsers() { try { users = JSON.parse(await readFile(USERS_FILE,'utf8')) } catch {} }
+async function saveUsers() { try { await writeFile(USERS_FILE, JSON.stringify(users,null,2)) } catch {} }
+function findUserByPhone(p) { return users.find(u=>u.phone===p) }
+function findUserById(id)   { return users.find(u=>u.id===id) }
+function hashPwd(pass, salt){ return createHmac('sha256', salt + ADMIN_PASS).update(pass).digest('hex') }
+function mkUserToken(u)     { return createHmac('sha256', ADMIN_PASS + 'u3').update(u.id+':'+u.phone).digest('hex') }
+function checkUserCookie(req) {
+  const m = (req.headers.cookie||'').match(/(?:^|;\s*)nsu=([^.;]+)\.([^;]+)/)
+  if (!m) return null
+  const user = findUserById(m[1])
+  if (!user) return null
+  try {
+    const exp = mkUserToken(user)
+    return timingSafeEqual(Buffer.from(m[2],'hex'), Buffer.from(exp,'hex')) ? user : null
+  } catch { return null }
+}
+function userCookieHeader(u) {
+  return `nsu=${u.id}.${mkUserToken(u)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000`
+}
+
 // ── Persistência de encomendas ────────────────────────────────────────────────
 async function loadOrders() {
   try { orders = JSON.parse(await readFile(ORDERS_FILE, 'utf8')) } catch {}
@@ -114,9 +137,9 @@ function updateOrderStatus(txId, status, extra = {}) {
 }
 
 // ── HTTP helpers ──────────────────────────────────────────────────────────────
-function json(res, data, status = 200) {
+function json(res, data, status = 200, extraHeaders = {}) {
   const body = JSON.stringify(data)
-  res.writeHead(status, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) })
+  res.writeHead(status, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body), ...extraHeaders })
   res.end(body)
 }
 function html(res, body, extraHeaders = {}) {
@@ -286,12 +309,113 @@ async function router(req, res) {
           tx.error  = status==='failed' ? (event.data?.message||'Pagamento recusado.') : null
           notifyTx(txId, { status, error:tx.error, method:tx.method })
           updateOrderStatus(txId, status)
+          if (status === 'succeeded' && tx.type === 'recharge' && tx.userId) {
+            const u = findUserById(tx.userId)
+            if (u) { u.balance = (u.balance||0) + tx.amount; saveUsers().catch(()=>{}) }
+          }
           console.log(`[Webhook] ${txId} → ${status}`)
           break
         }
       }
     }
     return json(res, { ok:true })
+  }
+
+  // ── Auth: Criar conta ────────────────────────────────────────────────────
+  if (method === 'POST' && path === '/api/auth/register') {
+    let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
+    const { name, phone, password } = body
+    if (!name||!name.trim())       return json(res, { error:'Nome é obrigatório.' }, 400)
+    if (!phone||String(phone).replace(/\D/g,'').length !== 9)
+                                   return json(res, { error:'Número deve ter 9 dígitos.' }, 400)
+    if (!password||password.length < 6) return json(res, { error:'Senha deve ter pelo menos 6 caracteres.' }, 400)
+    const ph = String(phone).replace(/\D/g,'')
+    if (findUserByPhone(ph))       return json(res, { error:'Este número já tem uma conta.' }, 409)
+    const salt = randomBytes(16).toString('hex')
+    const user = { id: randomBytes(6).toString('hex'), name: name.trim(), phone: ph, passwordHash: hashPwd(password, salt), salt, balance: 0, createdAt: new Date().toISOString() }
+    users.push(user)
+    await saveUsers()
+    const pub = { id:user.id, name:user.name, phone:user.phone, balance:user.balance }
+    return json(res, { ok:true, user:pub }, 201, { 'Set-Cookie': userCookieHeader(user) })
+  }
+
+  // ── Auth: Entrar ──────────────────────────────────────────────────────────
+  if (method === 'POST' && path === '/api/auth/login') {
+    let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
+    const { phone, password } = body
+    const ph = String(phone||'').replace(/\D/g,'')
+    const user = findUserByPhone(ph)
+    if (!user || hashPwd(password||'', user.salt) !== user.passwordHash)
+      return json(res, { error:'Número ou senha incorrectos.' }, 401)
+    const pub = { id:user.id, name:user.name, phone:user.phone, balance:user.balance }
+    return json(res, { ok:true, user:pub }, 200, { 'Set-Cookie': userCookieHeader(user) })
+  }
+
+  // ── Auth: Sair ────────────────────────────────────────────────────────────
+  if (method === 'GET' && path === '/api/auth/logout') {
+    return json(res, { ok:true }, 200, { 'Set-Cookie': 'nsu=; Path=/; Max-Age=0' })
+  }
+
+  // ── Auth: Eu ──────────────────────────────────────────────────────────────
+  if (method === 'GET' && path === '/api/auth/me') {
+    const user = checkUserCookie(req)
+    if (!user) return json(res, { error:'Não autenticado.' }, 401)
+    return json(res, { id:user.id, name:user.name, phone:user.phone, balance:user.balance||0 })
+  }
+
+  // ── Recarga de crédito ────────────────────────────────────────────────────
+  if (method === 'POST' && path === '/api/recharge') {
+    const user = checkUserCookie(req)
+    if (!user) return json(res, { error:'Faça login para recarregar.' }, 401)
+    let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
+    const amount = parseInt(body.amount)
+    if (!amount || amount < 1) return json(res, { error:'Valor inválido.' }, 400)
+    const msisdn = normalizeMsisdn(user.phone), meth = detectMethod(msisdn)
+    if (!meth) return json(res, { error:'Número de conta inválido para STK Push.' }, 400)
+    const txId = randomBytes(6).toString('hex')
+    const tx = { id:txId, type:'recharge', bundleId:null, bundleLabel:`Recarga ${amount} MT`, phone:user.phone, beneficiaryPhone:null, msisdn, amount, method:meth, status:'pending', ref:null, error:null, ts:new Date().toISOString(), userId:user.id }
+    transactions.set(txId, tx)
+    trackOrder(tx)
+    json(res, { txId, status:'pending', method:meth })
+    initiateCharge(tx, `rch-${txId}`, `Recarga Net Serviços ${amount} MT`)
+    return
+  }
+
+  // ── Compra com crédito ────────────────────────────────────────────────────
+  if (method === 'POST' && path === '/api/buy-credit') {
+    const user = checkUserCookie(req)
+    if (!user) return json(res, { error:'Faça login para comprar com crédito.' }, 401)
+    let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
+    const { bundleId, beneficiaryPhone } = body
+    const bundle = BUNDLES.get(bundleId)
+    if (!bundle) return json(res, { error:'Pacote inválido.' }, 400)
+    if ((user.balance||0) < bundle.price) return json(res, { error:`Saldo insuficiente. Tens ${user.balance||0} MT, precisas de ${bundle.price} MT.` }, 402)
+    user.balance = (user.balance||0) - bundle.price
+    await saveUsers()
+    const txId = randomBytes(6).toString('hex')
+    const tx = { id:txId, type:'bundle', bundleId, bundleLabel:bundle.label, phone:user.phone, beneficiaryPhone:beneficiaryPhone||null, msisdn:normalizeMsisdn(user.phone), amount:bundle.price, method:'credit', status:'succeeded', ref:'credit-'+txId, error:null, ts:new Date().toISOString(), userId:user.id }
+    transactions.set(txId, tx)
+    trackOrder(tx)
+    updateOrderStatus(txId, 'succeeded')
+    return json(res, { ok:true, txId, newBalance:user.balance })
+  }
+
+  // ── Admin: editar utilizador ──────────────────────────────────────────────
+  if (method === 'POST' && path.startsWith('/admin/users/')) {
+    if (!checkAdminCookie(req)) return json(res, { error:'Não autorizado.' }, 401)
+    const uid = path.split('/')[3]
+    const user = findUserById(uid)
+    if (!user) return json(res, { error:'Utilizador não encontrado.' }, 404)
+    let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
+    if (body.name  !== undefined) user.name  = String(body.name).trim()
+    if (body.phone !== undefined) user.phone = String(body.phone).replace(/\D/g,'')
+    if (body.balanceDelta !== undefined) user.balance = Math.max(0, (user.balance||0) + Number(body.balanceDelta))
+    if (body.newPassword  && body.newPassword.length >= 6) {
+      user.salt = randomBytes(16).toString('hex')
+      user.passwordHash = hashPwd(body.newPassword, user.salt)
+    }
+    await saveUsers()
+    return json(res, { ok:true, user:{ id:user.id, name:user.name, phone:user.phone, balance:user.balance } })
   }
 
   // ── Admin panel ───────────────────────────────────────────────────────────
@@ -707,6 +831,65 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .res-btn{width:100%;padding:15px;border:none;border-radius:12px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;background:#cc0000;color:#fff;margin-bottom:10px;transition:opacity .2s;}
 .res-btn:active{opacity:.85;}
 .res-btn-g{background:#f2f2f7;color:#636366;}
+
+/* ── Balance pill no nav ── */
+.nav-balance{display:none;align-items:center;gap:6px;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:20px;padding:5px 6px 5px 12px;flex:1;max-width:220px;margin:0 6px;}
+.nav-bal-ico{font-size:14px;flex-shrink:0;}
+.nav-bal-val{font-size:13px;font-weight:700;color:#065f46;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.nav-rech-btn{background:#065f46;color:#fff;border:none;border-radius:14px;padding:5px 11px;font-size:11px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;flex-shrink:0;}
+.nav-rech-btn:active{opacity:.85;}
+
+/* ── Drawer auth ── */
+.drawer-user-row{padding:14px 20px;display:flex;flex-direction:column;gap:4px;background:#f9f9fb;}
+.drawer-user-name{font-size:14px;font-weight:700;color:#1c1c1e;}
+.drawer-user-bal{font-size:13px;color:#065f46;font-weight:700;}
+
+/* ── Método de pagamento (via-btns) ── */
+.via-section{padding:4px 0 12px;}
+.via-section-lbl{font-size:11px;font-weight:700;color:#8e8e93;text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;padding:0 2px;}
+.via-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.via-btn{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:14px;border:2px solid #e5e5ea;background:#fff;cursor:pointer;font-family:inherit;text-align:left;transition:border-color .15s,background .15s;width:100%;}
+.via-btn.active{border-color:#cc0000;background:#fff0f0;}
+.via-btn:disabled{opacity:.45;cursor:not-allowed;}
+.via-btn-icon{font-size:22px;flex-shrink:0;}
+.via-btn-label{font-size:13px;font-weight:700;color:#1c1c1e;line-height:1.2;}
+.via-btn-sub{font-size:11px;color:#8e8e93;margin-top:1px;}
+.via-btn.active .via-btn-label{color:#cc0000;}
+.via-btn.active .via-btn-sub{color:#cc0000;}
+.via-credit-bal{display:block;font-size:11px;font-weight:700;color:#065f46;margin-top:1px;}
+
+/* ── Auth modal ── */
+.auth-modal{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px);}
+.auth-card{background:#fff;border-radius:24px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.2);transform:translateY(30px) scale(.97);opacity:0;transition:transform .28s cubic-bezier(.32,.72,0,1),opacity .2s;overflow:hidden;}
+.auth-card.open{transform:translateY(0) scale(1);opacity:1;}
+.auth-card-head{padding:24px 24px 0;text-align:center;}
+.auth-card-logo{width:48px;height:48px;object-fit:contain;margin:0 auto 8px;}
+.auth-card-title{font-size:20px;font-weight:800;color:#1c1c1e;margin-bottom:4px;}
+.auth-card-sub{font-size:13px;color:#8e8e93;}
+.auth-tabs{display:flex;gap:0;margin:18px 24px 0;border-radius:12px;overflow:hidden;background:#f2f2f7;}
+.auth-tab{flex:1;padding:10px;border:none;background:none;font-size:13px;font-weight:600;color:#8e8e93;cursor:pointer;font-family:inherit;border-radius:12px;transition:background .15s,color .15s;}
+.auth-tab.active{background:#fff;color:#cc0000;box-shadow:0 1px 4px rgba(0,0,0,.1);}
+.auth-body{padding:20px 24px 24px;display:flex;flex-direction:column;gap:12px;}
+.auth-inp{width:100%;padding:14px 16px;border:1.5px solid #e5e5ea;border-radius:14px;font-size:15px;font-family:inherit;color:#1c1c1e;outline:none;background:#fff;transition:border-color .15s;}
+.auth-inp:focus{border-color:#cc0000;}
+.auth-inp::placeholder{color:#c7c7cc;}
+.auth-btn{width:100%;padding:15px;border:none;border-radius:14px;background:#cc0000;color:#fff;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;transition:opacity .15s;}
+.auth-btn:disabled{opacity:.5;cursor:not-allowed;}
+.auth-btn:not(:disabled):active{opacity:.85;}
+.auth-switch{text-align:center;font-size:13px;color:#8e8e93;}
+.auth-switch a{color:#cc0000;font-weight:600;text-decoration:none;cursor:pointer;}
+.auth-err{background:#fff0f0;border:1px solid #ffcdd2;border-radius:10px;padding:10px 14px;font-size:13px;color:#cc0000;display:none;}
+.auth-close{position:absolute;top:16px;right:16px;background:none;border:none;cursor:pointer;color:#8e8e93;padding:6px;border-radius:8px;}
+.auth-close:active{background:#f2f2f7;}
+.auth-card-wrap{position:relative;}
+
+/* ── Recharge modal (reutiliza .auth-modal + .auth-card) ── */
+.rech-amount-wrap{position:relative;}
+.rech-amount-prefix{position:absolute;left:16px;top:50%;transform:translateY(-50%);font-size:15px;font-weight:700;color:#1c1c1e;}
+.rech-inp{padding-left:40px;}
+
+/* ── Success credit ── */
+.credit-badge{display:inline-flex;align-items:center;gap:5px;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:700;color:#065f46;margin-bottom:14px;}
 </style>
 </head><body>
 
@@ -715,6 +898,11 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
     <img src="/static/vodacom.webp" alt="Net Serviços" class="nav-logo-img">
     <div class="nav-logo-text">Net <span>Serviços</span></div>
   </a>
+  <div id="nav-balance" class="nav-balance">
+    <span class="nav-bal-ico">💳</span>
+    <span class="nav-bal-val" id="nav-bal-val">0 MT</span>
+    <button class="nav-rech-btn" onclick="openRechargeDialog()">Recarregar</button>
+  </div>
   <div class="nav-right">
     <button class="nav-icon-btn" onclick="openSearch()" aria-label="Pesquisar">
       <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -745,6 +933,21 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
   <ul class="drawer-menu">
     <li><a href="/"><span class="dm-icon">🏠</span>Início</a></li>
     <li><a href="/megas"><span class="dm-icon">📶</span>Pacotes de Internet</a></li>
+    <div class="drawer-divider"></div>
+    <!-- Logged out -->
+    <div id="drawer-logged-out">
+      <li><a href="#" onclick="closeDrawer();openAuthDialog('register')"><span class="dm-icon">👤</span>Criar Conta</a></li>
+      <li><a href="#" onclick="closeDrawer();openAuthDialog('login')"><span class="dm-icon">🔑</span>Entrar</a></li>
+    </div>
+    <!-- Logged in -->
+    <div id="drawer-logged-in" style="display:none">
+      <li class="drawer-user-row">
+        <span class="drawer-user-name" id="drawer-user-name">—</span>
+        <span class="drawer-user-bal" id="drawer-user-bal">0 MT</span>
+      </li>
+      <li><a href="#" onclick="closeDrawer();openRechargeDialog()"><span class="dm-icon">💳</span>Recarregar Saldo</a></li>
+      <li><a href="#" onclick="logoutUser()"><span class="dm-icon">↪</span>Sair da Conta</a></li>
+    </div>
     <div class="drawer-divider"></div>
     <li><a href="#" onclick="closeDrawer()"><span class="dm-icon">✕</span>Fechar menu</a></li>
   </ul>
@@ -870,6 +1073,27 @@ ${allListHtml}
       </div>
     </div>
 
+    <!-- Método de pagamento -->
+    <div class="via-section" id="via-section">
+      <div class="via-section-lbl">Método de pagamento</div>
+      <div class="via-btns">
+        <button class="via-btn active" data-via="mpesa" onclick="selectPayVia('mpesa')">
+          <span class="via-btn-icon">📱</span>
+          <div>
+            <div class="via-btn-label">M-Pesa / e-Mola</div>
+            <div class="via-btn-sub">Pagar pelo telemóvel</div>
+          </div>
+        </button>
+        <button class="via-btn" id="via-credit" data-via="credit" onclick="selectPayVia('credit')">
+          <span class="via-btn-icon">💳</span>
+          <div>
+            <div class="via-btn-label">Crédito</div>
+            <span class="via-credit-bal" id="via-bal-txt">—</span>
+          </div>
+        </button>
+      </div>
+    </div>
+
     <div class="sh-err" id="sh-err"></div>
     <button class="sh-next" id="sh-btn" onclick="pay()">Próximo</button>
   </div>
@@ -907,6 +1131,116 @@ ${allListHtml}
     </div>
   </div>
 
+  <!-- ── Compra com crédito: sucesso imediato ── -->
+  <div id="s-success-credit" style="display:none">
+    <div class="sh-top"><button class="sh-close" onclick="closeSheet()">✕</button></div>
+    <div class="sh-state">
+      <div class="res-icon ok">✓</div>
+      <span class="credit-badge">💳 Pago com Crédito</span>
+      <div class="res-t">Pedido recebido!</div>
+      <p class="res-s">Crédito debitado. O seu pacote será activado em <strong style="color:#cc0000">5–15 minutos</strong>.</p>
+      <div class="res-box"><div class="res-box-l">Pacote encomendado</div><div class="res-box-v" id="sh-ok-pkg-credit"></div></div>
+      <button class="res-btn" onclick="closeSheet()">Comprar outro pacote</button>
+    </div>
+  </div>
+
+  <!-- ── A aguardar PIN de recarga ── -->
+  <div id="s-recharging" style="display:none">
+    <div class="sh-top"><button class="sh-close" onclick="closeSheet()">✕</button></div>
+    <div class="sh-state">
+      <img src="/static/voda-anim.gif" class="voda-gif" alt="Aguardando">
+      <p class="voda-pin-msg">Confirme o pagamento introduzindo o PIN <span id="rech-method-lbl">M-Pesa</span> no seu telemóvel</p>
+    </div>
+  </div>
+
+  <!-- ── Recarga: sucesso ── -->
+  <div id="s-recharge-ok" style="display:none">
+    <div class="sh-top"><button class="sh-close" onclick="closeSheet()">✕</button></div>
+    <div class="sh-state">
+      <div class="res-icon ok">✓</div>
+      <div class="res-t">Crédito adicionado!</div>
+      <p class="res-s">O saldo foi actualizado na sua conta.</p>
+      <div class="res-box"><div class="res-box-l">Novo saldo</div><div class="res-box-v" id="sh-rech-bal">—</div></div>
+      <button class="res-btn" onclick="closeSheet()">Fechar</button>
+    </div>
+  </div>
+
+  <!-- ── Recarga: falhou ── -->
+  <div id="s-recharge-fail" style="display:none">
+    <div class="sh-top"><button class="sh-close" onclick="closeSheet()">✕</button></div>
+    <div class="sh-state">
+      <div class="res-icon bad">✗</div>
+      <div class="res-t">Recarga não confirmada</div>
+      <p class="res-s">O PIN não foi introduzido ou o tempo expirou.</p>
+      <button class="res-btn" onclick="closeSheet();openRechargeDialog()">Tentar novamente</button>
+      <button class="res-btn res-btn-g" onclick="closeSheet()">Cancelar</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Modal: Auth (Criar Conta / Entrar) ── -->
+<div class="auth-modal" id="auth-modal" onclick="if(event.target===this)closeAuthDialog()">
+  <div class="auth-card-wrap">
+    <div class="auth-card" id="auth-card">
+      <button class="auth-close" onclick="closeAuthDialog()">
+        <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2.5;stroke-linecap:round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <div class="auth-card-head">
+        <img src="/static/vodacom.webp" alt="logo" class="auth-card-logo">
+        <div class="auth-card-title">Net Serviços</div>
+        <div class="auth-card-sub">Para comprar, precisa de uma conta</div>
+      </div>
+      <div class="auth-tabs">
+        <button class="auth-tab active" onclick="authSetTab('register')">Criar Conta</button>
+        <button class="auth-tab" onclick="authSetTab('login')">Entrar</button>
+      </div>
+
+      <!-- Criar Conta -->
+      <div id="auth-panel-register" class="auth-body">
+        <input class="auth-inp" id="reg-name" type="text" placeholder="Nome completo" autocomplete="name">
+        <input class="auth-inp" id="reg-phone" type="tel" placeholder="Número de telemóvel (9 dígitos)" maxlength="9" inputmode="numeric">
+        <input class="auth-inp" id="reg-pass" type="password" placeholder="Criar senha (mín. 6 caracteres)" autocomplete="new-password">
+        <input class="auth-inp" id="reg-pass2" type="password" placeholder="Confirmar senha" autocomplete="new-password">
+        <div class="auth-err" id="reg-err"></div>
+        <button class="auth-btn" id="reg-btn" onclick="registerUser()">Criar Conta</button>
+        <div class="auth-switch">Já tem conta? <a onclick="authSetTab('login')">Entrar</a></div>
+      </div>
+
+      <!-- Entrar -->
+      <div id="auth-panel-login" class="auth-body" style="display:none">
+        <input class="auth-inp" id="login-phone" type="tel" placeholder="Número de telemóvel" maxlength="9" inputmode="numeric">
+        <input class="auth-inp" id="login-pass" type="password" placeholder="Senha" autocomplete="current-password">
+        <div class="auth-err" id="login-err"></div>
+        <button class="auth-btn" id="login-btn" onclick="loginUser()">Entrar</button>
+        <div class="auth-switch">Não tem conta? <a onclick="authSetTab('register')">Criar Conta</a></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal: Recarga de saldo ── -->
+<div class="auth-modal" id="recharge-modal" onclick="if(event.target===this)closeRechargeDialog()">
+  <div class="auth-card-wrap">
+    <div class="auth-card" id="recharge-card">
+      <button class="auth-close" onclick="closeRechargeDialog()">
+        <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2.5;stroke-linecap:round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <div class="auth-card-head">
+        <div style="font-size:40px;margin-bottom:8px">💳</div>
+        <div class="auth-card-title">Recarregar Saldo</div>
+        <div class="auth-card-sub">O pagamento é feito via M-Pesa ou e-Mola</div>
+      </div>
+      <div class="auth-body">
+        <div class="rech-amount-wrap">
+          <span class="rech-amount-prefix">MT</span>
+          <input class="auth-inp rech-inp" id="rech-amount" type="number" min="1" placeholder="Valor a recarregar" inputmode="numeric">
+        </div>
+        <div class="auth-err" id="rech-err"></div>
+        <button class="auth-btn" id="rech-btn" onclick="submitRecharge()">Pagar com M-Pesa / e-Mola</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -938,8 +1272,135 @@ CATS_JS.forEach(cat => {
   }, {passive: true})
 })
 
-// ── Sheet ──
+// ── Auth state ──────────────────────────────────────────────────────────────
+const authState = { user: null, pendingPkg: null }
+
+async function checkAuth() {
+  try {
+    const r = await fetch('/api/auth/me')
+    if (r.ok) authState.user = await r.json()
+  } catch {}
+  updateNavAuth()
+}
+function updateNavAuth() {
+  const u = authState.user
+  const nb = document.getElementById('nav-balance')
+  const nbv = document.getElementById('nav-bal-val')
+  const dlo = document.getElementById('drawer-logged-out')
+  const dli = document.getElementById('drawer-logged-in')
+  if (u) {
+    nb.style.display = 'flex'
+    nbv.textContent = (u.balance||0).toLocaleString('pt-MZ') + ' MT'
+    dlo.style.display = 'none'
+    dli.style.display = 'block'
+    document.getElementById('drawer-user-name').textContent = u.name
+    document.getElementById('drawer-user-bal').textContent = (u.balance||0).toLocaleString('pt-MZ') + ' MT saldo'
+  } else {
+    nb.style.display = 'none'
+    dlo.style.display = 'block'
+    dli.style.display = 'none'
+  }
+}
+function openAuthDialog(tab) {
+  authSetTab(tab || 'register')
+  document.getElementById('auth-modal').style.display = 'flex'
+  setTimeout(() => document.getElementById('auth-card').classList.add('open'), 10)
+}
+function closeAuthDialog() {
+  document.getElementById('auth-card').classList.remove('open')
+  setTimeout(() => { document.getElementById('auth-modal').style.display = 'none' }, 250)
+}
+function authSetTab(t) {
+  document.getElementById('auth-panel-register').style.display = t==='register' ? 'flex' : 'none'
+  document.getElementById('auth-panel-login').style.display    = t==='login'    ? 'flex' : 'none'
+  document.querySelectorAll('.auth-tab').forEach((b,i) => b.classList.toggle('active', (i===0&&t==='register')||(i===1&&t==='login')))
+}
+async function registerUser() {
+  const name=document.getElementById('reg-name').value.trim()
+  const phone=document.getElementById('reg-phone').value.trim().replace(/\D/g,'')
+  const pass=document.getElementById('reg-pass').value
+  const pass2=document.getElementById('reg-pass2').value
+  const err=document.getElementById('reg-err'); err.style.display='none'
+  if (!name){err.textContent='Introduza o seu nome.';err.style.display='block';return}
+  if (phone.length!==9){err.textContent='Número deve ter 9 dígitos.';err.style.display='block';return}
+  if (pass.length<6){err.textContent='Senha deve ter pelo menos 6 caracteres.';err.style.display='block';return}
+  if (pass!==pass2){err.textContent='As senhas não coincidem.';err.style.display='block';return}
+  const btn=document.getElementById('reg-btn'); btn.disabled=true; btn.textContent='A criar conta…'
+  try {
+    const r=await fetch('/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,phone,password:pass})})
+    const d=await r.json()
+    if(!r.ok){err.textContent=d.error||'Erro ao criar conta.';err.style.display='block';btn.disabled=false;btn.textContent='Criar Conta';return}
+    authState.user=d.user; updateNavAuth(); closeAuthDialog()
+    if(authState.pendingPkg){const id=authState.pendingPkg;authState.pendingPkg=null;setTimeout(()=>openBuyDirect(id),300)}
+  } catch{err.textContent='Erro de ligação.';err.style.display='block';btn.disabled=false;btn.textContent='Criar Conta'}
+}
+async function loginUser() {
+  const phone=document.getElementById('login-phone').value.trim().replace(/\D/g,'')
+  const pass=document.getElementById('login-pass').value
+  const err=document.getElementById('login-err'); err.style.display='none'
+  if(!phone){err.textContent='Introduza o número.';err.style.display='block';return}
+  if(!pass){err.textContent='Introduza a senha.';err.style.display='block';return}
+  const btn=document.getElementById('login-btn'); btn.disabled=true; btn.textContent='A entrar…'
+  try {
+    const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone,password:pass})})
+    const d=await r.json()
+    if(!r.ok){err.textContent=d.error||'Credenciais inválidas.';err.style.display='block';btn.disabled=false;btn.textContent='Entrar';return}
+    authState.user=d.user; updateNavAuth(); closeAuthDialog()
+    if(authState.pendingPkg){const id=authState.pendingPkg;authState.pendingPkg=null;setTimeout(()=>openBuyDirect(id),300)}
+  } catch{err.textContent='Erro de ligação.';err.style.display='block';btn.disabled=false;btn.textContent='Entrar'}
+}
+async function logoutUser() {
+  await fetch('/api/auth/logout').catch(()=>{})
+  authState.user=null; updateNavAuth(); closeDrawer()
+}
+
+// ── Recarga ──────────────────────────────────────────────────────────────────
+function openRechargeDialog() {
+  document.getElementById('rech-amount').value=''
+  document.getElementById('rech-err').style.display='none'
+  const btn=document.getElementById('rech-btn'); btn.disabled=false; btn.textContent='Pagar com M-Pesa / e-Mola'
+  document.getElementById('recharge-modal').style.display='flex'
+  setTimeout(()=>document.getElementById('recharge-card').classList.add('open'),10)
+}
+function closeRechargeDialog() {
+  document.getElementById('recharge-card').classList.remove('open')
+  setTimeout(()=>{document.getElementById('recharge-modal').style.display='none'},250)
+}
+async function submitRecharge() {
+  const amount=parseInt(document.getElementById('rech-amount').value)
+  const err=document.getElementById('rech-err'); err.style.display='none'
+  if(!amount||amount<1){err.textContent='Introduza um valor válido.';err.style.display='block';return}
+  const btn=document.getElementById('rech-btn'); btn.disabled=true; btn.textContent='A processar…'
+  try {
+    const r=await fetch('/api/recharge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount})})
+    const d=await r.json()
+    if(!r.ok){err.textContent=d.error||'Erro ao processar.';err.style.display='block';btn.disabled=false;btn.textContent='Pagar com M-Pesa / e-Mola';return}
+    closeRechargeDialog()
+    document.getElementById('rech-method-lbl').textContent=d.method==='mpesa'?'M-Pesa':'e-Mola'
+    document.getElementById('overlay').classList.add('open')
+    setTimeout(()=>document.getElementById('sheet').classList.add('open'),10)
+    shShow('recharging')
+    listenRecharge(d.txId, amount)
+  } catch{err.textContent='Erro de ligação.';err.style.display='block';btn.disabled=false;btn.textContent='Pagar com M-Pesa / e-Mola'}
+}
+function listenRecharge(txId, amount) {
+  const es=new EventSource('/events/'+txId)
+  es.onmessage=e=>{
+    const d=JSON.parse(e.data)
+    if(d.status==='succeeded'){
+      es.close()
+      fetch('/api/auth/me').then(r=>r.json()).then(u=>{authState.user=u;updateNavAuth()}).catch(()=>{})
+      document.getElementById('sh-rech-bal').textContent=(authState.user?.balance||0)+' MT (estimado)'
+      shShow('recharge-ok')
+    }
+    if(d.status==='failed'){es.close();shShow('recharge-fail')}
+  }
+  es.onerror=()=>{es.close();setTimeout(()=>listenRecharge(txId,amount),3000)}
+}
+
+// ── Sheet ──────────────────────────────────────────────────────────────────
 let shCurTab = 'mim'
+let payVia = 'mpesa'
 
 function shSetTab(t) {
   shCurTab = t
@@ -947,14 +1408,49 @@ function shSetTab(t) {
     document.getElementById('sh-tab-'+x).style.display = x===t ? 'block' : 'none'
     document.querySelectorAll('.sh-tab')[i].classList.toggle('active', x===t)
   })
-  document.getElementById('sh-btn').style.display = t==='req' ? 'none' : 'block'
+  const showBtn = t !== 'req'
+  document.getElementById('sh-btn').style.display = showBtn ? 'block' : 'none'
+  document.getElementById('via-section').style.display = showBtn ? 'block' : 'none'
 }
 
-function detectVia() {}
-function selectVia()  {}
-function selectVia2() {}
+function selectPayVia(v) {
+  payVia = v
+  document.querySelectorAll('.via-btn').forEach(b => b.classList.toggle('active', b.dataset.via===v))
+  const btn = document.getElementById('sh-btn')
+  if (v === 'credit') {
+    const bal = authState.user?.balance || 0
+    const price = curPkg?.price || 0
+    if (bal < price) {
+      btn.textContent = 'Saldo insuficiente (' + bal.toLocaleString('pt-MZ') + ' MT)'
+      btn.disabled = true
+    } else {
+      btn.textContent = 'Pagar ' + price + ' MT com Crédito'
+      btn.disabled = false
+    }
+  } else {
+    btn.textContent = 'Próximo'
+    btn.disabled = false
+  }
+}
+function updateCreditBtn() {
+  const u = authState.user
+  const el = document.getElementById('via-bal-txt')
+  const btn = document.getElementById('via-credit')
+  if (!el || !btn) return
+  if (u) {
+    el.textContent = (u.balance||0).toLocaleString('pt-MZ') + ' MT disponível'
+    btn.disabled = false
+  } else {
+    el.textContent = 'Faça login primeiro'
+    btn.disabled = true
+  }
+}
 
 function openBuy(id) {
+  if (!authState.user) { authState.pendingPkg = id; openAuthDialog('register'); return }
+  openBuyDirect(id)
+}
+function openBuyDirect(id) {
   const all = Object.values(PKGS_ALL).flat()
   const p = all.find(x=>x.id===id); if(!p) return
   curPkg = p
@@ -966,9 +1462,11 @@ function openBuy(id) {
   document.getElementById('ico-sms').textContent   = p.calls ? '+ SMS' : '0 SMS'
   document.getElementById('sh-phone').value = ''
   document.getElementById('sh-err').style.display = 'none'
+  payVia = 'mpesa'
+  document.querySelectorAll('.via-btn').forEach(b => b.classList.toggle('active', b.dataset.via==='mpesa'))
+  updateCreditBtn()
   const btn = document.getElementById('sh-btn'); btn.disabled=false; btn.textContent='Próximo'; btn.style.display='block'
   shSetTab('mim')
-  selectVia('mpesa')
   shShow('buy')
   document.getElementById('overlay').classList.add('open')
   setTimeout(()=>document.getElementById('sheet').classList.add('open'),10)
@@ -980,28 +1478,28 @@ function closeSheet() {
   setTimeout(()=>shShow('buy'), 300)
 }
 function shShow(s) {
-  ['buy','pending','success','failed'].forEach(x=>document.getElementById('s-'+x).style.display=(x===s?'block':'none'))
+  const ALL=['buy','pending','success','failed','success-credit','recharging','recharge-ok','recharge-fail']
+  ALL.forEach(x=>{ const el=document.getElementById('s-'+x); if(el) el.style.display=(x===s?'block':'none') })
   const sh=document.getElementById('sheet')
-  if(s==='pending'){sh.classList.add('pending-full')}else{sh.classList.remove('pending-full')}
+  const centered=['pending','recharging']
+  if(centered.includes(s)){sh.classList.add('pending-full')}else{sh.classList.remove('pending-full')}
+}
+
+function getPhoneFromSheet() {
+  if (shCurTab==='outro') {
+    const phone=document.getElementById('sh-phone-payer').value.trim().replace(/\D/g,'')
+    const bene=document.getElementById('sh-phone-bene').value.trim().replace(/\D/g,'')
+    return { phone, beneficiaryPhone:bene, error: !phone?'Introduza o seu número de pagamento.':phone.length!==9||!/^(84|85|86|87)/.test(phone)?'Número de pagamento inválido. Use 84 ou 85.':!bene?'Introduza o número do beneficiário.':bene.length!==9?'Número do beneficiário deve ter 9 dígitos.':null }
+  }
+  const phone=document.getElementById('sh-phone').value.trim().replace(/\D/g,'')
+  return { phone, beneficiaryPhone:null, error: !phone?'Introduza o número de telemóvel.':phone.length!==9?'O número deve ter exactamente 9 dígitos.':!/^(84|85|86|87)/.test(phone)?'Número inválido. Use 84 ou 85.':null }
 }
 
 async function pay() {
+  if (payVia === 'credit') { await payWithCredit(); return }
   const ee = document.getElementById('sh-err'); ee.style.display='none'
-  let phone, beneficiaryPhone=null
-  if (shCurTab==='outro') {
-    phone = document.getElementById('sh-phone-payer').value.trim().replace(/\D/g,'')
-    const bene = document.getElementById('sh-phone-bene').value.trim().replace(/\D/g,'')
-    if (!phone) { ee.textContent='Introduza o seu número de pagamento.'; ee.style.display='block'; return }
-    if (phone.length!==9||!/^(84|85|86|87)/.test(phone)) { ee.textContent='Número de pagamento inválido. Use 84 ou 85.'; ee.style.display='block'; return }
-    if (!bene) { ee.textContent='Introduza o número do beneficiário.'; ee.style.display='block'; return }
-    if (bene.length!==9) { ee.textContent='Número do beneficiário deve ter 9 dígitos.'; ee.style.display='block'; return }
-    beneficiaryPhone = bene
-  } else {
-    phone = document.getElementById('sh-phone').value.trim().replace(/\D/g,'')
-    if (!phone) { ee.textContent='Introduza o número de telemóvel.'; ee.style.display='block'; return }
-    if (phone.length!==9) { ee.textContent='O número deve ter exactamente 9 dígitos.'; ee.style.display='block'; return }
-    if (!/^(84|85|86|87)/.test(phone)) { ee.textContent='Número inválido. Use 84 ou 85.'; ee.style.display='block'; return }
-  }
+  const {phone, beneficiaryPhone, error} = getPhoneFromSheet()
+  if (error) { ee.textContent=error; ee.style.display='block'; return }
   const btn = document.getElementById('sh-btn'); btn.disabled=true; btn.textContent='A processar…'
   try {
     const payload={phone,bundleId:curPkg.id}; if(beneficiaryPhone) payload.beneficiaryPhone=beneficiaryPhone
@@ -1012,6 +1510,22 @@ async function pay() {
     document.getElementById('sh-ok-pkg').textContent = curPkg.name+' — '+curPkg.price+' MT'
     shShow('pending'); listenOrder(d.txId)
   } catch { ee.textContent='Erro de ligação. Tente novamente.'; ee.style.display='block'; btn.disabled=false; btn.textContent='Próximo' }
+}
+async function payWithCredit() {
+  const ee = document.getElementById('sh-err'); ee.style.display='none'
+  const {phone, beneficiaryPhone, error} = getPhoneFromSheet()
+  if (shCurTab !== 'req' && error) { ee.textContent=error; ee.style.display='block'; return }
+  const btn=document.getElementById('sh-btn'); btn.disabled=true; btn.textContent='A debitar crédito…'
+  try {
+    const payload={bundleId:curPkg.id}
+    if(beneficiaryPhone) payload.beneficiaryPhone=beneficiaryPhone
+    const r=await fetch('/api/buy-credit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+    const d=await r.json()
+    if(!r.ok){ee.textContent=d.error||'Erro.';ee.style.display='block';selectPayVia('credit');return}
+    authState.user.balance=d.newBalance; updateNavAuth()
+    document.getElementById('sh-ok-pkg-credit').textContent=curPkg.name+' — '+curPkg.price+' MT'
+    shShow('success-credit')
+  } catch{ee.textContent='Erro de ligação.';ee.style.display='block';selectPayVia('credit')}
 }
 function listenOrder(txId) {
   if (evtSrc) evtSrc.close()
@@ -1050,6 +1564,7 @@ function openDrawer()  { document.getElementById('drawer').classList.add('open')
 function closeDrawer() { document.getElementById('drawer').classList.remove('open'); document.getElementById('drawer-overlay').classList.remove('open') }
 
 // Init: diarias já visível por defeito (HTML pré-renderizado)
+checkAuth()
 </script>
 </body></html>`
 }
@@ -1116,6 +1631,7 @@ function adminDashboard(filter = 'all') {
   const filterMap = {
     all:       orders,
     zumbo:     orders,
+    users:     users,
     pending:   orders.filter(o=>o.status==='pending'),
     succeeded: orders.filter(o=>o.status==='succeeded'),
     activated: orders.filter(o=>o.status==='activated'),
@@ -1131,6 +1647,9 @@ function adminDashboard(filter = 'all') {
   const navSections = [
     { label: 'ZumboPay', items: [
       { f:'zumbo', label:'Transações ZumboPay', icon:'M12 2a10 10 0 100 20A10 10 0 0012 2zm1 14H11v-4H9l3-6 3 6h-2v4z' },
+    ]},
+    { label: 'Utilizadores', items: [
+      { f:'users', label:'Contas de Utilizadores', icon:'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75' },
     ]},
     { label: 'Encomendas', items: [
       { f:'all',       label:'Todas as transacções',   icon:'M3 7h18M3 12h18M3 17h18' },
@@ -1194,7 +1713,65 @@ function adminDashboard(filter = 'all') {
 </div>`)
     : null
 
-  const cards = zumboTable !== null ? zumboTable
+  // ── Vista: Utilizadores ────────────────────────────────────────────────────
+  const usersTable = filter === 'users'
+    ? (users.length === 0
+        ? `<div class="empty"><div class="empty-icon">👤</div><p>Nenhum utilizador registado ainda.</p></div>`
+        : `<div class="ztable-wrap" style="max-width:900px">
+  <table class="ztable">
+    <thead><tr>
+      <th>Nome</th><th>Número</th><th>Saldo</th><th>Registado em</th><th>Acções</th>
+    </tr></thead>
+    <tbody>
+    ${users.map(u=>{
+      const dt = new Date(u.createdAt)
+      const ds = dt.toLocaleDateString('pt-MZ',{day:'2-digit',month:'short',year:'numeric'})
+      return `<tr id="urow-${u.id}">
+        <td><strong>${u.name}</strong></td>
+        <td class="zt-phone">${u.phone}</td>
+        <td><span class="ubal-badge">${(u.balance||0).toLocaleString('pt-MZ')} MT</span></td>
+        <td class="zt-date">${ds}</td>
+        <td>
+          <button class="uedit-btn" onclick="openUserEdit('${u.id}','${u.name.replace(/'/g,"\\'")}','${u.phone}',${u.balance||0})">Editar</button>
+        </td>
+      </tr>`
+    }).join('')}
+    </tbody>
+  </table>
+</div>
+
+<!-- Modal de edição de utilizador -->
+<div id="user-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:#fff;border-radius:20px;width:100%;max-width:420px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+    <div style="padding:20px 24px 0;border-bottom:1px solid #e5e5ea;margin-bottom:20px;">
+      <div style="font-size:18px;font-weight:800;color:#1c1c1e;margin-bottom:4px">Editar Utilizador</div>
+      <div id="uedit-phone-lbl" style="font-size:13px;color:#8e8e93;padding-bottom:16px"></div>
+    </div>
+    <div style="padding:0 24px 24px;display:flex;flex-direction:column;gap:12px">
+      <input id="uedit-name" type="text" placeholder="Nome" style="width:100%;padding:13px 16px;border:1.5px solid #e5e5ea;border-radius:12px;font-size:15px;font-family:inherit;outline:none;">
+      <input id="uedit-phone" type="tel" placeholder="Número (9 dígitos)" maxlength="9" style="width:100%;padding:13px 16px;border:1.5px solid #e5e5ea;border-radius:12px;font-size:15px;font-family:inherit;outline:none;">
+      <div style="background:#f9f9fb;border-radius:12px;padding:14px 16px;">
+        <div style="font-size:12px;font-weight:700;color:#636366;margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em">Ajuste de Saldo</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button onclick="setBalDelta(-1)" style="background:#fee2e2;color:#cc0000;border:none;border-radius:8px;width:36px;height:36px;font-size:20px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center">−</button>
+          <input id="uedit-bal-delta" type="number" value="0" style="flex:1;padding:8px 12px;border:1.5px solid #e5e5ea;border-radius:8px;font-size:15px;font-family:inherit;text-align:center;outline:none;">
+          <button onclick="setBalDelta(1)" style="background:#d1fae5;color:#065f46;border:none;border-radius:8px;width:36px;height:36px;font-size:20px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center">+</button>
+        </div>
+        <div style="font-size:12px;color:#8e8e93;margin-top:6px;text-align:center">Saldo actual: <strong id="uedit-cur-bal">0</strong> MT → Novo: <strong id="uedit-new-bal">0</strong> MT</div>
+      </div>
+      <input id="uedit-newpass" type="password" placeholder="Nova senha (deixe em branco para manter)" style="width:100%;padding:13px 16px;border:1.5px solid #e5e5ea;border-radius:12px;font-size:15px;font-family:inherit;outline:none;">
+      <div id="uedit-err" style="display:none;background:#fff0f0;border:1px solid #ffcdd2;border-radius:10px;padding:10px 14px;font-size:13px;color:#cc0000;"></div>
+      <div style="display:flex;gap:8px;">
+        <button onclick="closeUserEdit()" style="flex:1;padding:14px;border:1.5px solid #e5e5ea;border-radius:12px;font-size:15px;font-weight:600;font-family:inherit;cursor:pointer;background:#fff;color:#636366">Cancelar</button>
+        <button id="uedit-save" onclick="saveUserEdit()" style="flex:2;padding:14px;border:none;border-radius:12px;background:#cc0000;color:#fff;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>`)
+    : null
+
+  const cards = usersTable !== null ? usersTable
+    : zumboTable !== null ? zumboTable
     : filtered.length === 0
     ? `<div class="empty"><div class="empty-icon">📭</div><p>Nenhuma transacção encontrada.</p></div>`
     : filtered.map(o => {
@@ -1375,6 +1952,11 @@ body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:1
 .zt-amount{font-weight:800;color:#1c1c1e;white-space:nowrap;}
 @media(max-width:640px){.content{max-width:100%;}.zumbo-panel{max-width:100%;}}
 
+/* ── Utilizadores ── */
+.ubal-badge{display:inline-block;background:#ecfdf5;color:#065f46;font-weight:700;font-size:12px;padding:3px 10px;border-radius:20px;border:1px solid #6ee7b7;}
+.uedit-btn{padding:6px 14px;border:1.5px solid #e5e5ea;border-radius:8px;background:#fff;font-size:12px;font-weight:600;color:#636366;cursor:pointer;font-family:inherit;transition:border-color .12s,color .12s;}
+.uedit-btn:hover{border-color:#cc0000;color:#cc0000;}
+
 /* ── Toast ── */
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:#1c1c1e;color:#fff;font-size:13px;font-weight:600;padding:10px 20px;border-radius:20px;z-index:999;opacity:0;transition:all .25s;pointer-events:none;white-space:nowrap;}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
@@ -1470,6 +2052,55 @@ function copyNum(num,btn){
     prompt('Copie o número:',num)
   })
 }
+// ── User edit ──────────────────────────────────────────────────────────────
+let _ueditId=null, _ueditCurBal=0
+function openUserEdit(id,name,phone,bal){
+  _ueditId=id; _ueditCurBal=bal
+  document.getElementById('uedit-phone-lbl').textContent='Número: '+phone
+  document.getElementById('uedit-name').value=name
+  document.getElementById('uedit-phone').value=phone
+  document.getElementById('uedit-bal-delta').value=0
+  document.getElementById('uedit-cur-bal').textContent=bal.toLocaleString('pt-MZ')
+  document.getElementById('uedit-new-bal').textContent=bal.toLocaleString('pt-MZ')
+  document.getElementById('uedit-newpass').value=''
+  document.getElementById('uedit-err').style.display='none'
+  const save=document.getElementById('uedit-save'); save.disabled=false; save.textContent='Guardar'
+  document.getElementById('user-modal').style.display='flex'
+  document.getElementById('uedit-bal-delta').oninput=updateBalPreview
+}
+function updateBalPreview(){
+  const delta=parseFloat(document.getElementById('uedit-bal-delta').value)||0
+  const novo=Math.max(0,_ueditCurBal+delta)
+  document.getElementById('uedit-new-bal').textContent=novo.toLocaleString('pt-MZ')
+}
+function setBalDelta(sign){
+  const el=document.getElementById('uedit-bal-delta')
+  const step=50; el.value=(parseFloat(el.value)||0)+sign*step; updateBalPreview()
+}
+function closeUserEdit(){ document.getElementById('user-modal').style.display='none' }
+async function saveUserEdit(){
+  const name=document.getElementById('uedit-name').value.trim()
+  const phone=document.getElementById('uedit-phone').value.trim().replace(/\D/g,'')
+  const delta=parseFloat(document.getElementById('uedit-bal-delta').value)||0
+  const newpass=document.getElementById('uedit-newpass').value
+  const err=document.getElementById('uedit-err'); err.style.display='none'
+  if(!name){err.textContent='Nome é obrigatório.';err.style.display='block';return}
+  if(phone.length!==9){err.textContent='Número deve ter 9 dígitos.';err.style.display='block';return}
+  if(newpass&&newpass.length<6){err.textContent='Nova senha deve ter pelo menos 6 caracteres.';err.style.display='block';return}
+  const save=document.getElementById('uedit-save'); save.disabled=true; save.textContent='A guardar…'
+  const body={name,phone}
+  if(delta!==0) body.balanceDelta=delta
+  if(newpass) body.newPassword=newpass
+  try{
+    const r=await fetch('/admin/users/'+_ueditId,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    const d=await r.json()
+    if(!r.ok){err.textContent=d.error||'Erro.';err.style.display='block';save.disabled=false;save.textContent='Guardar';return}
+    showToast('Utilizador actualizado com sucesso!')
+    closeUserEdit()
+    setTimeout(()=>location.reload(),800)
+  }catch{err.textContent='Erro de ligação.';err.style.display='block';save.disabled=false;save.textContent='Guardar'}
+}
+
 async function activateOrder(txId,btn){
   if(!confirm('Confirma que os megas foram enviados para o beneficiário?')) return
   btn.disabled=true; btn.textContent='A guardar…'
@@ -1493,6 +2124,7 @@ async function activateOrder(txId,btn){
 
 // ── Servidor ──────────────────────────────────────────────────────────────────
 await loadOrders()
+await loadUsers()
 createServer((req, res) => {
   router(req, res).catch(err => {
     console.error('[Server]', err)

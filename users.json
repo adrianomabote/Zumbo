@@ -1,0 +1,11 @@
+[
+  {
+    "id": "628bcba420da",
+    "name": "Teste Silva",
+    "phone": "841234567",
+    "passwordHash": "2c43a7353efda0339f473a295dbbc3bc40544123136b5eb579a9eb4836cf2576",
+    "salt": "de09d8b69c9722eb4db5b4a566ca3cf4",
+    "balance": 0,
+    "createdAt": "2026-08-08T08:31:08.589Z"
+  }
+]
