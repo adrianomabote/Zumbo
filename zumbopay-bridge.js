@@ -179,7 +179,7 @@ async function router(req, res) {
 
   // ── Páginas públicas ──────────────────────────────────────────────────────
   if (method === 'GET' && path === '/')         { res.writeHead(302,{'Location':'/megas'}); return res.end() }
-  if (method === 'GET' && path === '/static/vodacom.webp') {
+  if (method === 'GET' && (path === '/static/vodacom.webp' || path === '/favicon.ico')) {
     try { const img = await import('fs/promises').then(f=>f.readFile('./attached_assets/image_1786121779688.webp')); res.writeHead(200,{'Content-Type':'image/webp','Cache-Control':'max-age=86400'}); return res.end(img) } catch { res.writeHead(404); return res.end() }
   }
   if (method === 'GET' && path === '/megas')    return html(res, megasPage())
@@ -429,6 +429,7 @@ function megasPage() {
 <html lang="pt"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <title>Megas — Net Serviços</title>
+<link rel="icon" href="/favicon.ico" type="image/webp">
 <script>(function(){document.addEventListener('contextmenu',e=>e.preventDefault());document.addEventListener('keydown',function(e){const c=e.ctrlKey||e.metaKey;if(e.key==='F12'){e.preventDefault();return false}if(c&&e.shiftKey&&['I','J','C','K'].includes(e.key.toUpperCase())){e.preventDefault();return false}if(c&&['u','U','s','S','a','A','c','C','x','X'].includes(e.key)){e.preventDefault();return false}},true);['copy','cut','selectstart','dragstart'].forEach(ev=>document.addEventListener(ev,e=>e.preventDefault(),true))})()
 </script>
 <style>
