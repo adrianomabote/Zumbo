@@ -925,7 +925,6 @@ async function pay() {
     const r = await fetch('/api/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone,bundleId:curPkg.id})})
     const d = await r.json()
     if (!r.ok) { ee.textContent=d.error||'Erro ao processar.'; ee.style.display='block'; btn.disabled=false; btn.textContent='Próximo'; return }
-    document.getElementById('sh-pend-phone').textContent = phone
     document.getElementById('sh-method-lbl').textContent = d.method==='mpesa'?'M-Pesa':'e-Mola'
     document.getElementById('sh-ok-pkg').textContent = curPkg.name+' — '+curPkg.price+' MT'
     shShow('pending'); listenOrder(d.txId)
