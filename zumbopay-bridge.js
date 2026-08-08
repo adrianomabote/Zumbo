@@ -6,6 +6,7 @@
 import { createServer }                              from 'http'
 import { createHmac, timingSafeEqual, randomBytes }  from 'crypto'
 import { readFile, writeFile }                       from 'fs/promises'
+import pg                                            from 'pg'
 
 // ── Configuração ──────────────────────────────────────────────────────────────
 const PORT                 = process.env.PORT || 5000
@@ -55,6 +56,45 @@ const BUNDLES = new Map([
   ['d05',{label:'50 GB',  price:1490, cat:'diamante'}],
 ])
 
+// ── Base de dados permanente (opcional — resolve o disco efémero do Render) ──
+// Cole aqui o "External Database URL" do PostgreSQL criado no Render:
+const HARD_DB_URL = ''
+const APP_DB_URL  = process.env.APP_DB_URL || process.env.DATABASE_URL || HARD_DB_URL
+let dbPool = null
+if (APP_DB_URL) {
+  dbPool = new pg.Pool({
+    connectionString: APP_DB_URL,
+    ssl: /sslmode=disable/.test(APP_DB_URL) ? false : { rejectUnauthorized: false },
+    max: 3,
+  })
+  dbPool.on('error', e => console.error('[DB]', e.message))
+}
+async function dbInit() {
+  if (!dbPool) { console.log('[DB] sem base de dados — a usar ficheiros (dados perdem-se em cada deploy)'); return }
+  try {
+    await dbPool.query('CREATE TABLE IF NOT EXISTS app_store (k TEXT PRIMARY KEY, data JSONB NOT NULL, updated_at TIMESTAMPTZ DEFAULT now())')
+    console.log('[DB] ligado — dados persistentes activos')
+  } catch (e) { console.error('[DB] falha ao iniciar:', e.message); dbPool = null }
+}
+async function storeLoad(k, file) {
+  if (dbPool) {
+    try {
+      const r = await dbPool.query('SELECT data FROM app_store WHERE k=$1', [k])
+      if (r.rows[0]) return r.rows[0].data
+    } catch (e) { console.error('[DB] load', k, e.message) }
+  }
+  try { return JSON.parse(await readFile(file, 'utf8')) } catch { return null }
+}
+async function storeSave(k, data, file) {
+  if (dbPool) {
+    try {
+      await dbPool.query('INSERT INTO app_store (k,data,updated_at) VALUES ($1,$2,now()) ON CONFLICT (k) DO UPDATE SET data=$2, updated_at=now()', [k, JSON.stringify(data)])
+      return
+    } catch (e) { console.error('[DB] save', k, e.message) }
+  }
+  try { await writeFile(file, JSON.stringify(data, null, 2)) } catch {}
+}
+
 // ── Estado em memória ─────────────────────────────────────────────────────────
 const transactions  = new Map()
 const sseClients    = new Map()
@@ -92,8 +132,8 @@ function safeEqual(a, b) {
 
 // ── Utilizadores ──────────────────────────────────────────────────────────────
 let users = []
-async function loadUsers() { try { users = JSON.parse(await readFile(USERS_FILE,'utf8')) } catch {} }
-async function saveUsers() { try { await writeFile(USERS_FILE, JSON.stringify(users,null,2)) } catch {} }
+async function loadUsers() { const d = await storeLoad('users', USERS_FILE); if (d) users = d }
+async function saveUsers() { await storeSave('users', users, USERS_FILE) }
 function findUserByPhone(p) { return users.find(u=>u.phone===p) }
 function findUserById(id)   { return users.find(u=>u.id===id) }
 function hashPwd(pass, salt){ return createHmac('sha256', salt + ADMIN_PASS).update(pass).digest('hex') }
@@ -124,10 +164,10 @@ const GW_BUILTIN = {
   active: true, createdAt: '2026-08-08T00:00:00.000Z', txCount: 0, totalAmount: 0, builtin: true,
 }
 async function loadGwKeys() {
-  try { gwKeys = JSON.parse(await readFile(GWKEYS_FILE,'utf8')) } catch {}
+  const d = await storeLoad('gwkeys', GWKEYS_FILE); if (d) gwKeys = d
   if (!gwKeys.some(g => g.id === GW_BUILTIN.id)) gwKeys.unshift(GW_BUILTIN)
 }
-async function saveGwKeys() { try { await writeFile(GWKEYS_FILE, JSON.stringify(gwKeys,null,2)) } catch {} }
+async function saveGwKeys() { await storeSave('gwkeys', gwKeys, GWKEYS_FILE) }
 function findGwKey(k) {
   if (!k) return null
   const rec = gwKeys.find(g => g.key === k)
@@ -205,12 +245,8 @@ async function gwForwardCallback(tx) {
 }
 
 // ── Persistência de encomendas ────────────────────────────────────────────────
-async function loadOrders() {
-  try { orders = JSON.parse(await readFile(ORDERS_FILE, 'utf8')) } catch {}
-}
-async function saveOrders() {
-  try { await writeFile(ORDERS_FILE, JSON.stringify(orders, null, 2)) } catch {}
-}
+async function loadOrders() { const d = await storeLoad('orders', ORDERS_FILE); if (d) orders = d }
+async function saveOrders() { await storeSave('orders', orders, ORDERS_FILE) }
 function trackOrder(tx, extra = {}) {
   const rec = {
     txId: tx.id, type: tx.type || 'bundle', phone: tx.phone,
@@ -2774,6 +2810,7 @@ async function activateOrder(txId,btn){
 }
 
 // ── Servidor ──────────────────────────────────────────────────────────────────
+await dbInit()
 await loadOrders()
 await loadUsers()
 await loadGwKeys()
