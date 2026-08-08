@@ -173,7 +173,6 @@ function normalizeMsisdn(p) { const d = String(p).replace(/\D/g,''); return d.st
 function detectMethod(msisdn) {
   const l = msisdn.replace(/^258/,'')
   if (l.startsWith('84')||l.startsWith('85')) return 'mpesa'
-  if (l.startsWith('86')||l.startsWith('87')) return 'emola'
   return null
 }
 
@@ -834,12 +833,19 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 
 /* ── Balance pill no nav ── */
 .nav-balance{display:none;align-items:center;gap:6px;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:20px;padding:5px 6px 5px 12px;flex:1;max-width:220px;margin:0 6px;}
-.nav-bal-ico{font-size:14px;flex-shrink:0;}
+.nav-bal-ico{width:16px;height:16px;flex-shrink:0;stroke:#065f46;}
 .nav-bal-val{font-size:13px;font-weight:700;color:#065f46;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .nav-rech-btn{background:#065f46;color:#fff;border:none;border-radius:14px;padding:5px 11px;font-size:11px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;flex-shrink:0;}
 .nav-rech-btn:active{opacity:.85;}
 
 /* ── Drawer auth ── */
+.drawer-auth-row{display:flex;gap:8px;padding:4px 16px 12px;}
+.drawer-auth-btn{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;padding:10px 12px;border-radius:12px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;border:none;transition:opacity .12s;}
+.drawer-auth-btn svg{width:16px;height:16px;flex-shrink:0;}
+.drawer-auth-btn--primary{background:#cc0000;color:#fff;}
+.drawer-auth-btn--primary:active{opacity:.82;}
+.drawer-auth-btn--secondary{background:#f2f2f7;color:#1c1c1e;border:1.5px solid #e5e5ea;}
+.drawer-auth-btn--secondary:active{background:#e5e5ea;}
 .drawer-user-row{padding:14px 20px;display:flex;flex-direction:column;gap:4px;background:#f9f9fb;}
 .drawer-user-name{font-size:14px;font-weight:700;color:#1c1c1e;}
 .drawer-user-bal{font-size:13px;color:#065f46;font-weight:700;}
@@ -899,12 +905,12 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
     <div class="nav-logo-text">Net <span>Serviços</span></div>
   </a>
   <div id="nav-balance" class="nav-balance">
-    <span class="nav-bal-ico">💳</span>
+    <svg class="nav-bal-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v2m0 8v2M9.5 9.5C9.5 8.12 10.62 7 12 7s2.5 1.12 2.5 2.5S13.38 12 12 12s-2.5 1.12-2.5 2.5S10.62 17 12 17s2.5-1.12 2.5-2.5"/></svg>
     <span class="nav-bal-val" id="nav-bal-val">0 MT</span>
     <button class="nav-rech-btn" onclick="openRechargeDialog()">Recarregar</button>
   </div>
   <div class="nav-right">
-    <button class="nav-icon-btn" onclick="openSearch()" aria-label="Pesquisar">
+    <button class="nav-icon-btn" id="nav-search-btn" onclick="openSearch()" aria-label="Pesquisar">
       <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
     </button>
     <button class="nav-icon-btn" onclick="openDrawer()" aria-label="Menu">
@@ -931,13 +937,27 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
     <div class="drawer-brand">Net <span>Serviços</span></div>
   </div>
   <ul class="drawer-menu">
-    <li><a href="/"><span class="dm-icon">🏠</span>Início</a></li>
-    <li><a href="/megas"><span class="dm-icon">📶</span>Pacotes de Internet</a></li>
+    <li><a href="/">
+      <span class="dm-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
+      Início
+    </a></li>
+    <li><a href="/megas">
+      <span class="dm-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0114.08 0M1.42 9a16 16 0 0121.16 0M8.53 16.11a6 6 0 016.95 0M12 20h.01"/></svg></span>
+      Pacotes de Internet
+    </a></li>
     <div class="drawer-divider"></div>
     <!-- Logged out -->
     <div id="drawer-logged-out">
-      <li><a href="#" onclick="closeDrawer();openAuthDialog('register')"><span class="dm-icon">👤</span>Criar Conta</a></li>
-      <li><a href="#" onclick="closeDrawer();openAuthDialog('login')"><span class="dm-icon">🔑</span>Entrar</a></li>
+      <div class="drawer-auth-row">
+        <button class="drawer-auth-btn drawer-auth-btn--primary" onclick="closeDrawer();openAuthDialog('register')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+          Criar Conta
+        </button>
+        <button class="drawer-auth-btn drawer-auth-btn--secondary" onclick="closeDrawer();openAuthDialog('login')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+          Entrar
+        </button>
+      </div>
     </div>
     <!-- Logged in -->
     <div id="drawer-logged-in" style="display:none">
@@ -945,11 +965,20 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
         <span class="drawer-user-name" id="drawer-user-name">—</span>
         <span class="drawer-user-bal" id="drawer-user-bal">0 MT</span>
       </li>
-      <li><a href="#" onclick="closeDrawer();openRechargeDialog()"><span class="dm-icon">💳</span>Recarregar Saldo</a></li>
-      <li><a href="#" onclick="logoutUser()"><span class="dm-icon">↪</span>Sair da Conta</a></li>
+      <li><a href="#" onclick="closeDrawer();openRechargeDialog()">
+        <span class="dm-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v2m0 8v2M9.5 9.5C9.5 8.12 10.62 7 12 7s2.5 1.12 2.5 2.5S13.38 12 12 12s-2.5 1.12-2.5 2.5S10.62 17 12 17s2.5-1.12 2.5-2.5"/></svg></span>
+        Recarregar Saldo
+      </a></li>
+      <li><a href="#" onclick="logoutUser()">
+        <span class="dm-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></span>
+        Sair da Conta
+      </a></li>
     </div>
     <div class="drawer-divider"></div>
-    <li><a href="#" onclick="closeDrawer()"><span class="dm-icon">✕</span>Fechar menu</a></li>
+    <li><a href="#" onclick="closeDrawer()">
+      <span class="dm-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span>
+      Fechar menu
+    </a></li>
   </ul>
 </div>
 
@@ -1078,14 +1107,18 @@ ${allListHtml}
       <div class="via-section-lbl">Método de pagamento</div>
       <div class="via-btns">
         <button class="via-btn active" data-via="mpesa" onclick="selectPayVia('mpesa')">
-          <span class="via-btn-icon">📱</span>
+          <span class="via-btn-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+          </span>
           <div>
-            <div class="via-btn-label">M-Pesa / e-Mola</div>
+            <div class="via-btn-label">M-Pesa</div>
             <div class="via-btn-sub">Pagar pelo telemóvel</div>
           </div>
         </button>
         <button class="via-btn" id="via-credit" data-via="credit" onclick="selectPayVia('credit')">
-          <span class="via-btn-icon">💳</span>
+          <span class="via-btn-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v2m0 8v2M9.5 9.5C9.5 8.12 10.62 7 12 7s2.5 1.12 2.5 2.5S13.38 12 12 12s-2.5 1.12-2.5 2.5S10.62 17 12 17s2.5-1.12 2.5-2.5"/></svg>
+          </span>
           <div>
             <div class="via-btn-label">Crédito</div>
             <span class="via-credit-bal" id="via-bal-txt">—</span>
@@ -1136,7 +1169,7 @@ ${allListHtml}
     <div class="sh-top"><button class="sh-close" onclick="closeSheet()">✕</button></div>
     <div class="sh-state">
       <div class="res-icon ok">✓</div>
-      <span class="credit-badge">💳 Pago com Crédito</span>
+      <span class="credit-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:middle;margin-right:4px"><circle cx="12" cy="12" r="10"/><path d="M12 6v2m0 8v2M9.5 9.5C9.5 8.12 10.62 7 12 7s2.5 1.12 2.5 2.5S13.38 12 12 12s-2.5 1.12-2.5 2.5S10.62 17 12 17s2.5-1.12 2.5-2.5"/></svg>Pago com Crédito</span>
       <div class="res-t">Pedido recebido!</div>
       <p class="res-s">Crédito debitado. O seu pacote será activado em <strong style="color:#cc0000">5–15 minutos</strong>.</p>
       <div class="res-box"><div class="res-box-l">Pacote encomendado</div><div class="res-box-v" id="sh-ok-pkg-credit"></div></div>
@@ -1227,9 +1260,9 @@ ${allListHtml}
         <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2.5;stroke-linecap:round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
       <div class="auth-card-head">
-        <div style="font-size:40px;margin-bottom:8px">💳</div>
+        <div style="margin-bottom:12px;display:flex;justify-content:center"><svg viewBox="0 0 24 24" fill="none" stroke="#cc0000" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:52px;height:52px"><circle cx="12" cy="12" r="10"/><path d="M12 6v2m0 8v2M9.5 9.5C9.5 8.12 10.62 7 12 7s2.5 1.12 2.5 2.5S13.38 12 12 12s-2.5 1.12-2.5 2.5S10.62 17 12 17s2.5-1.12 2.5-2.5"/></svg></div>
         <div class="auth-card-title">Recarregar Saldo</div>
-        <div class="auth-card-sub">O pagamento é feito via M-Pesa ou e-Mola</div>
+        <div class="auth-card-sub">O pagamento é processado via M-Pesa</div>
       </div>
       <div class="auth-body">
         <div class="rech-amount-wrap">
@@ -1237,7 +1270,7 @@ ${allListHtml}
           <input class="auth-inp rech-inp" id="rech-amount" type="number" min="1" placeholder="Valor a recarregar" inputmode="numeric">
         </div>
         <div class="auth-err" id="rech-err"></div>
-        <button class="auth-btn" id="rech-btn" onclick="submitRecharge()">Pagar com M-Pesa / e-Mola</button>
+        <button class="auth-btn" id="rech-btn" onclick="submitRecharge()">Pagar com M-Pesa</button>
       </div>
     </div>
   </div>
@@ -1288,6 +1321,7 @@ function updateNavAuth() {
   const nbv = document.getElementById('nav-bal-val')
   const dlo = document.getElementById('drawer-logged-out')
   const dli = document.getElementById('drawer-logged-in')
+  const srch = document.getElementById('nav-search-btn')
   if (u) {
     nb.style.display = 'flex'
     nbv.textContent = (u.balance||0).toLocaleString('pt-MZ') + ' MT'
@@ -1295,10 +1329,12 @@ function updateNavAuth() {
     dli.style.display = 'block'
     document.getElementById('drawer-user-name').textContent = u.name
     document.getElementById('drawer-user-bal').textContent = (u.balance||0).toLocaleString('pt-MZ') + ' MT saldo'
+    if (srch) srch.style.display = 'none'
   } else {
     nb.style.display = 'none'
     dlo.style.display = 'block'
     dli.style.display = 'none'
+    if (srch) srch.style.display = 'flex'
   }
 }
 function openAuthDialog(tab) {
@@ -1358,7 +1394,7 @@ async function logoutUser() {
 function openRechargeDialog() {
   document.getElementById('rech-amount').value=''
   document.getElementById('rech-err').style.display='none'
-  const btn=document.getElementById('rech-btn'); btn.disabled=false; btn.textContent='Pagar com M-Pesa / e-Mola'
+  const btn=document.getElementById('rech-btn'); btn.disabled=false; btn.textContent='Pagar com M-Pesa'
   document.getElementById('recharge-modal').style.display='flex'
   setTimeout(()=>document.getElementById('recharge-card').classList.add('open'),10)
 }
@@ -1374,14 +1410,14 @@ async function submitRecharge() {
   try {
     const r=await fetch('/api/recharge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount})})
     const d=await r.json()
-    if(!r.ok){err.textContent=d.error||'Erro ao processar.';err.style.display='block';btn.disabled=false;btn.textContent='Pagar com M-Pesa / e-Mola';return}
+    if(!r.ok){err.textContent=d.error||'Erro ao processar.';err.style.display='block';btn.disabled=false;btn.textContent='Pagar com M-Pesa';return}
     closeRechargeDialog()
-    document.getElementById('rech-method-lbl').textContent=d.method==='mpesa'?'M-Pesa':'e-Mola'
+    document.getElementById('rech-method-lbl').textContent='M-Pesa'
     document.getElementById('overlay').classList.add('open')
     setTimeout(()=>document.getElementById('sheet').classList.add('open'),10)
     shShow('recharging')
     listenRecharge(d.txId, amount)
-  } catch{err.textContent='Erro de ligação.';err.style.display='block';btn.disabled=false;btn.textContent='Pagar com M-Pesa / e-Mola'}
+  } catch{err.textContent='Erro de ligação.';err.style.display='block';btn.disabled=false;btn.textContent='Pagar com M-Pesa'}
 }
 function listenRecharge(txId, amount) {
   const es=new EventSource('/events/'+txId)
@@ -1489,10 +1525,10 @@ function getPhoneFromSheet() {
   if (shCurTab==='outro') {
     const phone=document.getElementById('sh-phone-payer').value.trim().replace(/\D/g,'')
     const bene=document.getElementById('sh-phone-bene').value.trim().replace(/\D/g,'')
-    return { phone, beneficiaryPhone:bene, error: !phone?'Introduza o seu número de pagamento.':phone.length!==9||!/^(84|85|86|87)/.test(phone)?'Número de pagamento inválido. Use 84 ou 85.':!bene?'Introduza o número do beneficiário.':bene.length!==9?'Número do beneficiário deve ter 9 dígitos.':null }
+    return { phone, beneficiaryPhone:bene, error: !phone?'Introduza o seu número de pagamento.':phone.length!==9||!/^(84|85)/.test(phone)?'Número de pagamento inválido. Use 84 ou 85.':!bene?'Introduza o número do beneficiário.':bene.length!==9?'Número do beneficiário deve ter 9 dígitos.':null }
   }
   const phone=document.getElementById('sh-phone').value.trim().replace(/\D/g,'')
-  return { phone, beneficiaryPhone:null, error: !phone?'Introduza o número de telemóvel.':phone.length!==9?'O número deve ter exactamente 9 dígitos.':!/^(84|85|86|87)/.test(phone)?'Número inválido. Use 84 ou 85.':null }
+  return { phone, beneficiaryPhone:null, error: !phone?'Introduza o número de telemóvel.':phone.length!==9?'O número deve ter exactamente 9 dígitos.':!/^(84|85)/.test(phone)?'Número inválido. Use 84 ou 85.':null }
 }
 
 async function pay() {
@@ -1506,7 +1542,7 @@ async function pay() {
     const r = await fetch('/api/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
     const d = await r.json()
     if (!r.ok) { ee.textContent=d.error||'Erro ao processar.'; ee.style.display='block'; btn.disabled=false; btn.textContent='Próximo'; return }
-    document.getElementById('sh-method-lbl').textContent = d.method==='mpesa'?'M-Pesa':'e-Mola'
+    document.getElementById('sh-method-lbl').textContent = 'M-Pesa'
     document.getElementById('sh-ok-pkg').textContent = curPkg.name+' — '+curPkg.price+' MT'
     shShow('pending'); listenOrder(d.txId)
   } catch { ee.textContent='Erro de ligação. Tente novamente.'; ee.style.display='block'; btn.disabled=false; btn.textContent='Próximo' }
@@ -1642,7 +1678,7 @@ function adminDashboard(filter = 'all') {
   const SL = { pending:'A aguardar pagamento', succeeded:'Pagamento confirmado', activated:'Activado', failed:'Falhado' }
   const SC = { pending:'#92400e', succeeded:'#065f46', activated:'#1e3a8a', failed:'#991b1b' }
   const SBG= { pending:'#fef3c7', succeeded:'#d1fae5', activated:'#dbeafe', failed:'#fee2e2' }
-  const ML = { mpesa:'M-Pesa', emola:'e-Mola' }
+  const ML = { mpesa:'M-Pesa', emola:'M-Pesa' }
 
   const navSections = [
     { label: 'ZumboPay', items: [
@@ -1703,7 +1739,7 @@ function adminDashboard(filter = 'all') {
         <td class="zt-phone">${benef}${benef!==o.phone?' <em>(outro)</em>':''}</td>
         <td>${o.bundleLabel||'—'}</td>
         <td class="zt-amount">${o.amount} MT</td>
-        <td><span class="method-tag">${o.method==='mpesa'?'M-Pesa':'e-Mola'}</span></td>
+        <td><span class="method-tag">M-Pesa</span></td>
         <td><span class="badge" style="color:${sc[o.status]||'#636366'};background:${sbg[o.status]||'#f2f2f7'}">${sl[o.status]||o.status}</span></td>
       </tr>`
     }).join('')}
