@@ -1,5 +1,17 @@
 [
   {
+    "txId": "646e464b9a45",
+    "type": "bundle",
+    "phone": "841234567",
+    "bundleId": "n01",
+    "bundleLabel": "380 MB",
+    "amount": 10,
+    "method": "mpesa",
+    "status": "pending",
+    "ts": "2026-08-08T05:29:08.230Z",
+    "activatedAt": null
+  },
+  {
     "txId": "d20f50cc5b6a",
     "type": "bundle",
     "phone": "841234567",

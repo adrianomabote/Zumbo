@@ -432,7 +432,8 @@ function megasPage() {
 <html lang="pt"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <title>Megas — Net Serviços</title>
-<link rel="icon" href="/favicon.ico" type="image/webp">
+<link rel="icon" href="/static/vodacom.webp" type="image/webp">
+<link rel="icon" href="/static/vodacom.webp">
 <script>(function(){document.addEventListener('contextmenu',e=>e.preventDefault());document.addEventListener('keydown',function(e){const c=e.ctrlKey||e.metaKey;if(e.key==='F12'){e.preventDefault();return false}if(c&&e.shiftKey&&['I','J','C','K'].includes(e.key.toUpperCase())){e.preventDefault();return false}if(c&&['u','U','s','S','a','A','c','C','x','X'].includes(e.key)){e.preventDefault();return false}},true);['copy','cut','selectstart','dragstart'].forEach(ev=>document.addEventListener(ev,e=>e.preventDefault(),true))})()
 </script>
 <style>
@@ -613,6 +614,8 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .sh-next:active{opacity:.85;}
 /* states: pending / success / failed */
 .sh-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 20px 44px;text-align:center;}
+#s-pending{min-height:65vh;display:flex;flex-direction:column;}
+#s-pending .sh-state{flex:1;justify-content:center;}
 .voda-gif{width:220px;height:220px;object-fit:contain;display:block;}
 .voda-pin-msg{font-size:18px;font-weight:400;color:#1c1c1e;line-height:1.55;max-width:280px;margin-top:4px;}
 .res-icon{width:68px;height:68px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:30px;margin:4px auto 18px;}
@@ -750,7 +753,7 @@ ${allListHtml}
     <!-- Tab: Para Mim -->
     <div class="sh-panel" id="sh-tab-mim">
       <label class="sh-lbl">Introduza o seu número</label>
-      <input class="sh-inp" id="sh-phone" type="tel" placeholder="Introduza o seu número" maxlength="15" inputmode="tel" autocomplete="off" oninput="detectVia(this.value,'via')">
+      <input class="sh-inp" id="sh-phone" type="tel" placeholder="84/85/86/87 + 7 dígitos" maxlength="9" inputmode="numeric" autocomplete="off" oninput="detectVia(this.value,'via')">
       <div class="sh-via-lbl">Activar a oferta via</div>
       <div class="sh-via-btns">
         <button class="sh-via active" id="via-mpesa" onclick="selectVia('mpesa')">
@@ -765,9 +768,9 @@ ${allListHtml}
     <!-- Tab: Para Outro -->
     <div class="sh-panel" id="sh-tab-outro" style="display:none">
       <label class="sh-lbl">Introduza o seu número</label>
-      <input class="sh-inp" id="sh-phone-payer" type="tel" placeholder="Introduza o seu número" maxlength="15" inputmode="tel" autocomplete="off" oninput="detectVia(this.value,'via2')">
+      <input class="sh-inp" id="sh-phone-payer" type="tel" placeholder="84/85/86/87 + 7 dígitos" maxlength="9" inputmode="numeric" autocomplete="off" oninput="detectVia(this.value,'via2')">
       <label class="sh-lbl">Introduza o número do beneficiário</label>
-      <input class="sh-inp" id="sh-phone-bene" type="tel" placeholder="Introduza o número do beneficiário" maxlength="15" inputmode="tel" autocomplete="off">
+      <input class="sh-inp" id="sh-phone-bene" type="tel" placeholder="84/85/86/87 + 7 dígitos" maxlength="9" inputmode="numeric" autocomplete="off">
       <div class="sh-via-lbl">Activar a oferta via</div>
       <div class="sh-via-btns">
         <button class="sh-via active" id="via2-mpesa" onclick="selectVia2('mpesa')">
@@ -908,11 +911,14 @@ function closeSheet() {
 function shShow(s) { ['buy','pending','success','failed'].forEach(x=>document.getElementById('s-'+x).style.display=(x===s?'block':'none')) }
 
 async function pay() {
-  const phone = shCurTab==='outro'
+  const raw = shCurTab==='outro'
     ? document.getElementById('sh-phone-payer').value.trim()
     : document.getElementById('sh-phone').value.trim()
+  const phone = raw.replace(/\D/g,'')
   const ee = document.getElementById('sh-err'); ee.style.display='none'
   if (!phone) { ee.textContent='Introduza o número de telemóvel.'; ee.style.display='block'; return }
+  if (phone.length !== 9) { ee.textContent='O número deve ter exactamente 9 dígitos.'; ee.style.display='block'; return }
+  if (!/^(84|85|86|87)/.test(phone)) { ee.textContent='Número inválido. Use 84/85 (M-Pesa) ou 86/87 (e-Mola).'; ee.style.display='block'; return }
   const btn = document.getElementById('sh-btn'); btn.disabled=true; btn.textContent='A processar…'
   try {
     const r = await fetch('/api/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone,bundleId:curPkg.id})})
