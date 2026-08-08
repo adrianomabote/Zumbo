@@ -244,6 +244,21 @@ async function router(req, res) {
   if (method === 'GET' && path === '/static/coins.png') {
     try { const img = await import('fs/promises').then(f=>f.readFile('./attached_assets/600282_1786181848146.png')); res.writeHead(200,{'Content-Type':'image/png','Cache-Control':'max-age=86400'}); return res.end(img) } catch { res.writeHead(404); return res.end() }
   }
+  if (method === 'GET' && path === '/static/offer-soprati.webp') {
+    try { const img = await import('fs/promises').then(f=>f.readFile('./attached_assets/image_1786184888609.webp')); res.writeHead(200,{'Content-Type':'image/webp','Cache-Control':'max-age=86400'}); return res.end(img) } catch { res.writeHead(404); return res.end() }
+  }
+  if (method === 'GET' && path === '/static/offer-ya.webp') {
+    try { const img = await import('fs/promises').then(f=>f.readFile('./attached_assets/image_(1)_1786184888664.webp')); res.writeHead(200,{'Content-Type':'image/webp','Cache-Control':'max-age=86400'}); return res.end(img) } catch { res.writeHead(404); return res.end() }
+  }
+  if (method === 'GET' && path === '/static/offer-bomdia.webp') {
+    try { const img = await import('fs/promises').then(f=>f.readFile('./attached_assets/image_(2)_1786184888553.webp')); res.writeHead(200,{'Content-Type':'image/webp','Cache-Control':'max-age=86400'}); return res.end(img) } catch { res.writeHead(404); return res.end() }
+  }
+  if (method === 'GET' && path === '/static/offer-turnonoite.webp') {
+    try { const img = await import('fs/promises').then(f=>f.readFile('./attached_assets/image_(3)_1786184888505.webp')); res.writeHead(200,{'Content-Type':'image/webp','Cache-Control':'max-age=86400'}); return res.end(img) } catch { res.writeHead(404); return res.end() }
+  }
+  if (method === 'GET' && path === '/static/offer-jackpot.webp') {
+    try { const img = await import('fs/promises').then(f=>f.readFile('./attached_assets/image_(4)_1786184888721.webp')); res.writeHead(200,{'Content-Type':'image/webp','Cache-Control':'max-age=86400'}); return res.end(img) } catch { res.writeHead(404); return res.end() }
+  }
   if (method === 'GET' && path === '/megas')    return html(res, megasPage())
   if (method === 'GET' && path === '/ping')     return json(res, { ok: true })
 
@@ -770,6 +785,34 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .footer-support-label{font-size:12px;font-weight:600;color:#f2f2f7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .footer-copy{font-size:12px;color:#48484a;line-height:1.7;}
 
+/* ── Veja mais ofertas ── */
+.more-offers{padding:32px 16px 8px;max-width:480px;margin:0 auto;}
+.more-offers-title{font-size:18px;font-weight:800;color:#1c1c1e;margin-bottom:20px;text-align:center;}
+.more-offers-list{display:flex;flex-direction:column;gap:18px;}
+.mo-card{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.09);border:1px solid #e5e5ea;}
+.mo-img-wrap{width:100%;aspect-ratio:4/3;overflow:hidden;background:#f2f2f7;}
+.mo-img{width:100%;height:100%;object-fit:cover;display:block;}
+.mo-body{padding:16px 16px 14px;}
+.mo-name{font-size:20px;font-weight:700;color:#1c1c1e;margin-bottom:6px;}
+.mo-desc{font-size:14px;color:#3a3a3c;line-height:1.5;margin-bottom:14px;}
+.mo-footer{display:flex;align-items:center;justify-content:space-between;}
+.mo-price{font-size:14px;font-weight:800;color:#1c1c1e;}
+.mo-btn{padding:8px 20px;border-radius:8px;border:1.5px solid #1c1c1e;background:#fff;color:#1c1c1e;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;transition:background .12s,color .12s;}
+.mo-btn:active{background:#1c1c1e;color:#fff;}
+
+/* ── Modal de detalhe ── */
+.mo-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;overflow-y:auto;}
+.mo-modal.open{display:block;}
+.mo-modal-inner{background:#fff;min-height:100%;display:flex;flex-direction:column;}
+.mo-modal-hero{position:relative;width:100%;aspect-ratio:4/3;background:#f2f2f7;overflow:hidden;}
+.mo-modal-img{width:100%;height:100%;object-fit:cover;display:block;}
+.mo-modal-close{position:absolute;top:14px;right:14px;width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,.45);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.mo-modal-close svg{width:18px;height:18px;stroke:#fff;}
+.mo-modal-body{padding:24px 20px 48px;background:#f9f9f9;flex:1;}
+.mo-modal-bread{font-size:12px;color:#cc0000;margin-bottom:20px;line-height:1.4;}
+.mo-modal-name{font-size:22px;font-weight:800;color:#1c1c1e;margin-bottom:14px;text-align:center;}
+.mo-modal-text{font-size:15px;color:#3a3a3c;line-height:1.7;text-align:justify;}
+
 /* ── Note banner ── */
 .cat-note{margin:0 20px 16px;padding:10px 14px;background:#fff3cd;border:1px solid #ffc107;border-radius:10px;font-size:12px;color:#856404;line-height:1.5;display:none;}
 .cat-note.show{display:block;}
@@ -1002,6 +1045,91 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 
 <div class="carousel-area">${allSections}</div>
 ${allListHtml}
+
+<!-- ── Veja mais ofertas ── -->
+<section class="more-offers">
+  <h2 class="more-offers-title">Veja mais ofertas</h2>
+  <div class="more-offers-list">
+
+    <div class="mo-card">
+      <div class="mo-img-wrap"><img src="/static/offer-soprati.webp" alt="Ofertas SóPraTi" class="mo-img"></div>
+      <div class="mo-body">
+        <div class="mo-name">Ofertas SóPraTi</div>
+        <div class="mo-desc">Serviço de Ofertas personalizadas de acordo com o perfil de cada cliente.</div>
+        <div class="mo-footer">
+          <span class="mo-price">A partir de 10 MT</span>
+          <button class="mo-btn" onclick="openOffer('soprati')">Ver mais</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="mo-card">
+      <div class="mo-img-wrap"><img src="/static/offer-ya.webp" alt="Yá" class="mo-img"></div>
+      <div class="mo-body">
+        <div class="mo-name">Yá</div>
+        <div class="mo-desc">Mais megas e minutos para a malta jovem.</div>
+        <div class="mo-footer">
+          <span class="mo-price">A partir de 2 MT</span>
+          <button class="mo-btn" onclick="openOffer('ya')">Ver mais</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="mo-card">
+      <div class="mo-img-wrap"><img src="/static/offer-bomdia.webp" alt="Bom Dia" class="mo-img"></div>
+      <div class="mo-body">
+        <div class="mo-name">Bom Dia</div>
+        <div class="mo-desc">Bom Dia é o serviço em que podes activar uma oferta de Voz ou Dados, diariamente, no horário das 0h as 12h.</div>
+        <div class="mo-footer">
+          <span class="mo-price">A partir de 2 MT</span>
+          <button class="mo-btn" onclick="openOffer('bomdia')">Ver mais</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="mo-card">
+      <div class="mo-img-wrap"><img src="/static/offer-turnonoite.webp" alt="Turno da Noite" class="mo-img"></div>
+      <div class="mo-body">
+        <div class="mo-name">Turno da Noite</div>
+        <div class="mo-desc">As melhores ofertas para manter aquele papo durante à noite.</div>
+        <div class="mo-footer">
+          <span class="mo-price">A partir de 5 MT</span>
+          <button class="mo-btn" onclick="openOffer('turnonoite')">Ver mais</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="mo-card">
+      <div class="mo-img-wrap"><img src="/static/offer-jackpot.webp" alt="Todas Redes Jackpot" class="mo-img"></div>
+      <div class="mo-body">
+        <div class="mo-name">Todas Redes Jackpot</div>
+        <div class="mo-desc">É uma oferta de voz para todas as redes que permite aumentar as tuas chamadas em até 4X mais.</div>
+        <div class="mo-footer">
+          <span class="mo-price">A partir de 2 MT</span>
+          <button class="mo-btn" onclick="openOffer('jackpot')">Ver mais</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- Modal de detalhe de oferta -->
+<div class="mo-modal" id="mo-modal" onclick="if(event.target===this)closeOffer()">
+  <div class="mo-modal-inner" id="mo-modal-inner">
+    <div class="mo-modal-hero">
+      <img id="mo-modal-img" src="" alt="" class="mo-modal-img">
+      <button class="mo-modal-close" onclick="closeOffer()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="mo-modal-body">
+      <div class="mo-modal-bread">Início / Ofertas / <span id="mo-modal-bread"></span></div>
+      <h2 class="mo-modal-name" id="mo-modal-name"></h2>
+      <p class="mo-modal-text" id="mo-modal-text"></p>
+    </div>
+  </div>
+</div>
 
 <footer class="site-footer">
   <div class="footer-top">
@@ -1592,6 +1720,51 @@ function searchPkgs(q) {
 // ── Drawer ──
 function openDrawer()  { document.getElementById('drawer').classList.add('open'); document.getElementById('drawer-overlay').classList.add('open') }
 function closeDrawer() { document.getElementById('drawer').classList.remove('open'); document.getElementById('drawer-overlay').classList.remove('open') }
+
+// ── Mais ofertas ────────────────────────────────────────────────────────────
+const OFFERS = {
+  soprati: {
+    name: 'Ofertas SóPraTi',
+    img: '/static/offer-soprati.webp',
+    text: 'Serviço de ofertas personalizadas, apresentadas no menu *109#, que vão de encontro ao comportamento do cliente.'
+  },
+  ya: {
+    name: 'Yá',
+    img: '/static/offer-ya.webp',
+    text: 'YÁ é uma iniciativa da Vodacom que pretende introduzir ofertas e acções relevantes para o segmento jovem. Todo Cliente jovem com idade compreendida entre 16 à 25 anos, é convidado a experimentar as primeiras ofertas exclusivas para este segmento e partilhar a novidade com amigos e familiares.'
+  },
+  bomdia: {
+    name: 'Bom Dia',
+    img: '/static/offer-bomdia.webp',
+    text: 'Bom Dia é o serviço em que podes activar uma oferta de Voz ou Dados, diariamente, no horário das 0h as 12h. Para activar só tens que digitar o código USSD *126# e seguir as instruções.'
+  },
+  turnonoite: {
+    name: 'Turno da Noite',
+    img: '/static/offer-turnonoite.webp',
+    text: 'É um serviço da Vodacom que lhe dá acesso à ofertas de Voz mais acessíveis para falares dentro da rede entre 22h até as 06h.'
+  },
+  jackpot: {
+    name: 'Todas Redes Jackpot',
+    img: '/static/offer-jackpot.webp',
+    text: 'É uma oferta de voz para todas as redes que permite aumentar as tuas chamadas em até 4X mais, a partir de 2MT.'
+  }
+}
+function openOffer(id) {
+  const o = OFFERS[id]; if (!o) return
+  document.getElementById('mo-modal-img').src = o.img
+  document.getElementById('mo-modal-img').alt = o.name
+  document.getElementById('mo-modal-bread').textContent = o.name
+  document.getElementById('mo-modal-name').textContent = o.name
+  document.getElementById('mo-modal-text').textContent = o.text
+  const modal = document.getElementById('mo-modal')
+  modal.classList.add('open')
+  modal.scrollTop = 0
+  document.body.style.overflow = 'hidden'
+}
+function closeOffer() {
+  document.getElementById('mo-modal').classList.remove('open')
+  document.body.style.overflow = ''
+}
 
 // Init: diarias já visível por defeito (HTML pré-renderizado)
 checkAuth()
