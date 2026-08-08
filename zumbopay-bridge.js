@@ -832,10 +832,10 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .res-btn-g{background:#f2f2f7;color:#636366;}
 
 /* ── Balance pill no nav ── */
-.nav-balance{display:none;align-items:center;gap:6px;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:20px;padding:5px 6px 5px 12px;flex:1;max-width:220px;margin:0 6px;}
-.nav-bal-ico{width:16px;height:16px;flex-shrink:0;stroke:#065f46;}
-.nav-bal-val{font-size:13px;font-weight:700;color:#065f46;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.nav-rech-btn{background:#065f46;color:#fff;border:none;border-radius:14px;padding:5px 11px;font-size:11px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;flex-shrink:0;}
+.nav-balance{display:none;align-items:center;gap:6px;background:#fff0f0;border:1px solid #ffcdd2;border-radius:20px;padding:5px 6px 5px 12px;flex:1;max-width:220px;margin:0 6px;}
+.nav-bal-ico{width:16px;height:16px;flex-shrink:0;stroke:#cc0000;}
+.nav-bal-val{font-size:13px;font-weight:700;color:#cc0000;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.nav-rech-btn{background:#cc0000;color:#fff;border:none;border-radius:14px;padding:5px 11px;font-size:11px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;flex-shrink:0;}
 .nav-rech-btn:active{opacity:.85;}
 
 /* ── Drawer auth ── */
@@ -848,7 +848,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .drawer-auth-btn--secondary:active{background:#e5e5ea;}
 .drawer-user-row{padding:14px 20px;display:flex;flex-direction:column;gap:4px;background:#f9f9fb;}
 .drawer-user-name{font-size:14px;font-weight:700;color:#1c1c1e;}
-.drawer-user-bal{font-size:13px;color:#065f46;font-weight:700;}
+.drawer-user-bal{font-size:13px;color:#cc0000;font-weight:700;}
 
 /* ── Método de pagamento (via-btns) ── */
 .via-section{padding:4px 0 12px;}
@@ -895,7 +895,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .rech-inp{padding-left:40px;}
 
 /* ── Success credit ── */
-.credit-badge{display:inline-flex;align-items:center;gap:5px;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:700;color:#065f46;margin-bottom:14px;}
+.credit-badge{display:inline-flex;align-items:center;gap:5px;background:#fff0f0;border:1px solid #ffcdd2;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:700;color:#cc0000;margin-bottom:14px;}
 </style>
 </head><body>
 
@@ -1041,7 +1041,7 @@ ${allListHtml}
           <div class="footer-support-icon whatsapp">
             <svg viewBox="0 0 24 24" fill="#fff"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.118 1.528 5.847L.057 23.882a.5.5 0 00.606.63l6.266-1.643A11.94 11.94 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.686-.528-5.204-1.443l-.374-.22-3.878 1.018 1.037-3.785-.241-.389A9.96 9.96 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
           </div>
-          <span class="footer-support-label">Falar no WhatsApp</span>
+          <span class="footer-support-label">WhatsApp</span>
         </a>
       </div>
     </div>
@@ -1112,7 +1112,6 @@ ${allListHtml}
           </span>
           <div>
             <div class="via-btn-label">M-Pesa</div>
-            <div class="via-btn-sub">Pagar pelo telemóvel</div>
           </div>
         </button>
         <button class="via-btn" id="via-credit" data-via="credit" onclick="selectPayVia('credit')">
@@ -1121,7 +1120,6 @@ ${allListHtml}
           </span>
           <div>
             <div class="via-btn-label">Crédito</div>
-            <span class="via-credit-bal" id="via-bal-txt">—</span>
           </div>
         </button>
       </div>
@@ -1469,17 +1467,9 @@ function selectPayVia(v) {
   }
 }
 function updateCreditBtn() {
-  const u = authState.user
-  const el = document.getElementById('via-bal-txt')
   const btn = document.getElementById('via-credit')
-  if (!el || !btn) return
-  if (u) {
-    el.textContent = (u.balance||0).toLocaleString('pt-MZ') + ' MT disponível'
-    btn.disabled = false
-  } else {
-    el.textContent = 'Faça login primeiro'
-    btn.disabled = true
-  }
+  if (!btn) return
+  btn.disabled = false
 }
 
 function openBuy(id) {
