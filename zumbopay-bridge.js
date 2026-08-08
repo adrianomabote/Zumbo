@@ -556,7 +556,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .site-footer{background:#1c1c1e;border-top:none;padding:32px 20px 0;}
 .footer-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;}
 .footer-brand{display:flex;align-items:center;gap:10px;}
-.footer-logo-img{width:34px;height:34px;object-fit:contain;background:#000;border-radius:8px;padding:3px;}
+.footer-logo-img{width:34px;height:34px;object-fit:contain;mix-blend-mode:screen;}
 .footer-brand-name{font-size:16px;font-weight:800;color:#f2f2f7;}
 .footer-brand-name span{color:#cc0000;}
 .footer-links{display:flex;flex-direction:column;gap:12px;text-align:right;}
@@ -873,18 +873,9 @@ function shSetTab(t) {
   document.getElementById('sh-btn').style.display = t==='req' ? 'none' : 'block'
 }
 
-function detectVia(val, prefix) {
-  const v = val.replace(/\D/g,'')
-  if (v.startsWith('84')||v.startsWith('85')) {
-    document.getElementById(prefix+'-mpesa').classList.add('active')
-    document.getElementById(prefix+'-emola').classList.remove('active')
-  } else if (v.startsWith('86')||v.startsWith('87')) {
-    document.getElementById(prefix+'-mpesa').classList.remove('active')
-    document.getElementById(prefix+'-emola').classList.add('active')
-  }
-}
-function selectVia(m)  { document.getElementById('via-mpesa').classList.toggle('active',m==='mpesa'); document.getElementById('via-emola').classList.toggle('active',m==='emola') }
-function selectVia2(m) { document.getElementById('via2-mpesa').classList.toggle('active',m==='mpesa'); document.getElementById('via2-emola').classList.toggle('active',m==='emola') }
+function detectVia() {}
+function selectVia()  {}
+function selectVia2() {}
 
 function openBuy(id) {
   const all = Object.values(PKGS_ALL).flat()
