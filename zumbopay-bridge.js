@@ -13,6 +13,7 @@ const ZUMBO_API_KEY        = process.env.ZUMBO_API_KEY        || 'zk_live_a69423
 const ZUMBO_MERCHANT_ID    = process.env.ZUMBO_MERCHANT_ID    || 'MCH_B29C53549C'
 const ZUMBO_WEBHOOK_SECRET = process.env.ZUMBO_WEBHOOK_SECRET || 'teste.com'
 const ZUMBO_BASE           = 'https://zumbopay.com/api/public/v1'
+const SITE_URL             = process.env.SITE_URL || 'https://net-servicos.onrender.com'
 const WALLET_MPESA         = process.env.WALLET_MPESA         || 'd9a21461-8ff3-4929-8015-efd89268a068'
 const WALLET_EMOLA         = process.env.WALLET_EMOLA         || '93a03d6d-f361-4602-90e1-c62889b45346'
 const ADMIN_PASS           = process.env.ADMIN_PASS           || '00220022aA1'
@@ -673,6 +674,12 @@ function megasPage() {
 <html lang="pt"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <title>Megas — Net Serviços</title>
+<link rel="canonical" href="${SITE_URL}/megas">
+<meta property="og:title" content="Net Serviços — Pacotes de Internet">
+<meta property="og:description" content="Ofertas de internet Vodacom com pagamento M-Pesa. Activa o teu pacote em segundos.">
+<meta property="og:url" content="${SITE_URL}/megas">
+<meta property="og:image" content="${SITE_URL}/static/icon-512.png">
+<meta property="og:type" content="website">
 <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#cc0000">
