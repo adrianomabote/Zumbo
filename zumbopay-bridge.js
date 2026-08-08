@@ -112,6 +112,87 @@ function userCookieHeader(u) {
   return `nsu=${u.id}.${mkUserToken(u)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000`
 }
 
+// ── Gateway: chaves de API para terceiros ─────────────────────────────────────
+const GWKEYS_FILE = './gateway-keys.json'
+let gwKeys = []   // [{ id, name, key, secret, active, createdAt, txCount, totalAmount }]
+async function loadGwKeys() { try { gwKeys = JSON.parse(await readFile(GWKEYS_FILE,'utf8')) } catch {} }
+async function saveGwKeys() { try { await writeFile(GWKEYS_FILE, JSON.stringify(gwKeys,null,2)) } catch {} }
+function findGwKey(k) {
+  if (!k) return null
+  const rec = gwKeys.find(g => g.key === k)
+  return rec && rec.active ? rec : null
+}
+function gwAuth(req, body) {
+  const hdr = req.headers['x-api-key'] || ''
+  const auth = req.headers['authorization'] || ''
+  const bearer = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+  return findGwKey(hdr || bearer || body?.api_key)
+}
+function gwSign(secret, payload) {
+  return createHmac('sha256', secret).update(payload).digest('hex')
+}
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
+}
+function isPrivateIp(ip) {
+  if (ip.includes(':')) {   // IPv6
+    const l = ip.toLowerCase()
+    return l === '::1' || l.startsWith('fc') || l.startsWith('fd') || l.startsWith('fe80') || l.startsWith('::ffff:')
+  }
+  const p = ip.split('.').map(Number)
+  return p[0] === 10 || p[0] === 127 || p[0] === 0 ||
+    (p[0] === 172 && p[1] >= 16 && p[1] <= 31) ||
+    (p[0] === 192 && p[1] === 168) ||
+    (p[0] === 169 && p[1] === 254) ||   // link-local / metadata
+    (p[0] === 100 && p[1] >= 64 && p[1] <= 127)
+}
+async function gwValidateCallbackUrl(raw) {
+  let u
+  try { u = new URL(raw) } catch { return null }
+  if (u.protocol !== 'https:') return null
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(u.hostname) || u.hostname.includes(':')) {
+    if (isPrivateIp(u.hostname)) return null
+  } else {
+    try {
+      const { lookup } = await import('dns/promises')
+      const addrs = await lookup(u.hostname, { all: true })
+      if (addrs.some(a => isPrivateIp(a.address))) return null
+    } catch { return null }
+  }
+  return u.href
+}
+// Transição terminal única: conta estatísticas + envia callback, só 1 vez por tx
+function gwFinalize(tx) {
+  if (tx.type !== 'gateway' || tx.gwDone) return
+  if (tx.status !== 'succeeded' && tx.status !== 'failed') return
+  tx.gwDone = true
+  if (tx.status === 'succeeded') {
+    const gk = gwKeys.find(g => g.id === tx.gwKeyId)
+    if (gk) { gk.txCount = (gk.txCount||0)+1; gk.totalAmount = (gk.totalAmount||0)+tx.amount; saveGwKeys().catch(()=>{}) }
+  }
+  gwForwardCallback(tx).catch(()=>{})
+}
+async function gwForwardCallback(tx) {
+  if (!tx.callbackUrl) return
+  const gk = gwKeys.find(g => g.id === tx.gwKeyId)
+  const payload = JSON.stringify({
+    event: tx.status === 'succeeded' ? 'payment.succeeded' : 'payment.failed',
+    txId: tx.id, reference: tx.extRef || null,
+    amount: tx.amount, phone: tx.phone, method: tx.method,
+    error: tx.error || null, ts: new Date().toISOString(),
+  })
+  const headers = { 'Content-Type':'application/json' }
+  if (gk) headers['X-Gateway-Signature'] = gwSign(gk.secret, payload)
+  for (let i = 0; i < 3; i++) {
+    try {
+      const r = await fetch(tx.callbackUrl, { method:'POST', headers, body: payload, redirect:'error', signal: AbortSignal.timeout(10000) })
+      if (r.ok) { console.log(`[Gateway] callback → ${tx.callbackUrl} OK`); return }
+    } catch {}
+    await new Promise(r => setTimeout(r, 3000 * (i+1)))
+  }
+  console.error(`[Gateway] callback falhou 3x: ${tx.callbackUrl}`)
+}
+
 // ── Persistência de encomendas ────────────────────────────────────────────────
 async function loadOrders() {
   try { orders = JSON.parse(await readFile(ORDERS_FILE, 'utf8')) } catch {}
@@ -197,7 +278,7 @@ async function initiateCharge(tx, sourceId, customerName) {
     if (resp.status === 200) {
       tx.ref = data.data?.reference || sourceId; tx.status = 'succeeded'
       notifyTx(tx.id, { status:'succeeded', method:tx.method })
-      updateOrderStatus(tx.id, 'succeeded'); return
+      updateOrderStatus(tx.id, 'succeeded'); gwFinalize(tx); return
     }
     if (resp.status === 202) {
       tx.ref = data.data?.reference || sourceId; tx.status = 'pending'
@@ -207,12 +288,12 @@ async function initiateCharge(tx, sourceId, customerName) {
     const msg = data.error?.message || data.message || data.detail || `Erro ${resp.status}`
     tx.status = 'failed'; tx.error = msg
     notifyTx(tx.id, { status:'failed', error:msg, method:tx.method })
-    updateOrderStatus(tx.id, 'failed')
+    updateOrderStatus(tx.id, 'failed'); gwFinalize(tx)
   } catch (err) {
     console.error('[ZumboPay]', err.message)
     tx.status = 'failed'; tx.error = 'Erro de ligação. Tente novamente.'
     notifyTx(tx.id, { status:'failed', error:tx.error, method:tx.method })
-    updateOrderStatus(tx.id, 'failed')
+    updateOrderStatus(tx.id, 'failed'); gwFinalize(tx)
   }
 }
 
@@ -221,7 +302,7 @@ function scheduleTimeout(tx) {
     if (tx.status !== 'pending') return
     tx.status = 'failed'; tx.error = 'Tempo esgotado. O PIN não foi introduzido.'
     notifyTx(tx.id, { status:'failed', error:tx.error, method:tx.method })
-    updateOrderStatus(tx.id, 'failed')
+    updateOrderStatus(tx.id, 'failed'); gwFinalize(tx)
   }, 5 * 60 * 1000)
 }
 
@@ -345,20 +426,20 @@ self.addEventListener('fetch',e=>{
   if (method === 'POST' && path === '/webhook') {
     const raw = await readBody(req), rawStr = raw.toString()
     const sig = req.headers['x-zumbopay-signature'] || ''
-    if (ZUMBO_WEBHOOK_SECRET && sig) {
+    if (ZUMBO_WEBHOOK_SECRET) {
       try {
         const exp = createHmac('sha256', ZUMBO_WEBHOOK_SECRET).update(rawStr).digest('hex')
-        const ok  = sig.length > 0 && sig === exp
-        if (!ok) return json(res, { error:'Assinatura inválida.' }, 401)
+        if (!sig || !safeEqual(String(sig), exp)) return json(res, { error:'Assinatura inválida.' }, 401)
       } catch { return json(res, { error:'Assinatura inválida.' }, 401) }
     }
     let event = {}; try { event = JSON.parse(rawStr) } catch {}
     const ref    = event.data?.reference || event.data?.source_id || event.data?.id
     const status = event.event === 'payment.succeeded' ? 'succeeded' : event.event === 'payment.failed' ? 'failed' : null
     if (status && ref) {
+      let matched = false
       for (const [txId, tx] of transactions) {
-        const src = 'dep-'+tx.id, bsrc = 'bnd-'+tx.id
-        if ([tx.ref,tx.id,src,bsrc,event.data?.source_id].includes(ref) || [tx.ref,tx.id,src,bsrc].includes(event.data?.source_id)) {
+        const src = 'dep-'+tx.id, bsrc = 'bnd-'+tx.id, gsrc = 'gw-'+tx.id
+        if ([tx.ref,tx.id,src,bsrc,gsrc,event.data?.source_id].includes(ref) || [tx.ref,tx.id,src,bsrc,gsrc].includes(event.data?.source_id)) {
           tx.status = status
           tx.error  = status==='failed' ? (event.data?.message||'Pagamento recusado.') : null
           notifyTx(txId, { status, error:tx.error, method:tx.method })
@@ -367,8 +448,22 @@ self.addEventListener('fetch',e=>{
             const u = findUserById(tx.userId)
             if (u) { u.balance = (u.balance||0) + tx.amount; saveUsers().catch(()=>{}) }
           }
+          gwFinalize(tx)
           console.log(`[Webhook] ${txId} → ${status}`)
+          matched = true
           break
+        }
+      }
+      // fallback: tx perdida após reinício — recupera do registo persistente
+      if (!matched) {
+        const gid = String(ref).startsWith('gw-') ? String(ref).slice(3)
+                  : String(event.data?.source_id||'').startsWith('gw-') ? String(event.data.source_id).slice(3) : null
+        const rec = gid ? orders.find(o => o.txId === gid && o.type === 'gateway') : null
+        if (rec && rec.status === 'pending') {
+          updateOrderStatus(rec.txId, status)
+          const tx = { id:rec.txId, type:'gateway', status, amount:rec.amount, phone:rec.phone, method:rec.method, extRef:rec.extRef||null, callbackUrl:rec.callbackUrl||null, gwKeyId:rec.gwKeyId, error: status==='failed' ? (event.data?.message||'Pagamento recusado.') : null }
+          gwFinalize(tx)
+          console.log(`[Webhook] (persistido) ${rec.txId} → ${status}`)
         }
       }
     }
@@ -452,6 +547,64 @@ self.addEventListener('fetch',e=>{
     trackOrder(tx)
     updateOrderStatus(txId, 'succeeded')
     return json(res, { ok:true, txId, newBalance:user.balance })
+  }
+
+  // ── Gateway: iniciar pagamento (API para terceiros) ──────────────────────
+  if (method === 'POST' && path === '/gateway/api/pay') {
+    let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
+    const gk = gwAuth(req, body)
+    if (!gk) return json(res, { error:'Chave de API inválida ou inactiva. Use o header X-API-Key.' }, 401)
+    const amount = Math.round(Number(body.amount))
+    if (!amount || amount < 1) return json(res, { error:'Valor (amount) inválido.' }, 400)
+    const msisdn = normalizeMsisdn(body.phone), meth = detectMethod(msisdn)
+    if (!meth) return json(res, { error:'Número inválido. Use 84 ou 85 (M-Pesa).' }, 400)
+    let callbackUrl = null
+    if (body.callback_url) {
+      callbackUrl = await gwValidateCallbackUrl(body.callback_url)
+      if (!callbackUrl) return json(res, { error:'callback_url inválido. Use um endereço HTTPS público.' }, 400)
+    }
+    const txId = randomBytes(6).toString('hex')
+    const tx = { id:txId, type:'gateway', bundleId:null, bundleLabel:`Gateway: ${gk.name}`, phone:String(body.phone), beneficiaryPhone:null, msisdn, amount, method:meth, status:'pending', ref:null, error:null, ts:new Date().toISOString(), gwKeyId:gk.id, extRef: body.reference ? String(body.reference).slice(0,64) : null, callbackUrl }
+    transactions.set(txId, tx)
+    trackOrder(tx, { gwKey: gk.name, gwKeyId: gk.id, extRef: tx.extRef, callbackUrl })
+    json(res, { ok:true, txId, status:'pending', method:meth, statusUrl:`${SITE_URL}/gateway/api/status/${txId}` }, 202)
+    initiateCharge(tx, `gw-${txId}`, body.description ? String(body.description).slice(0,48) : `Pagamento ${gk.name}`)
+    return
+  }
+
+  // ── Gateway: consultar estado ─────────────────────────────────────────────
+  const gwStP = parseParams('/gateway/api/status/:txId', path)
+  if (method === 'GET' && gwStP) {
+    const gk = gwAuth(req, null)
+    if (!gk) return json(res, { error:'Chave de API inválida ou inactiva. Use o header X-API-Key.' }, 401)
+    const tx = transactions.get(gwStP.txId)
+    if (tx && tx.type === 'gateway' && tx.gwKeyId === gk.id)
+      return json(res, { ok:true, txId:tx.id, status:tx.status, amount:tx.amount, phone:tx.phone, method:tx.method, reference:tx.extRef, error:tx.error||null, ts:tx.ts })
+    // fallback: após reinício do servidor, procura no registo persistente
+    const rec = orders.find(o => o.txId === gwStP.txId && o.type === 'gateway' && o.gwKeyId === gk.id)
+    if (!rec) return json(res, { error:'Transacção não encontrada.' }, 404)
+    return json(res, { ok:true, txId:rec.txId, status:rec.status, amount:rec.amount, phone:rec.phone, method:rec.method, reference:rec.extRef||null, error:null, ts:rec.ts })
+  }
+
+  // ── Admin: gestão de chaves do gateway ────────────────────────────────────
+  if (path === '/admin/gateway/keys' && method === 'POST') {
+    if (!checkAdminCookie(req)) return json(res, { error:'Não autorizado.' }, 401)
+    let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
+    const name = String(body.name||'').trim()
+    if (!name) return json(res, { error:'Nome do projecto é obrigatório.' }, 400)
+    const rec = { id: randomBytes(6).toString('hex'), name, key: 'gw_live_'+randomBytes(24).toString('hex'), secret: 'gwsec_'+randomBytes(24).toString('hex'), active: true, createdAt: new Date().toISOString(), txCount: 0, totalAmount: 0 }
+    gwKeys.push(rec)
+    await saveGwKeys()
+    return json(res, { ok:true, key: rec }, 201)
+  }
+  const gwKeyP = parseParams('/admin/gateway/keys/:id/:action', path)
+  if (method === 'POST' && gwKeyP) {
+    if (!checkAdminCookie(req)) return json(res, { error:'Não autorizado.' }, 401)
+    const rec = gwKeys.find(g => g.id === gwKeyP.id)
+    if (!rec) return json(res, { error:'Chave não encontrada.' }, 404)
+    if (gwKeyP.action === 'toggle') { rec.active = !rec.active; await saveGwKeys(); return json(res, { ok:true, active:rec.active }) }
+    if (gwKeyP.action === 'delete') { gwKeys = gwKeys.filter(g => g.id !== rec.id); await saveGwKeys(); return json(res, { ok:true }) }
+    return json(res, { error:'Acção inválida.' }, 400)
   }
 
   // ── Admin: editar utilizador ──────────────────────────────────────────────
@@ -1944,6 +2097,7 @@ function adminDashboard(filter = 'all') {
     all:       orders,
     zumbo:     orders,
     users:     users,
+    gateway:   gwKeys,
     pending:   orders.filter(o=>o.status==='pending'),
     succeeded: orders.filter(o=>o.status==='succeeded'),
     activated: orders.filter(o=>o.status==='activated'),
@@ -1959,6 +2113,9 @@ function adminDashboard(filter = 'all') {
   const navSections = [
     { label: 'ZumboPay', items: [
       { f:'zumbo', label:'Transações ZumboPay', icon:'M12 2a10 10 0 100 20A10 10 0 0012 2zm1 14H11v-4H9l3-6 3 6h-2v4z' },
+    ]},
+    { label: 'Gateway', items: [
+      { f:'gateway', label:'Chaves de API (Terceiros)', icon:'M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4' },
     ]},
     { label: 'Utilizadores', items: [
       { f:'users', label:'Contas de Utilizadores', icon:'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75' },
@@ -2025,6 +2182,49 @@ function adminDashboard(filter = 'all') {
 </div>`)
     : null
 
+  // ── Vista: Gateway (chaves de API) ─────────────────────────────────────────
+  const gatewayView = filter === 'gateway'
+    ? `<div class="zumbo-panel">
+  <div class="zumbo-info">
+    <svg viewBox="0 0 24 24" style="width:15px;height:15px;stroke:#065f46;fill:none;stroke-width:2;stroke-linecap:round;flex-shrink:0"><path d="M12 2a10 10 0 100 20A10 10 0 0012 2zm0 9v4m0-7h.01"/></svg>
+    <div>Crie chaves para outros sites cobrarem via M-Pesa através deste gateway.<br>
+    <strong>Iniciar pagamento:</strong> <code>POST ${SITE_URL}/gateway/api/pay</code> com header <code>X-API-Key: &lt;chave&gt;</code> e corpo JSON <code>{"phone":"84xxxxxxx","amount":100,"reference":"pedido-123","callback_url":"https://seusite.com/confirmar"}</code><br>
+    <strong>Consultar estado:</strong> <code>GET ${SITE_URL}/gateway/api/status/&lt;txId&gt;</code> com o mesmo header. Estados: <code>pending</code>, <code>succeeded</code>, <code>failed</code>.<br>
+    Se enviar <code>callback_url</code>, o site de terceiros recebe um POST com o resultado, assinado com HMAC-SHA256 do segredo no header <code>X-Gateway-Signature</code>.</div>
+  </div>
+  <div style="background:#fff;border:1px solid #e5e5ea;border-radius:14px;padding:16px;margin-bottom:18px;display:flex;gap:8px;">
+    <input id="gw-name" type="text" placeholder="Nome do projecto (ex: Loja XYZ)" style="flex:1;padding:12px 14px;border:1.5px solid #e5e5ea;border-radius:10px;font-size:14px;font-family:inherit;outline:none;">
+    <button onclick="gwCreate()" style="padding:12px 20px;border:none;border-radius:10px;background:#cc0000;color:#fff;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;">Criar chave</button>
+  </div>
+  ${gwKeys.length === 0
+    ? `<div class="empty"><div class="empty-icon">🔑</div><p>Nenhuma chave criada ainda.</p></div>`
+    : gwKeys.map(g => `<div class="order-card">
+  <div class="card-header">
+    <div class="card-left">
+      <div class="card-badge-row">
+        <span class="badge" style="color:${g.active?'#065f46':'#991b1b'};background:${g.active?'#d1fae5':'#fee2e2'}">${g.active?'Activa':'Desactivada'}</span>
+        <strong style="font-size:15px">${escapeHtml(g.name)}</strong>
+      </div>
+      <div class="card-date">Criada em ${new Date(g.createdAt).toLocaleDateString('pt-MZ',{day:'2-digit',month:'short',year:'numeric'})} · ${g.txCount||0} pagamentos · ${(g.totalAmount||0).toLocaleString('pt-MZ')} MT</div>
+    </div>
+  </div>
+  <div class="card-divider"></div>
+  <div class="card-body">
+    <div class="info-row"><span class="info-label">Chave (X-API-Key)</span>
+      <div class="info-value bene-row"><span class="mono" style="font-family:monospace;font-size:11px">${g.key.slice(0,16)}…</span>
+      <button class="copy-btn" onclick="copyNum('${g.key}',this)">Copiar</button></div></div>
+    <div class="info-row"><span class="info-label">Segredo (assinatura)</span>
+      <div class="info-value bene-row"><span class="mono" style="font-family:monospace;font-size:11px">${g.secret.slice(0,14)}…</span>
+      <button class="copy-btn" onclick="copyNum('${g.secret}',this)">Copiar</button></div></div>
+  </div>
+  <div class="card-footer" style="display:flex;gap:8px">
+    <button class="uedit-btn" style="flex:1" onclick="gwToggle('${g.id}')">${g.active?'Desactivar':'Activar'}</button>
+    <button class="uedit-btn" style="flex:1;color:#cc0000;border-color:#ffcdd2" onclick="gwDelete('${g.id}',this.dataset.n)" data-n="${escapeHtml(g.name)}">Eliminar</button>
+  </div>
+</div>`).join('')}
+</div>`
+    : null
+
   // ── Vista: Utilizadores ────────────────────────────────────────────────────
   const usersTable = filter === 'users'
     ? (users.length === 0
@@ -2039,7 +2239,7 @@ function adminDashboard(filter = 'all') {
       const dt = new Date(u.createdAt)
       const ds = dt.toLocaleDateString('pt-MZ',{day:'2-digit',month:'short',year:'numeric'})
       return `<tr id="urow-${u.id}">
-        <td><strong>${u.name}</strong></td>
+        <td><strong>${escapeHtml(u.name)}</strong></td>
         <td class="zt-phone">${u.phone}</td>
         <td><span class="ubal-badge">${(u.balance||0).toLocaleString('pt-MZ')} MT</span></td>
         <td class="zt-date">${ds}</td>
@@ -2082,7 +2282,8 @@ function adminDashboard(filter = 'all') {
 </div>`)
     : null
 
-  const cards = usersTable !== null ? usersTable
+  const cards = gatewayView !== null ? gatewayView
+    : usersTable !== null ? usersTable
     : zumboTable !== null ? zumboTable
     : filtered.length === 0
     ? `<div class="empty"><div class="empty-icon">📭</div><p>Nenhuma transacção encontrada.</p></div>`
@@ -2413,6 +2614,33 @@ async function saveUserEdit(){
   }catch{err.textContent='Erro de ligação.';err.style.display='block';save.disabled=false;save.textContent='Guardar'}
 }
 
+// ── Gateway keys ───────────────────────────────────────────────────────────
+async function gwCreate(){
+  const name=document.getElementById('gw-name').value.trim()
+  if(!name){showToast('Escreva o nome do projecto.',false);return}
+  try{
+    const r=await fetch('/admin/gateway/keys',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})})
+    const d=await r.json()
+    if(!r.ok){showToast(d.error||'Erro.',false);return}
+    showToast('Chave criada!')
+    setTimeout(()=>location.reload(),700)
+  }catch{showToast('Erro de ligação.',false)}
+}
+async function gwToggle(id){
+  try{
+    const r=await fetch('/admin/gateway/keys/'+id+'/toggle',{method:'POST'})
+    if(r.ok){showToast('Estado alterado.');setTimeout(()=>location.reload(),600)}
+    else showToast('Erro.',false)
+  }catch{showToast('Erro de ligação.',false)}
+}
+async function gwDelete(id,name){
+  if(!confirm('Eliminar a chave de "'+name+'"? O site que a usa deixará de conseguir cobrar.'))return
+  try{
+    const r=await fetch('/admin/gateway/keys/'+id+'/delete',{method:'POST'})
+    if(r.ok){showToast('Chave eliminada.');setTimeout(()=>location.reload(),600)}
+    else showToast('Erro.',false)
+  }catch{showToast('Erro de ligação.',false)}
+}
 async function activateOrder(txId,btn){
   if(!confirm('Confirma que os megas foram enviados para o beneficiário?')) return
   btn.disabled=true; btn.textContent='A guardar…'
@@ -2437,6 +2665,7 @@ async function activateOrder(txId,btn){
 // ── Servidor ──────────────────────────────────────────────────────────────────
 await loadOrders()
 await loadUsers()
+await loadGwKeys()
 createServer((req, res) => {
   router(req, res).catch(err => {
     console.error('[Server]', err)
