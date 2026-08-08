@@ -577,7 +577,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .footer-support-card:active{background:#3a3a3c;}
 .footer-support-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .footer-support-icon svg{width:16px;height:16px;}
-.footer-support-icon.phone{background:#cc0000;}
+.footer-support-icon.phone{background:#34c759;}
 .footer-support-icon.phone svg{stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
 .footer-support-icon.whatsapp{background:#25d366;}
 .footer-support-icon.whatsapp svg{fill:#fff;}
@@ -743,7 +743,7 @@ ${allListHtml}
           <div class="footer-support-icon phone">
             <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.09 9.8a19.79 19.79 0 01-3.07-8.67A2 2 0 012 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
           </div>
-          <span class="footer-support-label">Suporte Técnico</span>
+          <span class="footer-support-label">Contactar Suporte</span>
         </a>
         <a href="https://wa.me/258876563910" target="_blank" rel="noopener" class="footer-support-card">
           <div class="footer-support-icon whatsapp">
@@ -1122,7 +1122,13 @@ function adminDashboard(filter = 'all') {
     </div>
     <div class="info-row">
       <span class="info-label">Oferta</span>
-      <span class="info-value">${o.bundleLabel||'—'}</span>
+      <div class="info-value bene-row">
+        <span>${o.bundleLabel||'—'}</span>
+        ${o.bundleLabel ? `<button class="copy-btn" onclick="copyNum('${o.bundleLabel}',this)" title="Copiar oferta">
+          <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          Copiar
+        </button>` : ''}
+      </div>
     </div>
     <div class="info-row">
       <span class="info-label">ID Transacção</span>
@@ -1159,8 +1165,11 @@ body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:1
 .topbar-brand-name{font-size:15px;font-weight:800;color:#1c1c1e;}
 .topbar-brand-name span{color:#cc0000;}
 .topbar-badge{font-size:11px;font-weight:700;color:#fff;background:#cc0000;border-radius:6px;padding:2px 7px;margin-left:4px;}
-.topbar-right{display:flex;align-items:center;gap:12px;}
-.revenue-pill{font-size:13px;font-weight:700;color:#065f46;background:#d1fae5;padding:5px 12px;border-radius:20px;}
+.topbar-right{display:flex;align-items:center;gap:20px;}
+.topbar-revenue{display:flex;flex-direction:column;align-items:flex-end;gap:1px;}
+.revenue-label{font-size:10px;font-weight:700;color:#8e8e93;text-transform:uppercase;letter-spacing:.07em;}
+.revenue-value{font-size:17px;font-weight:800;color:#065f46;line-height:1;}
+.topbar-divider{width:1px;height:28px;background:#e5e5ea;flex-shrink:0;}
 .logout-btn{font-size:13px;font-weight:600;color:#cc0000;text-decoration:none;padding:6px 14px;border-radius:9px;border:1.5px solid #ffcdd2;}
 .logout-btn:active{background:#fff0f0;}
 
@@ -1250,14 +1259,15 @@ body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:1
     <button class="menu-btn" onclick="toggleSidebar()" aria-label="Menu">
       <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
-    <div class="topbar-brand">
-      <img src="/static/vodacom.webp" alt="logo">
-      <span class="topbar-brand-name">Net <span>Serviços</span></span>
-      <span class="topbar-badge">Admin</span>
-    </div>
+    <img src="/static/vodacom.webp" alt="logo" style="width:30px;height:30px;object-fit:contain;border-radius:6px;">
+    <span style="font-size:11px;font-weight:700;color:#fff;background:#cc0000;border-radius:6px;padding:2px 8px;">Admin</span>
   </div>
   <div class="topbar-right">
-    <span class="revenue-pill">💰 ${totalReceived.toLocaleString('pt-MZ')} MT recebidos</span>
+    <div class="topbar-revenue">
+      <span class="revenue-label">Total Recebido</span>
+      <span class="revenue-value">${totalReceived.toLocaleString('pt-MZ')} MT</span>
+    </div>
+    <div class="topbar-divider"></div>
     <a href="/admin/logout" class="logout-btn">Sair</a>
   </div>
 </header>
