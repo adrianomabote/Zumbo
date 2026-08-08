@@ -182,6 +182,9 @@ async function router(req, res) {
   if (method === 'GET' && (path === '/static/vodacom.webp' || path === '/favicon.ico')) {
     try { const img = await import('fs/promises').then(f=>f.readFile('./attached_assets/image_1786121779688.webp')); res.writeHead(200,{'Content-Type':'image/webp','Cache-Control':'max-age=86400'}); return res.end(img) } catch { res.writeHead(404); return res.end() }
   }
+  if (method === 'GET' && path === '/static/vodafone-logo.jpg') {
+    try { const img = await import('fs/promises').then(f=>f.readFile('./attached_assets/20927248-vodafone-marca-logotipo-telefone-simbolo-vermelho-pro_1786173611755.jpg')); res.writeHead(200,{'Content-Type':'image/jpeg','Cache-Control':'max-age=86400'}); return res.end(img) } catch { res.writeHead(404); return res.end() }
+  }
   if (method === 'GET' && path === '/static/voda-anim.gif') {
     try { const gif = await import('fs/promises').then(f=>f.readFile('./attached_assets/VF_Living_Speechmark_Tech_Circle_always_on_1786166674756.gif')); res.writeHead(200,{'Content-Type':'image/gif','Cache-Control':'max-age=86400'}); return res.end(gif) } catch { res.writeHead(404); return res.end() }
   }
@@ -697,7 +700,7 @@ ${allListHtml}
 <footer class="site-footer">
   <div class="footer-top">
     <div class="footer-brand">
-      <img src="/static/vodacom.webp" alt="Net Serviços" class="footer-logo-img">
+      <img src="/static/vodafone-logo.jpg" alt="Net Serviços" class="footer-logo-img">
       <div class="footer-brand-name">Net <span>Serviços</span></div>
     </div>
     <div class="footer-links">
@@ -768,36 +771,18 @@ ${allListHtml}
     <!-- Tab: Para Mim -->
     <div class="sh-panel" id="sh-tab-mim">
       <label class="sh-lbl">Introduza o seu número</label>
-      <input class="sh-inp" id="sh-phone" type="tel" placeholder="Número de telemóvel" maxlength="9" inputmode="numeric" autocomplete="off" oninput="detectVia(this.value,'via')">
-      <span class="sh-hint">M-Pesa: 84 ou 85 · e-Mola: 86 ou 87</span>
-      <div class="sh-via-lbl">Activar a oferta via</div>
-      <div class="sh-via-btns">
-        <button class="sh-via active" id="via-mpesa" onclick="selectVia('mpesa')">
-          <svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18.01"/></svg>M-Pesa
-        </button>
-        <button class="sh-via" id="via-emola" onclick="selectVia('emola')">
-          <svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M16 12h.01"/></svg>e-Mola
-        </button>
-      </div>
+      <input class="sh-inp" id="sh-phone" type="tel" placeholder="Número de telemóvel" maxlength="9" inputmode="numeric" autocomplete="off">
+      <span class="sh-hint">84 ou 85</span>
     </div>
 
     <!-- Tab: Para Outro -->
     <div class="sh-panel" id="sh-tab-outro" style="display:none">
       <label class="sh-lbl">Introduza o seu número</label>
-      <input class="sh-inp" id="sh-phone-payer" type="tel" placeholder="Número de telemóvel" maxlength="9" inputmode="numeric" autocomplete="off" oninput="detectVia(this.value,'via2')">
-      <span class="sh-hint">Apenas 84 ou 85</span>
+      <input class="sh-inp" id="sh-phone-payer" type="tel" placeholder="Número de telemóvel" maxlength="9" inputmode="numeric" autocomplete="off">
+      <span class="sh-hint">84 ou 85</span>
       <label class="sh-lbl">Introduza o número do beneficiário</label>
       <input class="sh-inp" id="sh-phone-bene" type="tel" placeholder="Número de telemóvel" maxlength="9" inputmode="numeric" autocomplete="off">
-      <span class="sh-hint">Apenas 84 ou 85</span>
-      <div class="sh-via-lbl">Activar a oferta via</div>
-      <div class="sh-via-btns">
-        <button class="sh-via active" id="via2-mpesa" onclick="selectVia2('mpesa')">
-          <svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18.01"/></svg>M-Pesa
-        </button>
-        <button class="sh-via" id="via2-emola" onclick="selectVia2('emola')">
-          <svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M16 12h.01"/></svg>e-Mola
-        </button>
-      </div>
+      <span class="sh-hint">84 ou 85</span>
     </div>
 
     <!-- Tab: Requisitar -->
