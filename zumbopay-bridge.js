@@ -562,45 +562,66 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .cat-note{margin:0 20px 16px;padding:10px 14px;background:#fff3cd;border:1px solid #ffc107;border-radius:10px;font-size:12px;color:#856404;line-height:1.5;display:none;}
 .cat-note.show{display:block;}
 
-/* ── Bottom sheet ── */
+/* ── Bottom sheet (Vodacom style) ── */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:none;backdrop-filter:blur(4px);}
 .overlay.open{display:block;}
-.sheet{position:fixed;bottom:0;left:0;right:0;max-width:480px;margin:0 auto;background:#1c1c1e;border-radius:20px 20px 0 0;z-index:101;padding:0 20px 40px;transform:translateY(100%);transition:transform .3s cubic-bezier(.32,.72,0,1);max-height:90vh;overflow-y:auto;}
+.sheet{position:fixed;bottom:0;left:0;right:0;max-width:480px;margin:0 auto;background:#fff;border-radius:22px 22px 0 0;z-index:101;padding:0;transform:translateY(100%);transition:transform .3s cubic-bezier(.32,.72,0,1);max-height:92vh;overflow-y:auto;}
 .sheet.open{transform:translateY(0);}
-.sh-handle{width:36px;height:4px;background:#3a3a3c;border-radius:2px;margin:12px auto 20px;}
-.s-buy,.s-pending,.s-success,.s-failed{display:none;color:#f2f2f7;}
-.sel-pkg{background:#cc000015;border:1px solid #cc000035;border-radius:12px;padding:14px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;}
-.sel-size{font-size:18px;font-weight:800;color:#f2f2f7;}
-.sel-cat{font-size:11px;color:#8e8e93;margin-top:2px;}
-.sel-price{font-size:26px;font-weight:900;color:#cc0000;}
-.sel-cur{font-size:12px;color:#8e8e93;}
-.lbl{font-size:11px;font-weight:700;color:#8e8e93;text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px;display:block;}
-.inp{width:100%;background:#2c2c2e;border:1.5px solid #3a3a3c;border-radius:12px;padding:13px 14px 13px 42px;color:#f2f2f7;font-size:16px;font-family:inherit;outline:none;transition:border-color .15s;}
-.inp:focus{border-color:#cc0000;}
-.inp::placeholder{color:#636366;}
-.inp-w{position:relative;}
-.inp-ico{position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:16px;color:#636366;pointer-events:none;}
-.hint{font-size:11px;color:#636366;margin-top:6px;}
-.errs{background:rgba(255,59,48,.1);border:1px solid rgba(255,59,48,.3);border-radius:10px;padding:10px 14px;font-size:13px;color:#ff6b6b;margin-bottom:14px;display:none;}
-.btn{width:100%;padding:15px;border:none;border-radius:12px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;background:#cc0000;color:#fff;margin-top:14px;transition:opacity .2s;}
-.btn:hover{opacity:.9;}.btn:active{opacity:.8;}.btn:disabled{opacity:.4;cursor:not-allowed;}
-.btn-g{background:transparent;border:1.5px solid #3a3a3c;color:#8e8e93;margin-top:10px;}
-.btn-g:hover{border-color:#cc0000;color:#f2f2f7;}
-.spinner{width:52px;height:52px;border:4px solid #3a3a3c;border-top-color:#cc0000;border-radius:50%;animation:spin 1s linear infinite;margin:8px auto 20px;}
+/* close row */
+.sh-top{display:flex;justify-content:flex-end;padding:14px 14px 0;}
+.sh-close{background:none;border:none;font-size:20px;color:#636366;cursor:pointer;width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:50%;line-height:1;}
+.sh-close:active{background:#f2f2f7;}
+/* package info card */
+.sh-pkg-card{margin:4px 16px 16px;padding:16px;background:#f5f5f7;border-radius:14px;}
+.sh-pkg-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.sh-pkg-name{font-size:17px;font-weight:700;color:#1c1c1e;}
+.sh-pkg-prc{font-size:17px;font-weight:700;color:#1c1c1e;}
+.sh-pkg-icons{display:grid;grid-template-columns:repeat(4,1fr);text-align:center;gap:0;}
+.sh-pkg-ico{display:flex;flex-direction:column;align-items:center;gap:5px;}
+.sh-pkg-ico svg{width:30px;height:30px;stroke:#cc0000;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.sh-pkg-ico span{font-size:11px;color:#636366;font-weight:500;}
+/* tabs */
+.sh-tabs{display:flex;border-bottom:1.5px solid #e5e5ea;}
+.sh-tab{flex:1;background:none;border:none;border-bottom:2.5px solid transparent;margin-bottom:-1.5px;font-size:12px;font-weight:600;font-family:inherit;color:#8e8e93;cursor:pointer;padding:12px 4px;text-align:center;line-height:1.35;transition:color .15s;}
+.sh-tab.active{color:#cc0000;border-bottom-color:#cc0000;}
+/* panels */
+.sh-panel{padding:18px 16px 0;}
+.sh-lbl{display:block;font-size:15px;font-weight:600;color:#1c1c1e;margin-bottom:8px;}
+.sh-inp{width:100%;border:1.5px solid #c7c7cc;border-radius:12px;padding:15px 14px;font-size:16px;font-family:inherit;color:#1c1c1e;background:#fff;outline:none;margin-bottom:16px;transition:border-color .15s;}
+.sh-inp:focus{border-color:#cc0000;}
+.sh-inp::placeholder{color:#c7c7cc;}
+/* via buttons */
+.sh-via-lbl{font-size:15px;font-weight:600;color:#1c1c1e;margin-bottom:10px;}
+.sh-via-btns{display:flex;gap:12px;margin-bottom:4px;}
+.sh-via{flex:1;padding:14px 8px;border:1.5px solid #e5e5ea;border-radius:12px;background:#fff;font-size:14px;font-weight:600;font-family:inherit;color:#8e8e93;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:border-color .15s,color .15s,background .15s;}
+.sh-via svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;}
+.sh-via.active{border-color:#cc0000;color:#cc0000;background:#fff8f8;}
+/* error */
+.sh-err{background:#fff0f0;border:1px solid #ffcdd2;border-radius:10px;padding:10px 14px;font-size:13px;color:#cc0000;margin:12px 16px 0;display:none;}
+/* próximo button */
+.sh-next{width:calc(100% - 32px);margin:16px 16px 36px;padding:17px;border:none;border-radius:14px;font-size:16px;font-weight:700;font-family:inherit;cursor:pointer;background:linear-gradient(135deg,#e53935,#cc0000);color:#fff;transition:opacity .2s;}
+.sh-next:disabled{opacity:.45;cursor:not-allowed;}
+.sh-next:active{opacity:.85;}
+/* states: pending / success / failed */
+.sh-state{padding:8px 20px 40px;text-align:center;}
+.spinner{width:52px;height:52px;border:4px solid #e5e5ea;border-top-color:#cc0000;border-radius:50%;animation:spin 1s linear infinite;margin:4px auto 20px;}
 @keyframes spin{to{transform:rotate(360deg)}}
-.pend-ph{display:block;text-align:center;padding:6px 16px;background:rgba(204,0,0,.1);border:1px solid rgba(204,0,0,.2);border-radius:8px;font-size:14px;font-weight:700;color:#cc0000;margin-bottom:16px;}
-.psteps{list-style:none;background:#2c2c2e;border:1px solid #3a3a3c;border-radius:12px;padding:12px 16px;}
-.psteps li{font-size:12px;color:#8e8e93;padding:6px 0;display:flex;align-items:flex-start;gap:8px;border-bottom:1px solid #3a3a3c;}
+.pend-ph{display:inline-block;padding:6px 20px;background:#fff0f0;border:1px solid #ffcdd2;border-radius:8px;font-size:15px;font-weight:700;color:#cc0000;margin-bottom:16px;}
+.psteps{list-style:none;background:#f9f9f9;border:1px solid #e5e5ea;border-radius:12px;padding:12px 16px;text-align:left;}
+.psteps li{font-size:13px;color:#636366;padding:7px 0;display:flex;align-items:flex-start;gap:8px;border-bottom:1px solid #f2f2f7;}
 .psteps li:last-child{border-bottom:none;}
-.sn{min-width:18px;height:18px;border-radius:50%;background:rgba(204,0,0,.15);color:#cc0000;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
-.res-icon{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;margin:8px auto 16px;}
-.res-icon.ok{background:rgba(52,199,89,.15);}
-.res-icon.bad{background:rgba(255,59,48,.12);}
-.res-t{font-size:20px;font-weight:700;text-align:center;margin-bottom:6px;}
-.res-s{font-size:13px;color:#8e8e93;text-align:center;line-height:1.6;margin-bottom:20px;}
-.res-box{background:rgba(204,0,0,.07);border:1px solid rgba(204,0,0,.15);border-radius:10px;padding:14px;text-align:center;margin-bottom:20px;}
+.sn{min-width:20px;height:20px;border-radius:50%;background:#fff0f0;color:#cc0000;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+.res-icon{width:68px;height:68px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:30px;margin:4px auto 18px;}
+.res-icon.ok{background:#e8f5e9;color:#2e7d32;}
+.res-icon.bad{background:#ffebee;color:#c62828;}
+.res-t{font-size:20px;font-weight:700;text-align:center;margin-bottom:6px;color:#1c1c1e;}
+.res-s{font-size:13px;color:#636366;text-align:center;line-height:1.6;margin-bottom:20px;}
+.res-box{background:#fff0f0;border:1px solid #ffcdd2;border-radius:12px;padding:14px;text-align:center;margin-bottom:20px;}
 .res-box-l{font-size:11px;color:#8e8e93;margin-bottom:4px;}
-.res-box-v{font-size:16px;font-weight:700;color:#cc0000;}
+.res-box-v{font-size:15px;font-weight:700;color:#cc0000;}
+.res-btn{width:100%;padding:15px;border:none;border-radius:12px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;background:#cc0000;color:#fff;margin-bottom:10px;transition:opacity .2s;}
+.res-btn:active{opacity:.85;}
+.res-btn-g{background:#f2f2f7;color:#636366;}
 </style>
 </head><body>
 
@@ -678,44 +699,116 @@ ${allListHtml}
 
 <div class="overlay" id="overlay" onclick="closeSheet()"></div>
 <div class="sheet" id="sheet">
-  <div class="sh-handle"></div>
-  <div class="s-buy" id="s-buy">
-    <div class="sel-pkg">
-      <div><div class="sel-size" id="sh-size"></div><div class="sel-cat" id="sh-cat"></div></div>
-      <div style="text-align:right"><div class="sel-price" id="sh-price"></div><div class="sel-cur">MT</div></div>
+
+  <!-- ── Compra ── -->
+  <div id="s-buy" style="display:none">
+    <div class="sh-top"><button class="sh-close" onclick="closeSheet()">✕</button></div>
+
+    <!-- Cartão do pacote -->
+    <div class="sh-pkg-card">
+      <div class="sh-pkg-row">
+        <span class="sh-pkg-name" id="sh-size"></span>
+        <span class="sh-pkg-prc"><span id="sh-price"></span> MT</span>
+      </div>
+      <div class="sh-pkg-icons" id="sh-icons">
+        <div class="sh-pkg-ico"><svg viewBox="0 0 24 24"><path d="M7 16V4"/><path d="M4 7l3-3 3 3"/><path d="M17 8v12"/><path d="M14 17l3 3 3-3"/></svg><span id="ico-data">—</span></div>
+        <div class="sh-pkg-ico"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.09 9.8a19.79 19.79 0 01-3.07-8.67A2 2 0 012 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg><span id="ico-calls">0 MT</span></div>
+        <div class="sh-pkg-ico"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><span>0 SMS</span></div>
+        <div class="sh-pkg-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><span id="ico-dur">—</span></div>
+      </div>
     </div>
-    <div class="errs" id="sh-err"></div>
-    <label class="lbl">Número Vodacom do destinatário</label>
-    <div class="inp-w" style="margin-bottom:6px"><span class="inp-ico">📱</span><input class="inp" id="sh-phone" type="tel" placeholder="84 000 0000" maxlength="15" inputmode="tel" autocomplete="off"></div>
-    <div class="hint">84/85 → M-Pesa &nbsp;·&nbsp; 86/87 → e-Mola</div>
-    <button class="btn" id="sh-btn" onclick="pay()">Pagar e Encomendar</button>
-    <button class="btn btn-g" onclick="closeSheet()">Cancelar</button>
+
+    <!-- Tabs -->
+    <div class="sh-tabs">
+      <button class="sh-tab active" onclick="shSetTab('mim')">Comprar<br>Para Mim</button>
+      <button class="sh-tab" onclick="shSetTab('outro')">Comprar<br>Para Outro</button>
+      <button class="sh-tab" onclick="shSetTab('req')">Requisitar<br>Oferta</button>
+    </div>
+
+    <!-- Tab: Para Mim -->
+    <div class="sh-panel" id="sh-tab-mim">
+      <label class="sh-lbl">Introduza o seu número</label>
+      <input class="sh-inp" id="sh-phone" type="tel" placeholder="Introduza o seu número" maxlength="15" inputmode="tel" autocomplete="off" oninput="detectVia(this.value,'via')">
+      <div class="sh-via-lbl">Activar a oferta via</div>
+      <div class="sh-via-btns">
+        <button class="sh-via active" id="via-mpesa" onclick="selectVia('mpesa')">
+          <svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18.01"/></svg>M-Pesa
+        </button>
+        <button class="sh-via" id="via-emola" onclick="selectVia('emola')">
+          <svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M16 12h.01"/></svg>e-Mola
+        </button>
+      </div>
+    </div>
+
+    <!-- Tab: Para Outro -->
+    <div class="sh-panel" id="sh-tab-outro" style="display:none">
+      <label class="sh-lbl">Introduza o seu número</label>
+      <input class="sh-inp" id="sh-phone-payer" type="tel" placeholder="Introduza o seu número" maxlength="15" inputmode="tel" autocomplete="off" oninput="detectVia(this.value,'via2')">
+      <label class="sh-lbl">Introduza o número do beneficiário</label>
+      <input class="sh-inp" id="sh-phone-bene" type="tel" placeholder="Introduza o número do beneficiário" maxlength="15" inputmode="tel" autocomplete="off">
+      <div class="sh-via-lbl">Activar a oferta via</div>
+      <div class="sh-via-btns">
+        <button class="sh-via active" id="via2-mpesa" onclick="selectVia2('mpesa')">
+          <svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18.01"/></svg>M-Pesa
+        </button>
+        <button class="sh-via" id="via2-emola" onclick="selectVia2('emola')">
+          <svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M16 12h.01"/></svg>e-Mola
+        </button>
+      </div>
+    </div>
+
+    <!-- Tab: Requisitar -->
+    <div class="sh-panel" id="sh-tab-req" style="display:none">
+      <div style="text-align:center;padding:28px 0 12px">
+        <div style="font-size:40px;margin-bottom:14px">🔔</div>
+        <p style="font-size:14px;color:#636366;line-height:1.6">A funcionalidade <strong style="color:#1c1c1e">Requisitar Oferta</strong> não está disponível neste momento.</p>
+      </div>
+    </div>
+
+    <div class="sh-err" id="sh-err"></div>
+    <button class="sh-next" id="sh-btn" onclick="pay()">Próximo</button>
   </div>
-  <div class="s-pending" id="s-pending">
-    <div class="spinner"></div>
-    <div class="res-t" style="margin-bottom:8px">Aguardando PIN</div>
-    <div class="pend-ph" id="sh-pend-phone"></div>
-    <p style="font-size:12px;color:#8e8e93;text-align:center;margin-bottom:14px;line-height:1.6">Introduza o <strong style="color:#f2f2f7">PIN</strong> no pedido recebido no telemóvel.</p>
-    <ul class="psteps">
-      <li><span class="sn">1</span>Verifique o telemóvel — pedido <span id="sh-method-lbl">M-Pesa</span> recebido</li>
-      <li><span class="sn">2</span>Seleccione "Aceitar" e introduza o seu PIN</li>
-      <li><span class="sn">3</span>Esta página actualiza automaticamente</li>
-    </ul>
+
+  <!-- ── A aguardar PIN ── -->
+  <div id="s-pending" style="display:none">
+    <div class="sh-top"><button class="sh-close" onclick="closeSheet()">✕</button></div>
+    <div class="sh-state">
+      <div class="spinner"></div>
+      <div class="res-t" style="margin-bottom:10px">Aguardando PIN</div>
+      <div class="pend-ph" id="sh-pend-phone"></div>
+      <p style="font-size:13px;color:#636366;text-align:center;margin-bottom:18px;line-height:1.6">Introduza o <strong style="color:#cc0000">PIN</strong> no pedido recebido no telemóvel.</p>
+      <ul class="psteps">
+        <li><span class="sn">1</span>Verifique o telemóvel — pedido <span id="sh-method-lbl">M-Pesa</span> recebido</li>
+        <li><span class="sn">2</span>Seleccione "Aceitar" e introduza o seu PIN</li>
+        <li><span class="sn">3</span>Esta página actualiza automaticamente</li>
+      </ul>
+    </div>
   </div>
-  <div class="s-success" id="s-success">
-    <div class="res-icon ok" style="font-size:32px">✓</div>
-    <div class="res-t">Pedido recebido!</div>
-    <p class="res-s">Pagamento confirmado. O seu pacote será activado em <strong style="color:#f2f2f7">5–15 minutos</strong>.</p>
-    <div class="res-box"><div class="res-box-l">Pacote encomendado</div><div class="res-box-v" id="sh-ok-pkg"></div></div>
-    <button class="btn" onclick="closeSheet()">Comprar outro pacote</button>
+
+  <!-- ── Sucesso ── -->
+  <div id="s-success" style="display:none">
+    <div class="sh-top"><button class="sh-close" onclick="closeSheet()">✕</button></div>
+    <div class="sh-state">
+      <div class="res-icon ok">✓</div>
+      <div class="res-t">Pedido recebido!</div>
+      <p class="res-s">Pagamento confirmado. O seu pacote será activado em <strong style="color:#cc0000">5–15 minutos</strong>.</p>
+      <div class="res-box"><div class="res-box-l">Pacote encomendado</div><div class="res-box-v" id="sh-ok-pkg"></div></div>
+      <button class="res-btn" onclick="closeSheet()">Comprar outro pacote</button>
+    </div>
   </div>
-  <div class="s-failed" id="s-failed">
-    <div class="res-icon bad" style="font-size:32px">✗</div>
-    <div class="res-t">Pagamento não confirmado</div>
-    <p class="res-s" id="sh-fail-msg">O PIN não foi introduzido ou o tempo expirou.</p>
-    <button class="btn" onclick="shShow('buy')">Tentar novamente</button>
-    <button class="btn btn-g" onclick="closeSheet()">Cancelar</button>
+
+  <!-- ── Falhou ── -->
+  <div id="s-failed" style="display:none">
+    <div class="sh-top"><button class="sh-close" onclick="closeSheet()">✕</button></div>
+    <div class="sh-state">
+      <div class="res-icon bad">✗</div>
+      <div class="res-t">Pagamento não confirmado</div>
+      <p class="res-s" id="sh-fail-msg">O PIN não foi introduzido ou o tempo expirou.</p>
+      <button class="res-btn" onclick="shShow('buy')">Tentar novamente</button>
+      <button class="res-btn res-btn-g" onclick="closeSheet()">Cancelar</button>
+    </div>
   </div>
+
 </div>
 
 <script>
@@ -748,17 +841,44 @@ CATS_JS.forEach(cat => {
 })
 
 // ── Sheet ──
+let shCurTab = 'mim'
+
+function shSetTab(t) {
+  shCurTab = t
+  ;['mim','outro','req'].forEach((x,i) => {
+    document.getElementById('sh-tab-'+x).style.display = x===t ? 'block' : 'none'
+    document.querySelectorAll('.sh-tab')[i].classList.toggle('active', x===t)
+  })
+  document.getElementById('sh-btn').style.display = t==='req' ? 'none' : 'block'
+}
+
+function detectVia(val, prefix) {
+  const v = val.replace(/\D/g,'')
+  if (v.startsWith('84')||v.startsWith('85')) {
+    document.getElementById(prefix+'-mpesa').classList.add('active')
+    document.getElementById(prefix+'-emola').classList.remove('active')
+  } else if (v.startsWith('86')||v.startsWith('87')) {
+    document.getElementById(prefix+'-mpesa').classList.remove('active')
+    document.getElementById(prefix+'-emola').classList.add('active')
+  }
+}
+function selectVia(m)  { document.getElementById('via-mpesa').classList.toggle('active',m==='mpesa'); document.getElementById('via-emola').classList.toggle('active',m==='emola') }
+function selectVia2(m) { document.getElementById('via2-mpesa').classList.toggle('active',m==='mpesa'); document.getElementById('via2-emola').classList.toggle('active',m==='emola') }
+
 function openBuy(id) {
   const all = Object.values(PKGS_ALL).flat()
   const p = all.find(x=>x.id===id); if(!p) return
   curPkg = p
   document.getElementById('sh-size').textContent = p.name
-  document.getElementById('sh-cat').textContent  = CLABELS[curCat]||'' + ' · ' + p.dur
-  document.getElementById('sh-price').textContent= p.price
+  document.getElementById('sh-price').textContent = p.price
+  document.getElementById('ico-data').textContent = p.size
+  document.getElementById('ico-dur').textContent  = p.dur
+  document.getElementById('ico-calls').textContent = p.calls ? 'Ilim.' : '0 MT'
   document.getElementById('sh-phone').value = ''
   document.getElementById('sh-err').style.display = 'none'
-  document.getElementById('sh-btn').disabled = false
-  document.getElementById('sh-btn').textContent = 'Pagar e Encomendar'
+  const btn = document.getElementById('sh-btn'); btn.disabled=false; btn.textContent='Próximo'; btn.style.display='block'
+  shSetTab('mim')
+  selectVia('mpesa')
   shShow('buy')
   document.getElementById('overlay').classList.add('open')
   setTimeout(()=>document.getElementById('sheet').classList.add('open'),10)
@@ -772,19 +892,21 @@ function closeSheet() {
 function shShow(s) { ['buy','pending','success','failed'].forEach(x=>document.getElementById('s-'+x).style.display=(x===s?'block':'none')) }
 
 async function pay() {
-  const phone = document.getElementById('sh-phone').value.trim()
+  const phone = shCurTab==='outro'
+    ? document.getElementById('sh-phone-payer').value.trim()
+    : document.getElementById('sh-phone').value.trim()
   const ee = document.getElementById('sh-err'); ee.style.display='none'
   if (!phone) { ee.textContent='Introduza o número de telemóvel.'; ee.style.display='block'; return }
   const btn = document.getElementById('sh-btn'); btn.disabled=true; btn.textContent='A processar…'
   try {
     const r = await fetch('/api/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone,bundleId:curPkg.id})})
     const d = await r.json()
-    if (!r.ok) { ee.textContent=d.error||'Erro ao processar.'; ee.style.display='block'; btn.disabled=false; btn.textContent='Pagar e Encomendar'; return }
+    if (!r.ok) { ee.textContent=d.error||'Erro ao processar.'; ee.style.display='block'; btn.disabled=false; btn.textContent='Próximo'; return }
     document.getElementById('sh-pend-phone').textContent = phone
     document.getElementById('sh-method-lbl').textContent = d.method==='mpesa'?'M-Pesa':'e-Mola'
     document.getElementById('sh-ok-pkg').textContent = curPkg.name+' — '+curPkg.price+' MT'
     shShow('pending'); listenOrder(d.txId)
-  } catch { ee.textContent='Erro de ligação. Tente novamente.'; ee.style.display='block'; btn.disabled=false; btn.textContent='Pagar e Encomendar' }
+  } catch { ee.textContent='Erro de ligação. Tente novamente.'; ee.style.display='block'; btn.disabled=false; btn.textContent='Próximo' }
 }
 function listenOrder(txId) {
   if (evtSrc) evtSrc.close()
