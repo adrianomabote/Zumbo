@@ -232,32 +232,28 @@ async function router(req, res) {
 
   // ── Páginas públicas ──────────────────────────────────────────────────────
   if (method === 'GET' && path === '/')         { res.writeHead(302,{'Location':'/megas'}); return res.end() }
-  if (method === 'GET' && (path === '/static/vodacom.webp' || path === '/favicon.ico')) {
-    try { const img = await import('fs/promises').then(f=>f.readFile('./attached_assets/image_1786121779688.webp')); res.writeHead(200,{'Content-Type':'image/webp','Cache-Control':'max-age=86400'}); return res.end(img) } catch { res.writeHead(404); return res.end() }
+  // ── Ficheiros estáticos (servidos de ./public/) ───────────────────────────
+  const STATIC_MAP = {
+    '/static/vodacom.webp'        :['public/vodacom.webp'        ,'image/webp'],
+    '/favicon.ico'                :['public/vodacom.webp'        ,'image/webp'],
+    '/static/vodafone-logo.jpg'   :['public/vodafone-logo.jpg'   ,'image/jpeg'],
+    '/static/voda-anim.gif'       :['public/voda-anim.gif'       ,'image/gif'],
+    '/static/coins.png'           :['public/coins.png'           ,'image/png'],
+    '/static/offer-soprati.webp'  :['public/offer-soprati.webp'  ,'image/webp'],
+    '/static/offer-ya.webp'       :['public/offer-ya.webp'       ,'image/webp'],
+    '/static/offer-bomdia.webp'   :['public/offer-bomdia.webp'   ,'image/webp'],
+    '/static/offer-turnonoite.webp':['public/offer-turnonoite.webp','image/webp'],
+    '/static/offer-jackpot.webp'  :['public/offer-jackpot.webp'  ,'image/webp'],
+    '/static/icon-192.png'        :['public/icon-192.png'        ,'image/png'],
+    '/static/icon-512.png'        :['public/icon-512.png'        ,'image/png'],
   }
-  if (method === 'GET' && path === '/static/vodafone-logo.jpg') {
-    try { const img = await import('fs/promises').then(f=>f.readFile('./attached_assets/20927248-vodafone-marca-logotipo-telefone-simbolo-vermelho-pro_1786173611755.jpg')); res.writeHead(200,{'Content-Type':'image/jpeg','Cache-Control':'max-age=86400'}); return res.end(img) } catch { res.writeHead(404); return res.end() }
-  }
-  if (method === 'GET' && path === '/static/voda-anim.gif') {
-    try { const gif = await import('fs/promises').then(f=>f.readFile('./attached_assets/VF_Living_Speechmark_Tech_Circle_always_on_1786166674756.gif')); res.writeHead(200,{'Content-Type':'image/gif','Cache-Control':'max-age=86400'}); return res.end(gif) } catch { res.writeHead(404); return res.end() }
-  }
-  if (method === 'GET' && path === '/static/coins.png') {
-    try { const img = await import('fs/promises').then(f=>f.readFile('./attached_assets/600282_1786181848146.png')); res.writeHead(200,{'Content-Type':'image/png','Cache-Control':'max-age=86400'}); return res.end(img) } catch { res.writeHead(404); return res.end() }
-  }
-  if (method === 'GET' && path === '/static/offer-soprati.webp') {
-    try { const img = await import('fs/promises').then(f=>f.readFile('./attached_assets/image_1786184888609.webp')); res.writeHead(200,{'Content-Type':'image/webp','Cache-Control':'max-age=86400'}); return res.end(img) } catch { res.writeHead(404); return res.end() }
-  }
-  if (method === 'GET' && path === '/static/offer-ya.webp') {
-    try { const img = await import('fs/promises').then(f=>f.readFile('./attached_assets/image_(1)_1786184888664.webp')); res.writeHead(200,{'Content-Type':'image/webp','Cache-Control':'max-age=86400'}); return res.end(img) } catch { res.writeHead(404); return res.end() }
-  }
-  if (method === 'GET' && path === '/static/offer-bomdia.webp') {
-    try { const img = await import('fs/promises').then(f=>f.readFile('./attached_assets/image_(2)_1786184888553.webp')); res.writeHead(200,{'Content-Type':'image/webp','Cache-Control':'max-age=86400'}); return res.end(img) } catch { res.writeHead(404); return res.end() }
-  }
-  if (method === 'GET' && path === '/static/offer-turnonoite.webp') {
-    try { const img = await import('fs/promises').then(f=>f.readFile('./attached_assets/image_(3)_1786184888505.webp')); res.writeHead(200,{'Content-Type':'image/webp','Cache-Control':'max-age=86400'}); return res.end(img) } catch { res.writeHead(404); return res.end() }
-  }
-  if (method === 'GET' && path === '/static/offer-jackpot.webp') {
-    try { const img = await import('fs/promises').then(f=>f.readFile('./attached_assets/image_(4)_1786184888721.webp')); res.writeHead(200,{'Content-Type':'image/webp','Cache-Control':'max-age=86400'}); return res.end(img) } catch { res.writeHead(404); return res.end() }
+  if (method === 'GET' && STATIC_MAP[path]) {
+    const [file, mime] = STATIC_MAP[path]
+    try {
+      const data = await import('fs/promises').then(f=>f.readFile(`./${file}`))
+      res.writeHead(200,{'Content-Type':mime,'Cache-Control':'max-age=86400'})
+      return res.end(data)
+    } catch { res.writeHead(404); return res.end() }
   }
   if (method === 'GET' && path === '/static/icon.svg') {
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="100" fill="#cc0000"/><text x="256" y="340" text-anchor="middle" font-family="Arial,sans-serif" font-weight="bold" font-size="300" fill="#fff">N</text></svg>`
@@ -270,16 +266,18 @@ async function router(req, res) {
       start_url:'/megas',scope:'/',display:'standalone',
       background_color:'#f2f2f7',theme_color:'#cc0000',orientation:'portrait-primary',
       icons:[
-        {src:'/static/icon.svg',sizes:'any',type:'image/svg+xml',purpose:'any'},
-        {src:'/static/icon.svg',sizes:'any',type:'image/svg+xml',purpose:'maskable'}
+        {src:'/static/icon-192.png',sizes:'192x192',type:'image/png',purpose:'any'},
+        {src:'/static/icon-512.png',sizes:'512x512',type:'image/png',purpose:'any'},
+        {src:'/static/icon-512.png',sizes:'512x512',type:'image/png',purpose:'maskable'},
+        {src:'/static/icon.svg',    sizes:'any',    type:'image/svg+xml',purpose:'any'}
       ]
     })
     res.writeHead(200,{'Content-Type':'application/manifest+json','Cache-Control':'max-age=3600'}); return res.end(manifest)
   }
   if (method === 'GET' && path === '/sw.js') {
     const sw = `
-const CACHE='ns-v1';
-const PRECACHE=['/megas','/manifest.json','/static/icon.svg','/static/vodafone-logo.jpg','/static/coins.png'];
+const CACHE='ns-v2';
+const PRECACHE=['/megas','/manifest.json','/static/icon-192.png','/static/icon-512.png','/static/vodafone-logo.jpg','/static/coins.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(PRECACHE)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
 self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;const url=new URL(e.request.url);if(url.pathname.startsWith('/api/')||url.pathname.startsWith('/admin'))return;e.respondWith(caches.match(e.request).then(cached=>{const fresh=fetch(e.request).then(r=>{if(r&&r.status===200){const c=r.clone();caches.open(CACHE).then(ca=>ca.put(e.request,c))}return r}).catch(()=>null);return cached||fresh}))});
