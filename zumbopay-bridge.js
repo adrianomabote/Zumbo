@@ -276,11 +276,22 @@ async function router(req, res) {
   }
   if (method === 'GET' && path === '/sw.js') {
     const sw = `
-const CACHE='ns-v2';
-const PRECACHE=['/megas','/manifest.json','/static/icon-192.png','/static/icon-512.png','/static/vodafone-logo.jpg','/static/coins.png'];
+const CACHE='ns-v3';
+const PRECACHE=['/manifest.json','/static/icon-192.png','/static/icon-512.png','/static/vodafone-logo.jpg','/static/coins.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(PRECACHE)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
-self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;const url=new URL(e.request.url);if(url.pathname.startsWith('/api/')||url.pathname.startsWith('/admin'))return;e.respondWith(caches.match(e.request).then(cached=>{const fresh=fetch(e.request).then(r=>{if(r&&r.status===200){const c=r.clone();caches.open(CACHE).then(ca=>ca.put(e.request,c))}return r}).catch(()=>null);return cached||fresh}))});
+self.addEventListener('fetch',e=>{
+  if(e.request.method!=='GET')return;
+  const url=new URL(e.request.url);
+  if(url.pathname.startsWith('/api/')||url.pathname.startsWith('/admin')||url.pathname.startsWith('/events/'))return;
+  // Páginas HTML: network-first (nunca servir versão antiga após deploy)
+  if(e.request.mode==='navigate'||url.pathname==='/megas'){
+    e.respondWith(fetch(e.request).then(r=>{if(r&&r.status===200){const c=r.clone();caches.open(CACHE).then(ca=>ca.put(e.request,c))}return r}).catch(()=>caches.match(e.request)));
+    return;
+  }
+  // Estáticos: cache-first com actualização em segundo plano
+  e.respondWith(caches.match(e.request).then(cached=>{const fresh=fetch(e.request).then(r=>{if(r&&r.status===200){const c=r.clone();caches.open(CACHE).then(ca=>ca.put(e.request,c))}return r}).catch(()=>null);return cached||fresh}));
+});
 `
     res.writeHead(200,{'Content-Type':'application/javascript','Cache-Control':'no-cache'}); return res.end(sw)
   }
