@@ -182,6 +182,9 @@ async function router(req, res) {
   if (method === 'GET' && (path === '/static/vodacom.webp' || path === '/favicon.ico')) {
     try { const img = await import('fs/promises').then(f=>f.readFile('./attached_assets/image_1786121779688.webp')); res.writeHead(200,{'Content-Type':'image/webp','Cache-Control':'max-age=86400'}); return res.end(img) } catch { res.writeHead(404); return res.end() }
   }
+  if (method === 'GET' && path === '/static/voda-anim.gif') {
+    try { const gif = await import('fs/promises').then(f=>f.readFile('./attached_assets/VF_Living_Speechmark_Tech_Circle_always_on_1786166674756.gif')); res.writeHead(200,{'Content-Type':'image/gif','Cache-Control':'max-age=86400'}); return res.end(gif) } catch { res.writeHead(404); return res.end() }
+  }
   if (method === 'GET' && path === '/megas')    return html(res, megasPage())
   if (method === 'GET' && path === '/ping')     return json(res, { ok: true })
 
@@ -609,13 +612,9 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .sh-next:disabled{opacity:.45;cursor:not-allowed;}
 .sh-next:active{opacity:.85;}
 /* states: pending / success / failed */
-.sh-state{padding:8px 20px 40px;text-align:center;}
-/* ── Vodacom pulse animation (pending state) ── */
-.voda-anim-wrap{position:relative;width:190px;height:190px;margin:10px auto 28px;display:flex;align-items:center;justify-content:center;}
-.voda-rings{position:absolute;inset:0;width:100%;height:100%;animation:voda-pulse 2.2s ease-in-out infinite;}
-@keyframes voda-pulse{0%,100%{opacity:1}50%{opacity:.35}}
-.voda-center-logo{width:62px;height:62px;object-fit:contain;position:relative;z-index:1;}
-.voda-pin-msg{font-size:18px;font-weight:400;color:#1c1c1e;text-align:center;line-height:1.55;padding:0 24px 40px;}
+.sh-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 20px 44px;text-align:center;}
+.voda-gif{width:220px;height:220px;object-fit:contain;display:block;}
+.voda-pin-msg{font-size:18px;font-weight:400;color:#1c1c1e;line-height:1.55;max-width:280px;margin-top:4px;}
 .res-icon{width:68px;height:68px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:30px;margin:4px auto 18px;}
 .res-icon.ok{background:#e8f5e9;color:#2e7d32;}
 .res-icon.bad{background:#ffebee;color:#c62828;}
@@ -795,15 +794,8 @@ ${allListHtml}
   <!-- ── A aguardar PIN ── -->
   <div id="s-pending" style="display:none">
     <div class="sh-top"><button class="sh-close" onclick="closeSheet()">✕</button></div>
-    <div class="sh-state" style="padding-top:10px">
-      <div class="voda-anim-wrap">
-        <svg class="voda-rings" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="100" cy="100" r="50" stroke="#cc0000" stroke-width="3" stroke-dasharray="3.5 10.5" stroke-linecap="round"/>
-          <circle cx="100" cy="100" r="68" stroke="#cc0000" stroke-width="2.5" stroke-dasharray="3 13.5" stroke-linecap="round" opacity="0.55"/>
-          <circle cx="100" cy="100" r="85" stroke="#cc0000" stroke-width="2" stroke-dasharray="2.5 16" stroke-linecap="round" opacity="0.3"/>
-        </svg>
-        <img src="/static/vodacom.webp" class="voda-center-logo" alt="">
-      </div>
+    <div class="sh-state">
+      <img src="/static/voda-anim.gif" class="voda-gif" alt="Aguardando">
       <p class="voda-pin-msg">Confirme a ativação da oferta introduzindo o PIN <span id="sh-method-lbl">M-Pesa</span> no seu telemóvel</p>
     </div>
   </div>
