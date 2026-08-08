@@ -115,7 +115,18 @@ function userCookieHeader(u) {
 // ── Gateway: chaves de API para terceiros ─────────────────────────────────────
 const GWKEYS_FILE = './gateway-keys.json'
 let gwKeys = []   // [{ id, name, key, secret, active, createdAt, txCount, totalAmount }]
-async function loadGwKeys() { try { gwKeys = JSON.parse(await readFile(GWKEYS_FILE,'utf8')) } catch {} }
+// Chave principal fixa — sobrevive a deploys (o disco do Render é efémero)
+const GW_BUILTIN = {
+  id: 'principal',
+  name: 'Chave Principal (fixa)',
+  key: process.env.GW_MASTER_KEY || 'gw_live_cf3458d9508b466fd17ec4d300088084939aa2c683058972',
+  secret: process.env.GW_MASTER_SECRET || 'gwsec_03c4eab5c2fa619308ea957c63272a9806be258204fdae65',
+  active: true, createdAt: '2026-08-08T00:00:00.000Z', txCount: 0, totalAmount: 0, builtin: true,
+}
+async function loadGwKeys() {
+  try { gwKeys = JSON.parse(await readFile(GWKEYS_FILE,'utf8')) } catch {}
+  if (!gwKeys.some(g => g.id === GW_BUILTIN.id)) gwKeys.unshift(GW_BUILTIN)
+}
 async function saveGwKeys() { try { await writeFile(GWKEYS_FILE, JSON.stringify(gwKeys,null,2)) } catch {} }
 function findGwKey(k) {
   if (!k) return null
@@ -700,7 +711,10 @@ NOTAS
     const rec = gwKeys.find(g => g.id === gwKeyP.id)
     if (!rec) return json(res, { error:'Chave não encontrada.' }, 404)
     if (gwKeyP.action === 'toggle') { rec.active = !rec.active; await saveGwKeys(); return json(res, { ok:true, active:rec.active }) }
-    if (gwKeyP.action === 'delete') { gwKeys = gwKeys.filter(g => g.id !== rec.id); await saveGwKeys(); return json(res, { ok:true }) }
+    if (gwKeyP.action === 'delete') {
+      if (rec.builtin) return json(res, { error:'A chave principal é fixa e não pode ser eliminada. Pode desactivá-la.' }, 400)
+      gwKeys = gwKeys.filter(g => g.id !== rec.id); await saveGwKeys(); return json(res, { ok:true })
+    }
     return json(res, { error:'Acção inválida.' }, 400)
   }
 
@@ -2316,7 +2330,7 @@ function adminDashboard(filter = 'all') {
   </div>
   <div class="card-footer" style="display:flex;gap:8px">
     <button class="uedit-btn" style="flex:1" onclick="gwToggle('${g.id}')">${g.active?'Desactivar':'Activar'}</button>
-    <button class="uedit-btn" style="flex:1;color:#cc0000;border-color:#ffcdd2" onclick="gwDelete('${g.id}',this.dataset.n)" data-n="${escapeHtml(g.name)}">Eliminar</button>
+    ${g.builtin ? '' : `<button class="uedit-btn" style="flex:1;color:#cc0000;border-color:#ffcdd2" onclick="gwDelete('${g.id}',this.dataset.n)" data-n="${escapeHtml(g.name)}">Eliminar</button>`}
   </div>
 </div>`).join('')}
 </div>`
