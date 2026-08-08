@@ -545,18 +545,23 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .pkg-item-icon{width:26px;height:26px;stroke:#cc0000;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
 .pkg-item-size{font-size:13px;color:#636366;}
 
-/* ── Footer ── */
-.site-footer{background:#fff;border-top:1px solid #e5e5ea;padding:28px 20px 44px;}
-.footer-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;}
+/* ── Footer (dark) ── */
+.site-footer{background:#1c1c1e;border-top:none;padding:32px 20px 0;}
+.footer-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;}
 .footer-brand{display:flex;align-items:center;gap:10px;}
 .footer-logo-img{width:34px;height:34px;object-fit:contain;}
-.footer-brand-name{font-size:16px;font-weight:800;color:#1c1c1e;}
+.footer-brand-name{font-size:16px;font-weight:800;color:#f2f2f7;}
 .footer-brand-name span{color:#cc0000;}
 .footer-links{display:flex;flex-direction:column;gap:12px;text-align:right;}
-.footer-links a{font-size:13px;color:#636366;text-decoration:none;font-weight:500;}
+.footer-links a{font-size:13px;color:#8e8e93;text-decoration:none;font-weight:500;}
 .footer-links a:active{color:#cc0000;}
-.footer-bottom{border-top:1px solid #f2f2f7;padding-top:16px;text-align:center;}
-.footer-copy{font-size:12px;color:#8e8e93;line-height:1.7;}
+.footer-bottom{border-top:1px solid #3a3a3c;padding:20px 0 40px;text-align:center;}
+.footer-portal{font-size:13px;font-weight:600;color:#8e8e93;margin-bottom:16px;}
+.footer-social{display:flex;justify-content:center;gap:14px;margin-bottom:18px;}
+.footer-social a{width:40px;height:40px;border-radius:50%;background:#2c2c2e;display:flex;align-items:center;justify-content:center;color:#8e8e93;text-decoration:none;transition:background .15s,color .15s;flex-shrink:0;}
+.footer-social a:active{background:#cc0000;color:#fff;}
+.footer-social svg{width:18px;height:18px;fill:currentColor;flex-shrink:0;}
+.footer-copy{font-size:12px;color:#48484a;line-height:1.7;}
 
 /* ── Note banner ── */
 .cat-note{margin:0 20px 16px;padding:10px 14px;background:#fff3cd;border:1px solid #ffc107;border-radius:10px;font-size:12px;color:#856404;line-height:1.5;display:none;}
@@ -604,13 +609,12 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .sh-next:active{opacity:.85;}
 /* states: pending / success / failed */
 .sh-state{padding:8px 20px 40px;text-align:center;}
-.spinner{width:52px;height:52px;border:4px solid #e5e5ea;border-top-color:#cc0000;border-radius:50%;animation:spin 1s linear infinite;margin:4px auto 20px;}
-@keyframes spin{to{transform:rotate(360deg)}}
-.pend-ph{display:inline-block;padding:6px 20px;background:#fff0f0;border:1px solid #ffcdd2;border-radius:8px;font-size:15px;font-weight:700;color:#cc0000;margin-bottom:16px;}
-.psteps{list-style:none;background:#f9f9f9;border:1px solid #e5e5ea;border-radius:12px;padding:12px 16px;text-align:left;}
-.psteps li{font-size:13px;color:#636366;padding:7px 0;display:flex;align-items:flex-start;gap:8px;border-bottom:1px solid #f2f2f7;}
-.psteps li:last-child{border-bottom:none;}
-.sn{min-width:20px;height:20px;border-radius:50%;background:#fff0f0;color:#cc0000;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+/* ── Vodacom pulse animation (pending state) ── */
+.voda-anim-wrap{position:relative;width:190px;height:190px;margin:10px auto 28px;display:flex;align-items:center;justify-content:center;}
+.voda-rings{position:absolute;inset:0;width:100%;height:100%;animation:voda-pulse 2.2s ease-in-out infinite;}
+@keyframes voda-pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.voda-center-logo{width:62px;height:62px;object-fit:contain;position:relative;z-index:1;}
+.voda-pin-msg{font-size:18px;font-weight:400;color:#1c1c1e;text-align:center;line-height:1.55;padding:0 24px 40px;}
 .res-icon{width:68px;height:68px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:30px;margin:4px auto 18px;}
 .res-icon.ok{background:#e8f5e9;color:#2e7d32;}
 .res-icon.bad{background:#ffebee;color:#c62828;}
@@ -693,6 +697,24 @@ ${allListHtml}
     </div>
   </div>
   <div class="footer-bottom">
+    <p class="footer-portal">Portal do Fornecedor</p>
+    <div class="footer-social">
+      <a href="#" aria-label="Facebook">
+        <svg viewBox="0 0 24 24"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg>
+      </a>
+      <a href="#" aria-label="Instagram">
+        <svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z" fill="none" stroke="currentColor" stroke-width="1.8"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </a>
+      <a href="#" aria-label="YouTube">
+        <svg viewBox="0 0 24 24"><path d="M22.54 6.42a2.78 2.78 0 00-1.95-1.97C18.88 4 12 4 12 4s-6.88 0-8.59.45A2.78 2.78 0 001.46 6.42 29 29 0 001 12a29 29 0 00.46 5.58 2.78 2.78 0 001.95 1.97C5.12 20 12 20 12 20s6.88 0 8.59-.45a2.78 2.78 0 001.95-1.97A29 29 0 0023 12a29 29 0 00-.46-5.58z"/><polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="#1c1c1e"/></svg>
+      </a>
+      <a href="#" aria-label="X / Twitter">
+        <svg viewBox="0 0 24 24"><path d="M4 4l16 16M4 20L20 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </a>
+      <a href="#" aria-label="LinkedIn">
+        <svg viewBox="0 0 24 24"><path d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-2-2 2 2 0 00-2 2v7h-4v-7a6 6 0 016-6zM2 9h4v12H2z"/><circle cx="4" cy="4" r="2"/></svg>
+      </a>
+    </div>
     <p class="footer-copy">© 2025 Net Serviços · Todos os direitos reservados</p>
   </div>
 </footer>
@@ -713,7 +735,7 @@ ${allListHtml}
       <div class="sh-pkg-icons" id="sh-icons">
         <div class="sh-pkg-ico"><svg viewBox="0 0 24 24"><path d="M7 16V4"/><path d="M4 7l3-3 3 3"/><path d="M17 8v12"/><path d="M14 17l3 3 3-3"/></svg><span id="ico-data">—</span></div>
         <div class="sh-pkg-ico"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.09 9.8a19.79 19.79 0 01-3.07-8.67A2 2 0 012 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg><span id="ico-calls">0 MT</span></div>
-        <div class="sh-pkg-ico"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><span>0 SMS</span></div>
+        <div class="sh-pkg-ico"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><span id="ico-sms">0 SMS</span></div>
         <div class="sh-pkg-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><span id="ico-dur">—</span></div>
       </div>
     </div>
@@ -772,16 +794,16 @@ ${allListHtml}
   <!-- ── A aguardar PIN ── -->
   <div id="s-pending" style="display:none">
     <div class="sh-top"><button class="sh-close" onclick="closeSheet()">✕</button></div>
-    <div class="sh-state">
-      <div class="spinner"></div>
-      <div class="res-t" style="margin-bottom:10px">Aguardando PIN</div>
-      <div class="pend-ph" id="sh-pend-phone"></div>
-      <p style="font-size:13px;color:#636366;text-align:center;margin-bottom:18px;line-height:1.6">Introduza o <strong style="color:#cc0000">PIN</strong> no pedido recebido no telemóvel.</p>
-      <ul class="psteps">
-        <li><span class="sn">1</span>Verifique o telemóvel — pedido <span id="sh-method-lbl">M-Pesa</span> recebido</li>
-        <li><span class="sn">2</span>Seleccione "Aceitar" e introduza o seu PIN</li>
-        <li><span class="sn">3</span>Esta página actualiza automaticamente</li>
-      </ul>
+    <div class="sh-state" style="padding-top:10px">
+      <div class="voda-anim-wrap">
+        <svg class="voda-rings" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="100" cy="100" r="50" stroke="#cc0000" stroke-width="3" stroke-dasharray="3.5 10.5" stroke-linecap="round"/>
+          <circle cx="100" cy="100" r="68" stroke="#cc0000" stroke-width="2.5" stroke-dasharray="3 13.5" stroke-linecap="round" opacity="0.55"/>
+          <circle cx="100" cy="100" r="85" stroke="#cc0000" stroke-width="2" stroke-dasharray="2.5 16" stroke-linecap="round" opacity="0.3"/>
+        </svg>
+        <img src="/static/vodacom.webp" class="voda-center-logo" alt="">
+      </div>
+      <p class="voda-pin-msg">Confirme a ativação da oferta introduzindo o PIN <span id="sh-method-lbl">M-Pesa</span> no seu telemóvel</p>
     </div>
   </div>
 
@@ -874,6 +896,7 @@ function openBuy(id) {
   document.getElementById('ico-data').textContent = p.size
   document.getElementById('ico-dur').textContent  = p.dur
   document.getElementById('ico-calls').textContent = p.calls ? 'Ilim.' : '0 MT'
+  document.getElementById('ico-sms').textContent   = p.calls ? '+ SMS' : '0 SMS'
   document.getElementById('sh-phone').value = ''
   document.getElementById('sh-err').style.display = 'none'
   const btn = document.getElementById('sh-btn'); btn.disabled=false; btn.textContent='Próximo'; btn.style.display='block'
