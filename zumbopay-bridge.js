@@ -241,6 +241,9 @@ async function router(req, res) {
   if (method === 'GET' && path === '/static/voda-anim.gif') {
     try { const gif = await import('fs/promises').then(f=>f.readFile('./attached_assets/VF_Living_Speechmark_Tech_Circle_always_on_1786166674756.gif')); res.writeHead(200,{'Content-Type':'image/gif','Cache-Control':'max-age=86400'}); return res.end(gif) } catch { res.writeHead(404); return res.end() }
   }
+  if (method === 'GET' && path === '/static/coins.png') {
+    try { const img = await import('fs/promises').then(f=>f.readFile('./attached_assets/600282_1786181848146.png')); res.writeHead(200,{'Content-Type':'image/png','Cache-Control':'max-age=86400'}); return res.end(img) } catch { res.writeHead(404); return res.end() }
+  }
   if (method === 'GET' && path === '/megas')    return html(res, megasPage())
   if (method === 'GET' && path === '/ping')     return json(res, { ok: true })
 
@@ -833,7 +836,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 
 /* ── Balance pill no nav ── */
 .nav-balance{display:none;align-items:center;gap:6px;background:#fff0f0;border:1px solid #ffcdd2;border-radius:20px;padding:5px 6px 5px 12px;flex:1;max-width:220px;margin:0 6px;}
-.nav-bal-ico{width:16px;height:16px;flex-shrink:0;stroke:#cc0000;}
+.nav-bal-ico{width:16px;height:16px;flex-shrink:0;object-fit:contain;}
 .nav-bal-val{font-size:13px;font-weight:700;color:#cc0000;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .nav-rech-btn{background:#cc0000;color:#fff;border:none;border-radius:14px;padding:5px 11px;font-size:11px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;flex-shrink:0;}
 .nav-rech-btn:active{opacity:.85;}
@@ -854,8 +857,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .via-section{padding:4px 16px 12px;}
 .via-section-lbl{font-size:11px;font-weight:700;color:#8e8e93;text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;padding:0 2px;}
 .via-btns{display:flex;gap:8px;width:100%;}
-.via-btn{flex:1;}
-.via-btn{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;border:1.5px solid #e5e5ea;background:#fff;cursor:pointer;font-family:inherit;text-align:left;transition:border-color .15s,background .15s;width:100%;}
+.via-btn{flex:1;display:flex;align-items:center;gap:8px;padding:12px 10px;border-radius:10px;border:1.5px solid #e5e5ea;background:#fff;cursor:pointer;font-family:inherit;text-align:left;transition:border-color .15s,background .15s;}
 .via-btn.active{border-color:#cc0000;background:#fff0f0;}
 .via-btn:disabled{opacity:.45;cursor:not-allowed;}
 .via-btn-icon{flex-shrink:0;display:flex;align-items:center;justify-content:center;}
@@ -907,7 +909,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
     <div class="nav-logo-text">Net <span>Serviços</span></div>
   </a>
   <div id="nav-balance" class="nav-balance">
-    <svg class="nav-bal-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v2m0 8v2M9.5 9.5C9.5 8.12 10.62 7 12 7s2.5 1.12 2.5 2.5S13.38 12 12 12s-2.5 1.12-2.5 2.5S10.62 17 12 17s2.5-1.12 2.5-2.5"/></svg>
+    <img src="/static/coins.png" class="nav-bal-ico" alt="saldo">
     <span class="nav-bal-val" id="nav-bal-val">0 MT</span>
     <button class="nav-rech-btn" onclick="openRechargeDialog()">Recarregar</button>
   </div>
@@ -968,7 +970,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
         <span class="drawer-user-bal" id="drawer-user-bal">0 MT</span>
       </li>
       <li><a href="#" onclick="closeDrawer();openRechargeDialog()">
-        <span class="dm-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v2m0 8v2M9.5 9.5C9.5 8.12 10.62 7 12 7s2.5 1.12 2.5 2.5S13.38 12 12 12s-2.5 1.12-2.5 2.5S10.62 17 12 17s2.5-1.12 2.5-2.5"/></svg></span>
+        <span class="dm-icon"><img src="/static/coins.png" style="width:20px;height:20px;vertical-align:middle" alt="saldo"></span>
         Recarregar Saldo
       </a></li>
       <li><a href="#" onclick="logoutUser()">
@@ -1118,7 +1120,7 @@ ${allListHtml}
         </button>
         <button class="via-btn" id="via-credit" data-via="credit" onclick="selectPayVia('credit')">
           <span class="via-btn-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v2m0 8v2M9.5 9.5C9.5 8.12 10.62 7 12 7s2.5 1.12 2.5 2.5S13.38 12 12 12s-2.5 1.12-2.5 2.5S10.62 17 12 17s2.5-1.12 2.5-2.5"/></svg>
+            <img src="/static/coins.png" style="width:18px;height:18px" alt="crédito">
           </span>
           <div>
             <div class="via-btn-label">Crédito</div>
@@ -1169,7 +1171,7 @@ ${allListHtml}
     <div class="sh-top"><button class="sh-close" onclick="closeSheet()">✕</button></div>
     <div class="sh-state">
       <div class="res-icon ok">✓</div>
-      <span class="credit-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:middle;margin-right:4px"><circle cx="12" cy="12" r="10"/><path d="M12 6v2m0 8v2M9.5 9.5C9.5 8.12 10.62 7 12 7s2.5 1.12 2.5 2.5S13.38 12 12 12s-2.5 1.12-2.5 2.5S10.62 17 12 17s2.5-1.12 2.5-2.5"/></svg>Pago com Crédito</span>
+      <span class="credit-badge"><img src="/static/coins.png" style="width:14px;height:14px;vertical-align:middle;margin-right:4px" alt="">Pago com Crédito</span>
       <div class="res-t">Pedido recebido!</div>
       <p class="res-s">Crédito debitado. O seu pacote será activado em <strong style="color:#cc0000">5–15 minutos</strong>.</p>
       <div class="res-box"><div class="res-box-l">Pacote encomendado</div><div class="res-box-v" id="sh-ok-pkg-credit"></div></div>
@@ -1260,7 +1262,7 @@ ${allListHtml}
         <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2.5;stroke-linecap:round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
       <div class="auth-card-head">
-        <div style="margin-bottom:12px;display:flex;justify-content:center"><svg viewBox="0 0 24 24" fill="none" stroke="#cc0000" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:52px;height:52px"><circle cx="12" cy="12" r="10"/><path d="M12 6v2m0 8v2M9.5 9.5C9.5 8.12 10.62 7 12 7s2.5 1.12 2.5 2.5S13.38 12 12 12s-2.5 1.12-2.5 2.5S10.62 17 12 17s2.5-1.12 2.5-2.5"/></svg></div>
+        <div style="margin-bottom:12px;display:flex;justify-content:center"><img src="/static/coins.png" style="width:56px;height:56px" alt="saldo"></div>
         <div class="auth-card-title">Recarregar Saldo</div>
         <div class="auth-card-sub">O pagamento é processado via M-Pesa</div>
       </div>
