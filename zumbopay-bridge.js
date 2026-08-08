@@ -247,6 +247,7 @@ async function router(req, res) {
     '/static/offer-jackpot.webp'  :['public/offer-jackpot.webp'  ,'image/webp'],
     '/static/icon-192.png'        :['public/icon-192.png'        ,'image/png'],
     '/static/icon-512.png'        :['public/icon-512.png'        ,'image/png'],
+    '/static/icon-maskable-512.png':['public/icon-maskable-512.png','image/png'],
   }
   if (method === 'GET' && STATIC_MAP[path]) {
     const [file, mime] = STATIC_MAP[path]
@@ -269,8 +270,7 @@ async function router(req, res) {
       icons:[
         {src:'/static/icon-192.png',sizes:'192x192',type:'image/png',purpose:'any'},
         {src:'/static/icon-512.png',sizes:'512x512',type:'image/png',purpose:'any'},
-        {src:'/static/icon-512.png',sizes:'512x512',type:'image/png',purpose:'maskable'},
-        {src:'/static/icon.svg',    sizes:'any',    type:'image/svg+xml',purpose:'any'}
+        {src:'/static/icon-maskable-512.png',sizes:'512x512',type:'image/png',purpose:'maskable'}
       ]
     })
     res.writeHead(200,{'Content-Type':'application/manifest+json','Cache-Control':'max-age=3600'}); return res.end(manifest)
@@ -687,7 +687,7 @@ function megasPage() {
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Net Serviços">
-<link rel="apple-touch-icon" href="/static/icon.svg">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
 <script>(function(){document.addEventListener('contextmenu',e=>e.preventDefault());document.addEventListener('keydown',function(e){const c=e.ctrlKey||e.metaKey;if(e.key==='F12'){e.preventDefault();return false}if(c&&e.shiftKey&&['I','J','C','K'].includes(e.key.toUpperCase())){e.preventDefault();return false}if(c&&['u','U','s','S','a','A','c','C','x','X'].includes(e.key)){e.preventDefault();return false}},true);['copy','cut','selectstart','dragstart'].forEach(ev=>document.addEventListener(ev,e=>e.preventDefault(),true))})()
 </script>
 <style>
