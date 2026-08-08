@@ -556,7 +556,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .site-footer{background:#1c1c1e;border-top:none;padding:32px 20px 0;}
 .footer-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;}
 .footer-brand{display:flex;align-items:center;gap:10px;}
-.footer-logo-img{width:34px;height:34px;object-fit:contain;mix-blend-mode:screen;}
+.footer-logo-img{width:34px;height:34px;object-fit:contain;border-radius:8px;}
 .footer-brand-name{font-size:16px;font-weight:800;color:#f2f2f7;}
 .footer-brand-name span{color:#cc0000;}
 .footer-links{display:flex;flex-direction:column;gap:12px;text-align:right;}
@@ -568,10 +568,19 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .footer-social a{width:40px;height:40px;border-radius:50%;background:#2c2c2e;display:flex;align-items:center;justify-content:center;color:#8e8e93;text-decoration:none;transition:background .15s,color .15s;flex-shrink:0;}
 .footer-social a:active{background:#cc0000;color:#fff;}
 .footer-social svg{width:18px;height:18px;fill:currentColor;flex-shrink:0;}
-.footer-contact{display:flex;flex-direction:column;gap:10px;margin-bottom:18px;}
-.footer-contact-link{display:flex;align-items:center;gap:10px;color:#8e8e93;text-decoration:none;font-size:13px;font-weight:500;}
-.footer-contact-link svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;}
-.footer-contact-wa{color:#25d366;}
+.footer-support{margin-bottom:28px;}
+.footer-support-title{font-size:11px;font-weight:700;color:#636366;letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px;}
+.footer-support-cards{display:flex;flex-direction:column;gap:10px;}
+.footer-support-card{display:flex;align-items:center;gap:14px;background:#2c2c2e;border-radius:14px;padding:14px 16px;text-decoration:none;transition:background .15s;}
+.footer-support-card:active{background:#3a3a3c;}
+.footer-support-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.footer-support-icon svg{width:20px;height:20px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.footer-support-icon.phone{background:#cc0000;}
+.footer-support-icon.whatsapp{background:#25d366;}
+.footer-support-icon.whatsapp svg{stroke:#fff;}
+.footer-support-info{display:flex;flex-direction:column;gap:2px;}
+.footer-support-label{font-size:11px;color:#636366;font-weight:500;}
+.footer-support-number{font-size:15px;font-weight:700;color:#f2f2f7;letter-spacing:.02em;}
 .footer-copy{font-size:12px;color:#48484a;line-height:1.7;}
 
 /* ── Note banner ── */
@@ -726,15 +735,28 @@ ${allListHtml}
         <svg viewBox="0 0 24 24"><path d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-2-2 2 2 0 00-2 2v7h-4v-7a6 6 0 016-6zM2 9h4v12H2z"/><circle cx="4" cy="4" r="2"/></svg>
       </a>
     </div>
-    <div class="footer-contact">
-      <a href="tel:876563910" class="footer-contact-link">
-        <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.09 9.8a19.79 19.79 0 01-3.07-8.67A2 2 0 012 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
-        <span>876 563 910 — Suporte</span>
-      </a>
-      <a href="https://wa.me/258876563910" target="_blank" rel="noopener" class="footer-contact-link footer-contact-wa">
-        <svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>
-        <span>876 563 910 — WhatsApp</span>
-      </a>
+    <div class="footer-support">
+      <p class="footer-support-title">Apoio ao Cliente</p>
+      <div class="footer-support-cards">
+        <a href="tel:876563910" class="footer-support-card">
+          <div class="footer-support-icon phone">
+            <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.09 9.8a19.79 19.79 0 01-3.07-8.67A2 2 0 012 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
+          </div>
+          <div class="footer-support-info">
+            <span class="footer-support-label">Linha de Suporte</span>
+            <span class="footer-support-number">876 563 910</span>
+          </div>
+        </a>
+        <a href="https://wa.me/258876563910" target="_blank" rel="noopener" class="footer-support-card">
+          <div class="footer-support-icon whatsapp">
+            <svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>
+          </div>
+          <div class="footer-support-info">
+            <span class="footer-support-label">WhatsApp</span>
+            <span class="footer-support-number">876 563 910</span>
+          </div>
+        </a>
+      </div>
     </div>
     <p class="footer-copy">© 2025 Net Serviços · Todos os direitos reservados</p>
   </div>
