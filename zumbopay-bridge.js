@@ -549,6 +549,103 @@ self.addEventListener('fetch',e=>{
     return json(res, { ok:true, txId, newBalance:user.balance })
   }
 
+  // ── Gateway: documentação para programadores ──────────────────────────────
+  if (method === 'GET' && path === '/gateway/docs') {
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' })
+    return res.end(`GATEWAY DE PAGAMENTOS M-PESA — NET SERVIÇOS
+=============================================
+Documentação para integrar pagamentos M-Pesa (Moçambique) num site externo.
+Base URL: ${SITE_URL}
+
+AUTENTICAÇÃO
+------------
+Todos os pedidos levam o header:
+  X-API-Key: gw_live_...          (chave fornecida pelo administrador)
+Também existe um SEGREDO (gwsec_...) usado apenas para verificar callbacks (ver abaixo).
+NUNCA exponha a chave nem o segredo no frontend/browser — use-os só no servidor.
+
+1) INICIAR PAGAMENTO (STK Push — o cliente recebe o pedido de PIN no telemóvel)
+-------------------------------------------------------------------------------
+POST ${SITE_URL}/gateway/api/pay
+Headers:
+  Content-Type: application/json
+  X-API-Key: gw_live_...
+Corpo JSON:
+  {
+    "phone": "84xxxxxxx",             // obrigatório, número M-Pesa (84 ou 85, 9 dígitos)
+    "amount": 100,                    // obrigatório, valor inteiro em MT (meticais)
+    "reference": "pedido-123",        // opcional, a sua referência interna (máx 64 chars)
+    "description": "Compra na loja",  // opcional, aparece no telemóvel do cliente (máx 48 chars)
+    "callback_url": "https://seusite.com/api/pagamento-confirmado"  // opcional, HTTPS público
+  }
+Resposta 202:
+  {
+    "ok": true,
+    "txId": "a1b2c3d4e5f6",
+    "status": "pending",
+    "method": "mpesa",
+    "statusUrl": "${SITE_URL}/gateway/api/status/a1b2c3d4e5f6"
+  }
+Erros: 400 (dados inválidos), 401 (chave inválida/inactiva).
+
+2) CONSULTAR ESTADO (polling)
+-----------------------------
+GET ${SITE_URL}/gateway/api/status/<txId>
+Header: X-API-Key: gw_live_...
+Resposta 200:
+  {
+    "ok": true, "txId": "...", "status": "pending" | "succeeded" | "failed",
+    "amount": 100, "phone": "84xxxxxxx", "method": "mpesa",
+    "reference": "pedido-123", "error": null | "motivo da falha", "ts": "2026-..."
+  }
+Recomendação: consultar a cada 3-5 segundos até status deixar de ser "pending".
+O pagamento expira ao fim de 5 minutos se o cliente não introduzir o PIN (status "failed").
+
+3) CALLBACK AUTOMÁTICO (opcional, recomendado)
+----------------------------------------------
+Se enviou "callback_url" no passo 1, quando o pagamento termina o gateway faz:
+POST <callback_url>
+Headers:
+  Content-Type: application/json
+  X-Gateway-Signature: <hmac>
+Corpo JSON:
+  {
+    "event": "payment.succeeded" | "payment.failed",
+    "txId": "...", "reference": "pedido-123",
+    "amount": 100, "phone": "84xxxxxxx", "method": "mpesa",
+    "error": null | "motivo", "ts": "2026-..."
+  }
+Responda com HTTP 2xx. Em caso de falha, o gateway tenta 3 vezes.
+
+VERIFICAR A ASSINATURA do callback (Node.js):
+  import { createHmac, timingSafeEqual } from 'crypto'
+  // rawBody = corpo do pedido EXACTAMENTE como recebido (string, antes de JSON.parse)
+  const esperado = createHmac('sha256', 'gwsec_...').update(rawBody).digest('hex')
+  const recebido = req.headers['x-gateway-signature'] || ''
+  const valido = recebido.length === esperado.length &&
+    timingSafeEqual(Buffer.from(recebido), Buffer.from(esperado))
+  // Se "valido" for false, ignore o callback (pode ser falso).
+Mesmo com callback, confirme sempre com o endpoint de estado (passo 2) antes de entregar o produto.
+
+EXEMPLO COMPLETO (curl)
+-----------------------
+curl -X POST ${SITE_URL}/gateway/api/pay \\
+  -H "Content-Type: application/json" \\
+  -H "X-API-Key: gw_live_SUA_CHAVE" \\
+  -d '{"phone":"84xxxxxxx","amount":50,"reference":"pedido-1"}'
+
+curl ${SITE_URL}/gateway/api/status/TXID_RECEBIDO \\
+  -H "X-API-Key: gw_live_SUA_CHAVE"
+
+NOTAS
+-----
+- Moeda: meticais (MT). Apenas M-Pesa Moçambique (números 84/85).
+- Guarde o txId associado ao seu pedido para conferir o estado.
+- Use "reference" para reconciliar os pagamentos com os seus pedidos.
+- Estados finais: "succeeded" (pago) ou "failed" (falhou/expirou). Não há reversão automática.
+`)
+  }
+
   // ── Gateway: iniciar pagamento (API para terceiros) ──────────────────────
   if (method === 'POST' && path === '/gateway/api/pay') {
     let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
