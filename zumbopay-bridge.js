@@ -811,7 +811,7 @@ function searchPkgs(q) {
   const found = all.filter(p => p.name.toLowerCase().includes(q.toLowerCase()) || String(p.price).includes(q) || p.size.toLowerCase().includes(q.toLowerCase()))
   if (!found.length) { res.innerHTML = '<p style="padding:20px 16px;color:#8e8e93;font-size:14px">Nenhum pacote encontrado.</p>'; return }
   res.innerHTML = found.map(p =>
-    '<div onclick="closeSearch();openBuy(\''+p.id+'\')" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #e5e5ea;cursor:pointer">' +
+    '<div data-id="'+p.id+'" onclick="closeSearch();openBuy(this.dataset.id)" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #e5e5ea;cursor:pointer">' +
     '<div><div style="font-size:15px;font-weight:600;color:#1c1c1e">'+p.name+'</div>' +
     '<div style="font-size:12px;color:#8e8e93;margin-top:2px">'+p.size+' · '+p.dur+'</div></div>' +
     '<div style="font-size:16px;font-weight:700;color:#cc0000">'+p.price+' MT</div></div>'
