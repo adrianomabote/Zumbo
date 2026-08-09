@@ -622,7 +622,7 @@ Corpo JSON:
     "phone": "84xxxxxxx",             // obrigatório, número M-Pesa (84 ou 85, 9 dígitos)
     "amount": 100,                    // obrigatório, valor inteiro em MT (meticais)
     "reference": "pedido-123",        // opcional, a sua referência interna (máx 64 chars)
-    "description": "Compra na loja",  // opcional, aparece no telemóvel do cliente (máx 48 chars)
+    "description": "Compra na loja",  // opcional, guardada apenas nos registos internos (máx 120 chars)
     "callback_url": "https://seusite.com/api/pagamento-confirmado"  // opcional, HTTPS público
   }
 Resposta 202:
@@ -712,7 +712,8 @@ NOTAS
     transactions.set(txId, tx)
     trackOrder(tx, { gwKey: gk.name, gwKeyId: gk.id, extRef: tx.extRef, callbackUrl })
     json(res, { ok:true, txId, status:'pending', method:meth, statusUrl:`${SITE_URL}/gateway/api/status/${txId}` }, 202)
-    initiateCharge(tx, `gw-${txId}`, body.description ? String(body.description).slice(0,48) : `Pagamento ${gk.name}`)
+    if (body.description) tx.extDesc = String(body.description).slice(0,120)
+    initiateCharge(tx, `gw-${txId}`, 'Pagamento de servicos')
     return
   }
 
