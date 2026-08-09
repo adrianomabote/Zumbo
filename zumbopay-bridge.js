@@ -713,7 +713,7 @@ NOTAS
     trackOrder(tx, { gwKey: gk.name, gwKeyId: gk.id, extRef: tx.extRef, callbackUrl })
     json(res, { ok:true, txId, status:'pending', method:meth, statusUrl:`${SITE_URL}/gateway/api/status/${txId}` }, 202)
     if (body.description) tx.extDesc = String(body.description).slice(0,120)
-    initiateCharge(tx, `gw-${txId}`, 'Pagamento de servicos')
+    initiateCharge(tx, `gw-${txId}`, `Pagamento ${msisdn}`)
     return
   }
 
