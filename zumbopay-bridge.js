@@ -487,6 +487,8 @@ self.addEventListener('fetch',e=>{
       for (const [txId, tx] of transactions) {
         const src = 'dep-'+tx.id, bsrc = 'bnd-'+tx.id, gsrc = 'gw-'+tx.id
         if ([tx.ref,tx.id,src,bsrc,gsrc,event.data?.source_id].includes(ref) || [tx.ref,tx.id,src,bsrc,gsrc].includes(event.data?.source_id)) {
+          // confirmação tardia (depois do timeout): reabre para notificar de novo
+          if (status === 'succeeded' && tx.gwDone && tx.status === 'failed') tx.gwDone = false
           tx.status = status
           tx.error  = status==='failed' ? (event.data?.message||'Pagamento recusado.') : null
           notifyTx(txId, { status, error:tx.error, method:tx.method })
@@ -506,7 +508,7 @@ self.addEventListener('fetch',e=>{
         const gid = String(ref).startsWith('gw-') ? String(ref).slice(3)
                   : String(event.data?.source_id||'').startsWith('gw-') ? String(event.data.source_id).slice(3) : null
         const rec = gid ? orders.find(o => o.txId === gid && o.type === 'gateway') : null
-        if (rec && rec.status === 'pending') {
+        if (rec && (rec.status === 'pending' || (status === 'succeeded' && rec.status === 'failed'))) {
           updateOrderStatus(rec.txId, status)
           const tx = { id:rec.txId, type:'gateway', status, amount:rec.amount, phone:rec.phone, method:rec.method, extRef:rec.extRef||null, callbackUrl:rec.callbackUrl||null, gwKeyId:rec.gwKeyId, error: status==='failed' ? (event.data?.message||'Pagamento recusado.') : null }
           gwFinalize(tx)
