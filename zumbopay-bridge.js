@@ -253,7 +253,7 @@ function trackOrder(tx, extra = {}) {
     beneficiaryPhone: tx.beneficiaryPhone || null,
     bundleId: tx.bundleId || null, bundleLabel: tx.bundleLabel || null,
     amount: tx.amount, method: tx.method, status: 'pending',
-    ts: tx.ts, activatedAt: null, ...extra,
+    ts: tx.ts, activatedAt: null, userId: tx.userId || null, ...extra,
   }
   orders.unshift(rec)
   if (orders.length > 1000) orders = orders.slice(0, 1000)
@@ -505,14 +505,27 @@ self.addEventListener('fetch',e=>{
       }
       // fallback: tx perdida após reinício — recupera do registo persistente
       if (!matched) {
+        // Transacções gateway (prefixo gw-)
         const gid = String(ref).startsWith('gw-') ? String(ref).slice(3)
                   : String(event.data?.source_id||'').startsWith('gw-') ? String(event.data.source_id).slice(3) : null
-        const rec = gid ? orders.find(o => o.txId === gid && o.type === 'gateway') : null
-        if (rec && (rec.status === 'pending' || (status === 'succeeded' && rec.status === 'failed'))) {
-          updateOrderStatus(rec.txId, status)
-          const tx = { id:rec.txId, type:'gateway', status, amount:rec.amount, phone:rec.phone, method:rec.method, extRef:rec.extRef||null, callbackUrl:rec.callbackUrl||null, gwKeyId:rec.gwKeyId, error: status==='failed' ? (event.data?.message||'Pagamento recusado.') : null }
+        const gwRec = gid ? orders.find(o => o.txId === gid && o.type === 'gateway') : null
+        if (gwRec && (gwRec.status === 'pending' || (status === 'succeeded' && gwRec.status === 'failed'))) {
+          updateOrderStatus(gwRec.txId, status)
+          const tx = { id:gwRec.txId, type:'gateway', status, amount:gwRec.amount, phone:gwRec.phone, method:gwRec.method, extRef:gwRec.extRef||null, callbackUrl:gwRec.callbackUrl||null, gwKeyId:gwRec.gwKeyId, error: status==='failed' ? (event.data?.message||'Pagamento recusado.') : null }
           gwFinalize(tx)
-          console.log(`[Webhook] (persistido) ${rec.txId} → ${status}`)
+          console.log(`[Webhook] (persistido gateway) ${gwRec.txId} → ${status}`)
+        }
+        // Recargas de saldo (prefixo rch-)
+        const rid = String(ref).startsWith('rch-') ? String(ref).slice(4)
+                  : String(event.data?.source_id||'').startsWith('rch-') ? String(event.data.source_id).slice(4) : null
+        const rchRec = rid ? orders.find(o => o.txId === rid && o.type === 'recharge') : null
+        if (rchRec && status === 'succeeded' && (rchRec.status === 'pending' || rchRec.status === 'failed')) {
+          updateOrderStatus(rchRec.txId, status)
+          if (rchRec.userId) {
+            const u = findUserById(rchRec.userId)
+            if (u) { u.balance = (u.balance||0) + rchRec.amount; saveUsers().catch(()=>{}) }
+          }
+          console.log(`[Webhook] (persistido recarga) ${rchRec.txId} → ${status} utilizador ${rchRec.userId}`)
         }
       }
     }
