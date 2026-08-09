@@ -750,6 +750,12 @@ NOTAS
     const rec = gwKeys.find(g => g.id === gwKeyP.id)
     if (!rec) return json(res, { error:'Chave não encontrada.' }, 404)
     if (gwKeyP.action === 'toggle') { rec.active = !rec.active; await saveGwKeys(); return json(res, { ok:true, active:rec.active }) }
+    if (gwKeyP.action === 'rename') {
+      let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
+      const newName = String(body.name || '').trim()
+      if (!newName) return json(res, { error:'Nome é obrigatório.' }, 400)
+      rec.name = newName; await saveGwKeys(); return json(res, { ok:true, name:rec.name })
+    }
     if (gwKeyP.action === 'delete') {
       if (rec.builtin) return json(res, { error:'A chave principal é fixa e não pode ser eliminada. Pode desactivá-la.' }, 400)
       gwKeys = gwKeys.filter(g => g.id !== rec.id); await saveGwKeys(); return json(res, { ok:true })
@@ -2369,6 +2375,7 @@ function adminDashboard(filter = 'all') {
   </div>
   <div class="card-footer" style="display:flex;gap:8px">
     <button class="uedit-btn" style="flex:1" onclick="gwToggle('${g.id}')">${g.active?'Desactivar':'Activar'}</button>
+    <button class="uedit-btn" style="flex:1" onclick="gwRename('${g.id}','${escapeHtml(g.name).replace(/'/g,"\\'")}')">Renomear</button>
     ${g.builtin ? '' : `<button class="uedit-btn" style="flex:1;color:#cc0000;border-color:#ffcdd2" onclick="gwDelete('${g.id}',this.dataset.n)" data-n="${escapeHtml(g.name)}">Eliminar</button>`}
   </div>
 </div>`).join('')}
@@ -2789,6 +2796,16 @@ async function gwDelete(id,name){
     const r=await fetch('/admin/gateway/keys/'+id+'/delete',{method:'POST'})
     if(r.ok){showToast('Chave eliminada.');setTimeout(()=>location.reload(),600)}
     else showToast('Erro.',false)
+  }catch{showToast('Erro de ligação.',false)}
+}
+async function gwRename(id,currentName){
+  const newName=prompt('Novo nome para a chave:',currentName)
+  if(!newName||!newName.trim())return
+  try{
+    const r=await fetch('/admin/gateway/keys/'+id+'/rename',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:newName.trim()})})
+    const d=await r.json()
+    if(r.ok){showToast('Nome actualizado para "'+d.name+'".');setTimeout(()=>location.reload(),700)}
+    else showToast(d.error||'Erro.',false)
   }catch{showToast('Erro de ligação.',false)}
 }
 async function activateOrder(txId,btn){
