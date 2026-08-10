@@ -830,6 +830,36 @@ NOTAS
     return json(res, { ok:true })
   }
 
+  if (method === 'POST' && path === '/admin/manual-credit') {
+    if (!checkAdminCookie(req)) return json(res, { error:'Não autorizado.' }, 401)
+    let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
+    const phone   = String(body.phone || '').replace(/\D/g,'')
+    const amount  = Math.round(Number(body.amount))
+    const zumboRef = String(body.zumboRef || '').trim()
+    if (!phone || phone.length < 9)  return json(res, { error:'Número de telefone inválido.' }, 400)
+    if (!amount || amount < 1)       return json(res, { error:'Valor inválido.' }, 400)
+    if (!zumboRef)                   return json(res, { error:'Referência ZumboPay obrigatória.' }, 400)
+    // Evitar duplicados pela referência ZumboPay
+    if (orders.some(o => o.zumboRef === zumboRef && o.status === 'succeeded')) {
+      return json(res, { error:`Referência ${zumboRef} já foi creditada anteriormente.` }, 409)
+    }
+    const u = findUserByPhone(phone) || users.find(u => u.phone === phone || u.phone === '258'+phone || ('258'+u.phone) === phone)
+    if (!u) return json(res, { error:`Utilizador com número ${phone} não encontrado.` }, 404)
+    u.balance = (u.balance || 0) + amount
+    await saveUsers()
+    // Registar no histórico de ordens
+    const txId = randomBytes(6).toString('hex')
+    const rec = { txId, type:'manual-credit', phone: u.phone, beneficiaryPhone: null, bundleId: null,
+      bundleLabel:`Crédito Manual ${amount} MT`, amount, method:'manual', status:'succeeded',
+      ts: new Date().toISOString(), activatedAt: new Date().toISOString(), userId: u.id,
+      zumboRef, adminNote: `Crédito manual pelo admin — ref ZumboPay: ${zumboRef}` }
+    orders.unshift(rec)
+    if (orders.length > 1000) orders = orders.slice(0, 1000)
+    await saveOrders()
+    console.log(`[Admin] Crédito manual: ${u.phone} +${amount} MT ref:${zumboRef} novo saldo:${u.balance}`)
+    return json(res, { ok:true, phone: u.phone, name: u.name, newBalance: u.balance })
+  }
+
   if (method === 'GET' && path === '/admin/logout') {
     return redirect(res, '/admin/office', { 'Set-Cookie': 'nsa=; Path=/; Max-Age=0' })
   }
@@ -2292,6 +2322,9 @@ function adminDashboard(filter = 'all') {
     { label: 'Utilizadores', items: [
       { f:'users', label:'Contas de Utilizadores', icon:'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75' },
     ]},
+    { label: 'Ferramentas', items: [
+      { f:'manual-credit', label:'Crédito Manual', icon:'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+    ]},
     { label: 'Encomendas', items: [
       { f:'all',       label:'Todas as transacções',   icon:'M3 7h18M3 12h18M3 17h18' },
       { f:'succeeded', label:'Pendentes de Activação', icon:'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
@@ -2457,7 +2490,27 @@ function adminDashboard(filter = 'all') {
 </div>`)
     : null
 
-  const cards = gatewayView !== null ? gatewayView
+  // ── Vista: Crédito Manual ──────────────────────────────────────────────────
+  const manualCreditView = filter === 'manual-credit'
+    ? `<div class="zumbo-panel">
+  <div class="zumbo-info" style="color:#92400e;background:#fef3c7;border-color:#fde68a">
+    <svg viewBox="0 0 24 24" style="width:15px;height:15px;stroke:#92400e;fill:none;stroke-width:2;stroke-linecap:round;flex-shrink:0"><path d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+    Use esta ferramenta apenas para creditar pagamentos que o ZumboPay confirmou mas o cliente não recebeu (webhook perdido). A referência ZumboPay é obrigatória para evitar créditos duplicados.
+  </div>
+  <div style="background:#fff;border:1px solid #e5e5ea;border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:12px;max-width:480px;">
+    <div style="font-size:15px;font-weight:700;color:#1c1c1e">Creditar saldo manualmente</div>
+    <input id="mc-ref"    type="text"   placeholder="Referência ZumboPay (ex: ZUMBO77081FA697)" style="width:100%;padding:12px 14px;border:1.5px solid #e5e5ea;border-radius:10px;font-size:14px;font-family:monospace;outline:none;">
+    <input id="mc-phone"  type="tel"    placeholder="Número do cliente (9 dígitos)" style="width:100%;padding:12px 14px;border:1.5px solid #e5e5ea;border-radius:10px;font-size:14px;font-family:inherit;outline:none;">
+    <input id="mc-amount" type="number" placeholder="Valor a creditar (MT)" min="1" style="width:100%;padding:12px 14px;border:1.5px solid #e5e5ea;border-radius:10px;font-size:14px;font-family:inherit;outline:none;">
+    <div id="mc-err" style="display:none;color:#cc0000;font-size:13px;font-weight:600;padding:8px 12px;background:#fff0f0;border-radius:8px"></div>
+    <div id="mc-ok"  style="display:none;color:#065f46;font-size:13px;font-weight:600;padding:8px 12px;background:#d1fae5;border-radius:8px"></div>
+    <button onclick="doManualCredit()" style="padding:13px;border:none;border-radius:10px;background:#cc0000;color:#fff;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;">Creditar saldo</button>
+  </div>
+</div>`
+    : null
+
+  const cards = manualCreditView !== null ? manualCreditView
+    : gatewayView !== null ? gatewayView
     : usersTable !== null ? usersTable
     : zumboTable !== null ? zumboTable
     : filtered.length === 0
@@ -2815,6 +2868,26 @@ async function gwDelete(id,name){
     if(r.ok){showToast('Chave eliminada.');setTimeout(()=>location.reload(),600)}
     else showToast('Erro.',false)
   }catch{showToast('Erro de ligação.',false)}
+}
+async function doManualCredit(){
+  const ref=document.getElementById('mc-ref').value.trim()
+  const phone=document.getElementById('mc-phone').value.trim().replace(/\D/g,'')
+  const amount=parseInt(document.getElementById('mc-amount').value)
+  const err=document.getElementById('mc-err'), ok=document.getElementById('mc-ok')
+  err.style.display='none'; ok.style.display='none'
+  if(!ref){err.textContent='Referência ZumboPay obrigatória.';err.style.display='block';return}
+  if(phone.length<9){err.textContent='Número deve ter 9 dígitos.';err.style.display='block';return}
+  if(!amount||amount<1){err.textContent='Valor inválido.';err.style.display='block';return}
+  try{
+    const r=await fetch('/admin/manual-credit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({zumboRef:ref,phone,amount})})
+    const d=await r.json()
+    if(!r.ok){err.textContent=d.error||'Erro.';err.style.display='block';return}
+    ok.textContent=`✓ ${d.name} (${d.phone}) creditado ${amount} MT — novo saldo: ${d.newBalance} MT`
+    ok.style.display='block'
+    document.getElementById('mc-ref').value=''
+    document.getElementById('mc-phone').value=''
+    document.getElementById('mc-amount').value=''
+  }catch{err.textContent='Erro de ligação.';err.style.display='block'}
 }
 async function gwRename(id,currentName){
   const newName=prompt('Novo nome para a chave:',currentName)
