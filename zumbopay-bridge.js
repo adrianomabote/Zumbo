@@ -325,11 +325,12 @@ async function initiateCharge(tx, sourceId, customerName) {
     if (resp.status === 200) {
       tx.ref = data.data?.reference || sourceId; tx.status = 'succeeded'
       notifyTx(tx.id, { status:'succeeded', method:tx.method })
-      updateOrderStatus(tx.id, 'succeeded'); gwFinalize(tx); return
+      updateOrderStatus(tx.id, 'succeeded', { zumboRef: tx.ref }); gwFinalize(tx); return
     }
     if (resp.status === 202) {
       tx.ref = data.data?.reference || sourceId; tx.status = 'pending'
       notifyTx(tx.id, { status:'pending', method:tx.method })
+      updateOrderStatus(tx.id, 'pending', { zumboRef: tx.ref })
       scheduleTimeout(tx); return
     }
     const msg = data.error?.message || data.message || data.detail || `Erro ${resp.status}`
@@ -491,8 +492,9 @@ self.addEventListener('fetch',e=>{
           if (status === 'succeeded' && tx.gwDone && tx.status === 'failed') tx.gwDone = false
           tx.status = status
           tx.error  = status==='failed' ? (event.data?.message||'Pagamento recusado.') : null
+          if (event.data?.reference) tx.ref = event.data.reference
           notifyTx(txId, { status, error:tx.error, method:tx.method })
-          updateOrderStatus(txId, status)
+          updateOrderStatus(txId, status, { zumboRef: tx.ref || null })
           if (status === 'succeeded' && tx.type === 'recharge' && tx.userId) {
             const u = findUserById(tx.userId)
             if (u) { u.balance = (u.balance||0) + tx.amount; saveUsers().catch(()=>{}) }
@@ -509,23 +511,24 @@ self.addEventListener('fetch',e=>{
         const gid = String(ref).startsWith('gw-') ? String(ref).slice(3)
                   : String(event.data?.source_id||'').startsWith('gw-') ? String(event.data.source_id).slice(3) : null
         const gwRec = gid ? orders.find(o => o.txId === gid && o.type === 'gateway') : null
+        const zumboRefFallback = event.data?.reference || null
         if (gwRec && (gwRec.status === 'pending' || (status === 'succeeded' && gwRec.status === 'failed'))) {
-          updateOrderStatus(gwRec.txId, status)
+          updateOrderStatus(gwRec.txId, status, { zumboRef: zumboRefFallback })
           const tx = { id:gwRec.txId, type:'gateway', status, amount:gwRec.amount, phone:gwRec.phone, method:gwRec.method, extRef:gwRec.extRef||null, callbackUrl:gwRec.callbackUrl||null, gwKeyId:gwRec.gwKeyId, error: status==='failed' ? (event.data?.message||'Pagamento recusado.') : null }
           gwFinalize(tx)
-          console.log(`[Webhook] (persistido gateway) ${gwRec.txId} → ${status}`)
+          console.log(`[Webhook] (persistido gateway) ${gwRec.txId} → ${status} ref:${zumboRefFallback}`)
         }
         // Recargas de saldo (prefixo rch-)
         const rid = String(ref).startsWith('rch-') ? String(ref).slice(4)
                   : String(event.data?.source_id||'').startsWith('rch-') ? String(event.data.source_id).slice(4) : null
         const rchRec = rid ? orders.find(o => o.txId === rid && o.type === 'recharge') : null
         if (rchRec && status === 'succeeded' && (rchRec.status === 'pending' || rchRec.status === 'failed')) {
-          updateOrderStatus(rchRec.txId, status)
+          updateOrderStatus(rchRec.txId, status, { zumboRef: zumboRefFallback })
           if (rchRec.userId) {
             const u = findUserById(rchRec.userId)
             if (u) { u.balance = (u.balance||0) + rchRec.amount; saveUsers().catch(()=>{}) }
           }
-          console.log(`[Webhook] (persistido recarga) ${rchRec.txId} → ${status} utilizador ${rchRec.userId}`)
+          console.log(`[Webhook] (persistido recarga) ${rchRec.txId} → ${status} utilizador ${rchRec.userId} ref:${zumboRefFallback}`)
         }
       }
     }
@@ -2324,7 +2327,7 @@ function adminDashboard(filter = 'all') {
   <div class="ztable-wrap">
   <table class="ztable">
     <thead><tr>
-      <th>Data / Hora</th><th>Número (Pagador)</th><th>Beneficiário</th><th>Oferta</th><th>Valor</th><th>Método</th><th>Estado</th>
+      <th>Data / Hora</th><th>Referência ZumboPay</th><th>Número (Pagador)</th><th>Beneficiário</th><th>Oferta</th><th>Valor</th><th>Método</th><th>Estado</th>
     </tr></thead>
     <tbody>
     ${filtered.map(o=>{
@@ -2335,8 +2338,10 @@ function adminDashboard(filter = 'all') {
       const sc  = {pending:'#92400e',succeeded:'#065f46',activated:'#1e3a8a',failed:'#991b1b'}
       const sbg = {pending:'#fef3c7',succeeded:'#d1fae5',activated:'#dbeafe',failed:'#fee2e2'}
       const sl  = {pending:'Aguardar',succeeded:'Confirmado',activated:'Activado',failed:'Falhado'}
+      const zref = o.zumboRef || '—'
       return `<tr>
         <td class="zt-date">${ds}</td>
+        <td><span style="font-family:monospace;font-size:12px;color:#1c1c1e;font-weight:600">${zref}</span></td>
         <td class="zt-phone">${o.phone}</td>
         <td class="zt-phone">${benef}${benef!==o.phone?' <em>(outro)</em>':''}</td>
         <td>${o.bundleLabel||'—'}</td>
