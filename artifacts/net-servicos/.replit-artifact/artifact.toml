@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Net Serviços"
+description = "Interface web administrativa do Net Serviços, preservando o checkout e a gestão existentes para operação diária do serviço."
+version = "1.0.0"
+id = "artifacts/net-servicos"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23434
+
+[services.development]
+run = "pnpm --filter @workspace/net-servicos run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/net-servicos", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/net-servicos/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23434"
+BASE_PATH = "/"
