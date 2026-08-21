@@ -19,7 +19,10 @@
     "android": {
       "package": "com.netservicos.ussdagent",
       "usesCleartextTraffic": true,
-      "permissions": ["android.permission.CALL_PHONE", "android.permission.READ_PHONE_STATE"]
+      "permissions": [
+        "android.permission.CALL_PHONE",
+        "android.permission.READ_PHONE_STATE"
+      ]
     },
     "web": {
       "favicon": "./assets/images/icon.png"
@@ -38,6 +41,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "8160f9f3-1b3b-4b05-ab3c-a776f8246acf"
+      }
+    },
+    "owner": "adrianomabote"
   }
 }
