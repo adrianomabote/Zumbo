@@ -17,6 +17,8 @@
       "supportsTablet": false
     },
     "android": {
+      "package": "com.netservicos.ussdagent",
+      "usesCleartextTraffic": true,
       "permissions": ["android.permission.CALL_PHONE", "android.permission.READ_PHONE_STATE"]
     },
     "web": {

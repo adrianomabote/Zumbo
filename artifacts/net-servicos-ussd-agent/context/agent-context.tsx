@@ -43,7 +43,11 @@ interface AgentContextValue {
 const AgentContext = createContext<AgentContextValue | null>(null);
 const deviceKey = "net-servicos-device";
 const tokenKey = "net-servicos-device-token";
-const apiBase = process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}/api/ussd-agent` : "";
+const apiBase =
+  process.env.EXPO_PUBLIC_API_URL ??
+  (process.env.EXPO_PUBLIC_DOMAIN
+    ? `http://${process.env.EXPO_PUBLIC_DOMAIN}/api/ussd-agent`
+    : "http://169.58.173.16:3003/api/ussd-agent");
 
 async function secureGet(key: string) {
   if (Platform.OS === "web") return AsyncStorage.getItem(key);
