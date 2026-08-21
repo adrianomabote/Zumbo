@@ -7,16 +7,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-# Carregar variáveis de ambiente se existir ficheiro .env
-if [[ -f "$ROOT/.env" ]]; then
-  set -a
-  # shellcheck disable=SC1091
-  source "$ROOT/.env"
-  set +a
-fi
-
+# Instalar com NODE_ENV=development para incluir devDependencies (esbuild, etc.)
 echo "==> Instalar dependências pnpm..."
-pnpm install --no-frozen-lockfile
+NODE_ENV=development pnpm install --no-frozen-lockfile
 
 echo "==> Compilar servidor API..."
 pnpm --filter @workspace/api-server run build
