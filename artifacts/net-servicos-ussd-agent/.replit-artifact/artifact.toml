@@ -1,0 +1,24 @@
+kind = "mobile"
+previewPath = "/net-servicos-ussd-agent/"
+title = "Agente USSD Net Serviços"
+description = "Aplicação Android dedicada que recebe pedidos pagos do Net Serviços e executa de forma rastreável a entrega de pacotes Vodacom pelo SIM autorizado."
+version = "1.0.0"
+id = "artifacts/net-servicos-ussd-agent"
+router = "expo-domain"
+
+[[services]]
+name = "expo"
+ensurePreviewReachable = "/status"
+paths = [ "/net-servicos-ussd-agent/" ]
+localPort = 23912
+
+[services.development]
+run = "pnpm --filter @workspace/net-servicos-ussd-agent run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/net-servicos-ussd-agent", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/net-servicos-ussd-agent", "run", "serve" ]
+
+[services.env]
+PORT = "23912"
+BASE_PATH = "/net-servicos-ussd-agent/"

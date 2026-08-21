@@ -49,6 +49,7 @@ export function startLegacyBridge() {
   const childEnv: NodeJS.ProcessEnv = {
     ...process.env,
     PORT: String(legacyPort),
+    MAIN_API_PORT: process.env["PORT"] ?? "",
   };
   delete childEnv.DATABASE_URL;
   delete childEnv.APP_DB_URL;

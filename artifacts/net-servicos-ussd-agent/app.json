@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "Agente USSD Net Serviços",
+    "slug": "net-servicos-ussd-agent",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "net-servicos-ussd-agent",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#f2f2f7"
+    },
+    "ios": {
+      "supportsTablet": false
+    },
+    "android": {
+      "permissions": ["android.permission.CALL_PHONE", "android.permission.READ_PHONE_STATE"]
+    },
+    "web": {
+      "favicon": "./assets/images/icon.png"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "origin": "https://replit.com/"
+        }
+      ],
+      "expo-font",
+      "expo-dev-client",
+      "expo-web-browser"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}

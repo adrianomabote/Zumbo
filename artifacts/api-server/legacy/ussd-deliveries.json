@@ -1,0 +1,179 @@
+{
+  "deliveries": [
+    {
+      "id": "delivery_9df8c01fb6e6bf96253469d2",
+      "idempotencyKey": "simulated-1787199546226",
+      "paymentId": "simulated-1787199546226",
+      "beneficiaryPhone": "841234567",
+      "packageLabel": "380 MB",
+      "ussdSequence": [
+        "*111#",
+        "Seleccionar oferta de dados",
+        "Confirmar 380 MB para 841234567"
+      ],
+      "status": "completed",
+      "attempts": 1,
+      "maxAttempts": 2,
+      "events": [
+        {
+          "at": "2026-08-20T04:19:06.226Z",
+          "status": "queued",
+          "detail": "Pagamento confirmado; entrega enfileirada."
+        },
+        {
+          "at": "2026-08-20T04:19:06.235Z",
+          "status": "leased",
+          "detail": "Entregue exclusivamente ao dispositivo device_2c44a70efaa05d9f27177eef."
+        },
+        {
+          "at": "2026-08-20T04:19:06.248Z",
+          "status": "completed",
+          "detail": "Confirmação USSD registada pelo agente."
+        }
+      ],
+      "createdAt": "2026-08-20T04:19:06.226Z",
+      "updatedAt": "2026-08-20T04:19:06.248Z",
+      "deviceId": "device_2c44a70efaa05d9f27177eef",
+      "confirmationReference": "SIM-OK-20260820"
+    },
+    {
+      "id": "delivery_32476ca3bdc4513a2f1ae241",
+      "idempotencyKey": "simulated-1787293509010",
+      "paymentId": "simulated-1787293509010",
+      "beneficiaryPhone": "841234567",
+      "packageLabel": "380 MB",
+      "ussdSequence": [
+        "*111#",
+        "Seleccionar oferta de dados",
+        "Confirmar 380 MB para 841234567"
+      ],
+      "status": "manual_intervention",
+      "attempts": 1,
+      "maxAttempts": 2,
+      "events": [
+        {
+          "at": "2026-08-21T06:25:09.011Z",
+          "status": "queued",
+          "detail": "Pagamento confirmado; entrega enfileirada."
+        },
+        {
+          "at": "2026-08-21T06:25:09.321Z",
+          "status": "leased",
+          "detail": "Entregue exclusivamente ao dispositivo device_c9eb4f546da8abd383e03cd8."
+        },
+        {
+          "at": "2026-08-21T06:25:09.463Z",
+          "status": "manual_intervention",
+          "detail": "Teste de intervenção manual"
+        }
+      ],
+      "createdAt": "2026-08-21T06:25:09.011Z",
+      "updatedAt": "2026-08-21T06:25:09.463Z",
+      "deviceId": "device_c9eb4f546da8abd383e03cd8",
+      "failureReason": "Teste de intervenção manual"
+    },
+    {
+      "id": "delivery_8ac90eb9347192de8624da04",
+      "idempotencyKey": "simulated-1787293551624",
+      "paymentId": "simulated-1787293551624",
+      "beneficiaryPhone": "841234567",
+      "packageLabel": "380 MB",
+      "ussdSequence": [
+        "*111#",
+        "Seleccionar oferta de dados",
+        "Confirmar 380 MB para 841234567"
+      ],
+      "status": "completed",
+      "attempts": 1,
+      "maxAttempts": 2,
+      "events": [
+        {
+          "at": "2026-08-21T06:25:51.624Z",
+          "status": "queued",
+          "detail": "Pagamento confirmado; entrega enfileirada."
+        },
+        {
+          "at": "2026-08-21T06:25:51.740Z",
+          "status": "leased",
+          "detail": "Entregue exclusivamente ao dispositivo device_24bdf6e3b6cd598d925c6514."
+        },
+        {
+          "at": "2026-08-21T06:25:51.826Z",
+          "status": "manual_intervention",
+          "detail": "Módulo nativo indisponível; operador confirmou no ecrã"
+        },
+        {
+          "at": "2026-08-21T06:25:51.872Z",
+          "status": "completed",
+          "detail": "Confirmação USSD registada pelo agente."
+        }
+      ],
+      "createdAt": "2026-08-21T06:25:51.624Z",
+      "updatedAt": "2026-08-21T06:25:51.872Z",
+      "deviceId": "device_24bdf6e3b6cd598d925c6514",
+      "failureReason": "Módulo nativo indisponível; operador confirmou no ecrã",
+      "confirmationReference": "CONF-20260821-TEST99"
+    },
+    {
+      "id": "delivery_35eb2d4542516bb38a1a5dd9",
+      "idempotencyKey": "simulated-1787293551907",
+      "paymentId": "simulated-1787293551907",
+      "beneficiaryPhone": "841234567",
+      "packageLabel": "380 MB",
+      "ussdSequence": [
+        "*111#",
+        "Seleccionar oferta de dados",
+        "Confirmar 380 MB para 841234567"
+      ],
+      "status": "leased",
+      "attempts": 1,
+      "maxAttempts": 2,
+      "events": [
+        {
+          "at": "2026-08-21T06:25:51.907Z",
+          "status": "queued",
+          "detail": "Pagamento confirmado; entrega enfileirada."
+        },
+        {
+          "at": "2026-08-21T06:25:51.940Z",
+          "status": "leased",
+          "detail": "Entregue exclusivamente ao dispositivo device_24bdf6e3b6cd598d925c6514."
+        }
+      ],
+      "createdAt": "2026-08-21T06:25:51.907Z",
+      "updatedAt": "2026-08-21T06:25:51.940Z",
+      "deviceId": "device_24bdf6e3b6cd598d925c6514",
+      "leaseExpiresAt": "2026-08-21T06:28:51.940Z"
+    }
+  ],
+  "devices": [
+    {
+      "id": "device_fb0716ffa6e50f04dbf96238",
+      "name": "Teste Android",
+      "tokenHash": "1a425525b57ae4fcb604be31dcf9cebb98ef4763440db34bb211d3263af5eaf3",
+      "pairedAt": "2026-08-20T04:18:39.157Z",
+      "lastSeenAt": "2026-08-20T04:18:39.157Z"
+    },
+    {
+      "id": "device_2c44a70efaa05d9f27177eef",
+      "name": "Validação Android",
+      "tokenHash": "6458c1f9062d02dbd05d833c1aa91d1989408d9bf3f580837bc9d9b2b8973649",
+      "pairedAt": "2026-08-20T04:19:06.208Z",
+      "lastSeenAt": "2026-08-20T04:19:06.247Z"
+    },
+    {
+      "id": "device_c9eb4f546da8abd383e03cd8",
+      "name": "Teste",
+      "tokenHash": "f3b85b64b6eebafcfeb17f7faaa18e0c0bf5e039c7099794498b2ef1f6427ebe",
+      "pairedAt": "2026-08-21T06:25:09.205Z",
+      "lastSeenAt": "2026-08-21T06:25:09.507Z"
+    },
+    {
+      "id": "device_24bdf6e3b6cd598d925c6514",
+      "name": "Teste",
+      "tokenHash": "c3cd1ddd12b7978a66d789cf3cf801d516a712ad1cad5979aa7d0423b973beb4",
+      "pairedAt": "2026-08-21T06:25:51.660Z",
+      "lastSeenAt": "2026-08-21T06:25:52.017Z"
+    }
+  ]
+}

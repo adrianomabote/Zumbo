@@ -261,7 +261,43 @@ function trackOrder(tx, extra = {}) {
 }
 function updateOrderStatus(txId, status, extra = {}) {
   const rec = orders.find(o => o.txId === txId)
-  if (rec) { Object.assign(rec, { status, ...extra }); saveOrders() }
+  if (rec) {
+    Object.assign(rec, { status, ...extra })
+    saveOrders()
+    if (status === 'succeeded' && rec.type === 'bundle' && rec.beneficiaryPhone) {
+      enqueueUssdDelivery(rec).catch(e => console.error('[USSD] enqueue error:', e.message))
+    }
+  }
+}
+
+function bundleUssdSequence(bundleLabel, beneficiaryPhone) {
+  // Sequência USSD Vodacom Mozambique — validar no telefone dedicado antes de produção
+  return [`*111#`, `Enviar pacote ${bundleLabel} para ${beneficiaryPhone}`]
+}
+
+async function enqueueUssdDelivery(order) {
+  const mainPort = process.env.MAIN_API_PORT
+  const secret   = process.env.SESSION_SECRET
+  if (!mainPort || !secret) return
+  const body = JSON.stringify({
+    paymentId:           order.txId,
+    idempotencyKey:      `order-${order.txId}`,
+    beneficiaryPhone:    order.beneficiaryPhone,
+    packageLabel:        order.bundleLabel || 'Pacote de dados',
+    ussdSequence:        bundleUssdSequence(order.bundleLabel || 'Pacote de dados', order.beneficiaryPhone),
+  })
+  try {
+    const res = await fetch(`http://localhost:${mainPort}/api/ussd-agent/internal/paid-deliveries`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'x-internal-delivery-key': secret },
+      body,
+      signal:  AbortSignal.timeout(5000),
+    })
+    if (res.ok) console.log(`[USSD] Entrega enfileirada para ${order.beneficiaryPhone}`)
+    else        console.error(`[USSD] Servidor recusou enfileiramento: ${res.status}`)
+  } catch (e) {
+    console.error('[USSD] Falha de rede ao enfileirar:', e.message)
+  }
 }
 
 // ── HTTP helpers ──────────────────────────────────────────────────────────────
