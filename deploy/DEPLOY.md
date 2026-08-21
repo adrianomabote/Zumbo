@@ -4,7 +4,7 @@
 
 | Serviço | Porta | Quem acede |
 |---|---|---|
-| Nginx (site público) | **7000** | Internet (mudar para 10000 se preferir) |
+| Nginx (site público) | **3000** | Internet |
 | API Node.js | **3001** | Só interno — o Nginx encaminha para cá |
 | Legacy bridge | **8099** | Só interno — iniciado automaticamente pela API |
 
