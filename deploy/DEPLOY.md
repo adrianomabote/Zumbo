@@ -1,71 +1,68 @@
-# Guia de Instalação na VPS (MozServe)
+# Guia de Instalação na VPS (multi-projecto)
 
-Este guia cobre tudo: instalar o projecto na VPS, mantê-lo a correr, e configurar o telefone Android.
+## Portas usadas por este projecto
 
----
+| Serviço | Porta | Quem acede |
+|---|---|---|
+| Nginx (site público) | **7000** | Internet (mudar para 10000 se preferir) |
+| API Node.js | **3001** | Só interno — o Nginx encaminha para cá |
+| Legacy bridge | **8099** | Só interno — iniciado automaticamente pela API |
 
-## O que vai correr onde
-
-| Componente | Onde |
-|---|---|
-| **Site Net Serviços** (loja) | VPS → Nginx serve as páginas |
-| **Servidor API** (pagamentos, fila USSD) | VPS → PM2 mantém o processo activo |
-| **App Android** (agente USSD) | Telefone Vodacom → instalar APK |
+As portas 3001 e 8099 **não ficam expostas** — só o Nginx na 7000 fica visível.
 
 ---
 
-## Passo 1 — Ligar à VPS via SSH
+## Pré-requisitos (verificar se já estão instalados)
 
 ```bash
-ssh root@SEU_IP_DA_VPS
+node --version     # precisa de v18 ou superior
+pnpm --version     # precisa de v8 ou superior
+pm2 --version      # process manager
+nginx -v           # servidor web
 ```
 
-Se a MozServe lhe deu um utilizador diferente de `root`, use esse.
-
----
-
-## Passo 2 — Instalar Node.js, pnpm, PM2 e Nginx (só uma vez)
-
-Copie e cole este bloco inteiro no terminal da VPS:
-
+Se algum faltar:
 ```bash
 # Node.js 22
-curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-apt-get install -y nodejs
+curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y nodejs
 
 # pnpm
 npm install -g pnpm@9
 
-# PM2 (mantém o servidor sempre activo)
+# PM2
 npm install -g pm2
 
-# Nginx (servidor web)
+# Nginx
 apt-get install -y nginx
-
-echo "✅ Instalação concluída"
-node --version && pnpm --version && pm2 --version && nginx -v
 ```
 
 ---
 
-## Passo 3 — Copiar o projecto para a VPS
+## Passo 1 — Copiar o projecto para a VPS
 
-**No seu computador** (ou no Replit com o shell), comprima o projecto:
-
+**Opção A — via Git (recomendado se tiver repositório):**
 ```bash
-# No Replit shell:
+cd /opt
+git clone URL_DO_SEU_REPO net-servicos
+cd net-servicos
+```
+
+**Opção B — via compressão (do Replit para a VPS):**
+
+No terminal do Replit:
+```bash
 cd /home/runner/workspace
-tar --exclude='node_modules' --exclude='.git' --exclude='*/node_modules' \
-    --exclude='*/dist' --exclude='deploy/nginx.conf' \
+tar --exclude='node_modules' --exclude='.git' \
+    --exclude='*/node_modules' --exclude='*/dist' \
     -czf /tmp/net-servicos.tar.gz .
 ```
 
-Depois envie para a VPS:
+Enviar para a VPS:
 ```bash
-scp /tmp/net-servicos.tar.gz root@SEU_IP:/opt/
+scp /tmp/net-servicos.tar.gz utilizador@IP_DA_VPS:/opt/
 ```
 
-**Na VPS**, extraia:
+Na VPS:
 ```bash
 mkdir -p /opt/net-servicos
 tar -xzf /opt/net-servicos.tar.gz -C /opt/net-servicos
@@ -74,134 +71,170 @@ cd /opt/net-servicos
 
 ---
 
-## Passo 4 — Configurar variáveis de ambiente
-
-Na VPS, crie o ficheiro `.env`:
+## Passo 2 — Criar o ficheiro de variáveis de ambiente
 
 ```bash
 nano /opt/net-servicos/.env
 ```
 
-Cole o seguinte, substituindo os valores:
+Colar isto (substituir `SESSION_SECRET` por uma senha longa):
 
 ```env
-# Porta interna do servidor API (não mude)
 PORT=3001
 NODE_ENV=production
-
-# Segredo de sessão — crie uma senha longa e aleatória (mínimo 32 caracteres)
-SESSION_SECRET=SUBSTITUA_POR_UMA_SENHA_LONGA_E_ALEATORIA
-
-# Código de emparelhamento do telefone Android (já definido no código)
+SESSION_SECRET=COLOQUE_AQUI_UMA_SENHA_LONGA_E_ALEATORIA_MINIMO_32_CHARS
 NET_SERVICOS_AGENT_PAIRING_CODE=00220022a1
 ```
 
-Guarde com `Ctrl+X` → `Y` → `Enter`.
+Guardar: `Ctrl+X` → `Y` → `Enter`
 
 ---
 
-## Passo 5 — Instalar dependências e compilar
+## Passo 3 — Compilar o projecto
 
 ```bash
 cd /opt/net-servicos
 bash deploy/build-prod.sh
 ```
 
-Este script instala todos os pacotes e compila o site e o servidor. Demora 2–5 minutos.
+Demora 2–5 minutos. No final deve ver:
+```
+✅ Build concluído.
+   API:  artifacts/api-server/dist/index.mjs
+   Site: artifacts/net-servicos/dist/public/
+```
 
 ---
 
-## Passo 6 — Iniciar o servidor com PM2
+## Passo 4 — Iniciar o servidor com PM2
 
 ```bash
 cd /opt/net-servicos
 pm2 start deploy/ecosystem.config.cjs
-pm2 save
-pm2 startup  # siga as instruções que aparecem para iniciar no boot
 ```
 
-Verificar que está a correr:
+Verificar que está activo:
 ```bash
 pm2 status
-pm2 logs net-servicos-api --lines 20
+# Deve aparecer: net-servicos-api | online
+```
+
+Ver logs:
+```bash
+pm2 logs net-servicos-api --lines 30
+```
+
+Activar arranque automático com o sistema:
+```bash
+pm2 save
+pm2 startup
+# Copiar e correr o comando que aparecer no ecrã
 ```
 
 ---
 
-## Passo 7 — Configurar o Nginx
+## Passo 5 — Configurar o Nginx
 
-Edite o ficheiro de configuração Nginx:
-```bash
-nano /opt/net-servicos/deploy/nginx.conf
-```
-
-Substitua `SEU_DOMINIO` pelo seu domínio real (ex: `netservicos.co.mz`) ou pelo IP da VPS.
-
-Depois active a configuração:
+**5.1 — Activar a configuração deste projecto:**
 ```bash
 cp /opt/net-servicos/deploy/nginx.conf /etc/nginx/sites-available/net-servicos
 ln -sf /etc/nginx/sites-available/net-servicos /etc/nginx/sites-enabled/net-servicos
-rm -f /etc/nginx/sites-enabled/default
-nginx -t && systemctl reload nginx
 ```
 
-O site deve estar acessível em `http://SEU_DOMINIO`.
+**5.2 — Verificar e recarregar:**
+```bash
+nginx -t
+# Deve dizer: syntax is ok / test is successful
+
+systemctl reload nginx
+```
+
+**5.3 — Testar:**
+```bash
+# Testar API internamente
+curl http://localhost:3001/api/health
+
+# Testar site pela porta pública
+curl http://localhost:7000
+```
+
+O site fica acessível em: `http://IP_DA_VPS:7000`
+
+> **Mudar para porta 10000?**
+> Edite `deploy/nginx.conf` e mude `listen 7000;` para `listen 10000;`, depois recarregue o Nginx.
 
 ---
 
-## Passo 8 — Configurar o telefone Android (agente USSD)
+## Passo 6 — Configurar o telefone Android (agente USSD)
 
-### 8.1 — Actualizar o domínio na app
+### 6.1 — Definir o endereço do servidor na app
 
-**No Replit**, edite `artifacts/net-servicos-ussd-agent/.env`:
-
+No Replit, edite `artifacts/net-servicos-ussd-agent/.env`:
 ```env
-EXPO_PUBLIC_DOMAIN=SEU_DOMINIO  # ex: netservicos.co.mz
+EXPO_PUBLIC_DOMAIN=IP_DA_VPS:7000
 ```
+Exemplo: `EXPO_PUBLIC_DOMAIN=196.28.1.100:7000`
 
-### 8.2 — Gerar o APK (build para Android)
+### 6.2 — Gerar o APK
 
-No Replit shell:
+No terminal do Replit:
 ```bash
-cd /home/runner/workspace/artifacts/net-servicos-ussd-agent
-npx eas-cli build --platform android --profile preview --non-interactive
+cd artifacts/net-servicos-ussd-agent
+
+# Instalar EAS CLI (uma vez)
+npm install -g eas-cli
+
+# Login na conta Expo (gratuita em https://expo.dev)
+eas login
+
+# Gerar APK
+eas build --platform android --profile preview --non-interactive
 ```
 
-Isto gera um APK para instalar no telefone. Precisa de uma conta Expo (gratuita) em https://expo.dev.
+### 6.3 — Instalar no telefone
 
-### 8.3 — Instalar no telefone
-
-1. Descarregar o APK gerado para o telefone
-2. Activar "Instalar de fontes desconhecidas" nas Definições Android
+1. Descarregar o APK para o telefone
+2. No Android: **Definições → Segurança → Instalar apps desconhecidas** → activar
 3. Instalar o APK
-4. Na app: inserir um nome (ex: "Vodacom USSD") e o código **`00220022a1`**
-5. Carregar **Emparelhar** → o telefone está pronto
+4. Na app: nome do dispositivo (ex: "Vodacom USSD") + código **`00220022a1`**
+5. Carregar **Emparelhar**
 
 ---
 
-## Comandos úteis no dia-a-dia
+## Comandos do dia-a-dia
 
 ```bash
-# Ver estado do servidor
+# Ver estado
 pm2 status
 
-# Ver logs em tempo real
+# Logs em tempo real
 pm2 logs net-servicos-api
 
-# Reiniciar após actualizações
-cd /opt/net-servicos && bash deploy/build-prod.sh && pm2 restart net-servicos-api
+# Actualizar depois de mudanças no código
+cd /opt/net-servicos
+git pull                          # se usar Git
+bash deploy/build-prod.sh
+pm2 restart net-servicos-api
 
-# Testar se a API está a responder
-curl http://localhost:3001/api/health
+# Reiniciar Nginx
+systemctl reload nginx
 ```
 
 ---
 
-## Problemas comuns
+## Verificação final
 
-| Problema | Solução |
-|---|---|
-| Site não abre | Verificar `pm2 status` e `nginx -t` |
-| App não liga ao servidor | Confirmar `EXPO_PUBLIC_DOMAIN` correcto e sem `http://` |
-| Emparelhamento recusado | Confirmar código `00220022a1` e que o servidor está activo |
-| Servidor cai | `pm2 resurrect` ou `pm2 restart net-servicos-api` |
+```bash
+# 1. PM2 está online?
+pm2 status | grep net-servicos-api
+
+# 2. API responde?
+curl -s http://localhost:3001/api/health
+
+# 3. Site abre?
+curl -s http://localhost:7000 | head -5
+
+# 4. Porta 7000 está aberta no firewall?
+ufw status | grep 7000
+# Se não estiver: ufw allow 7000/tcp
+```
