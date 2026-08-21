@@ -33,7 +33,7 @@ module.exports = {
       interpreter_args: "--enable-source-maps",
       env: {
         NODE_ENV: "production",
-        PORT: process.env.PORT ?? "3001",
+        PORT: process.env.PORT ?? "3801",
         SESSION_SECRET: process.env.SESSION_SECRET ?? "",
         NET_SERVICOS_AGENT_PAIRING_CODE:
           process.env.NET_SERVICOS_AGENT_PAIRING_CODE ?? "00220022a1",
