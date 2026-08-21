@@ -37,6 +37,16 @@ module.exports = {
         SESSION_SECRET: process.env.SESSION_SECRET ?? "",
         NET_SERVICOS_AGENT_PAIRING_CODE:
           process.env.NET_SERVICOS_AGENT_PAIRING_CODE ?? "00220022a1",
+        SITE_URL: process.env.SITE_URL ?? "https://net-servicos.online",
+        ZUMBO_API_KEY: process.env.ZUMBO_API_KEY ?? "",
+        ZUMBO_MERCHANT_ID: process.env.ZUMBO_MERCHANT_ID ?? "",
+        ZUMBO_WEBHOOK_SECRET: process.env.ZUMBO_WEBHOOK_SECRET ?? "",
+        WALLET_MPESA: process.env.WALLET_MPESA ?? "",
+        WALLET_EMOLA: process.env.WALLET_EMOLA ?? "",
+        ADMIN_PASS: process.env.ADMIN_PASS ?? "",
+        APP_DB_URL: process.env.APP_DB_URL ?? "",
+        GW_MASTER_KEY: process.env.GW_MASTER_KEY ?? "",
+        GW_MASTER_SECRET: process.env.GW_MASTER_SECRET ?? "",
       },
       // Reiniciar automaticamente se o processo cair
       autorestart: true,
