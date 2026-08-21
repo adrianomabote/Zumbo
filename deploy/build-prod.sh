@@ -16,7 +16,7 @@ if [[ -f "$ROOT/.env" ]]; then
 fi
 
 echo "==> Instalar dependências pnpm..."
-pnpm install --frozen-lockfile
+pnpm install --no-frozen-lockfile
 
 echo "==> Compilar servidor API..."
 pnpm --filter @workspace/api-server run build
