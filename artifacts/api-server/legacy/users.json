@@ -7,5 +7,17 @@
     "salt": "92544947847477a205d37863c4df54c9",
     "balance": 0,
     "createdAt": "2026-08-22T11:49:50.783Z"
+  },
+  {
+    "id": "92aa482575ef",
+    "name": "Adriano Manuel Mabote",
+    "phone": "848060353",
+    "passwordHash": "880a85c7c2e96b74da6c74b74270774a9ba50443a6fa91109e1b6c0aeb351668",
+    "salt": "6ca0962c0ff7099cc88292cb06dc4197",
+    "balance": 10,
+    "createdAt": "2026-08-22T11:53:11.107Z",
+    "rechargeCredits": [
+      "b0135dc8dd1f"
+    ]
   }
 ]

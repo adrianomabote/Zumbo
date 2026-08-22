@@ -1,5 +1,38 @@
 [
   {
+    "txId": "f3d7417060b1",
+    "type": "bundle",
+    "phone": "848060353",
+    "beneficiaryPhone": null,
+    "bundleId": "n01",
+    "bundleLabel": "380 MB",
+    "amount": 10,
+    "method": "mpesa",
+    "status": "succeeded",
+    "sourceId": "bnd-f3d7417060b1",
+    "ts": "2026-08-22T11:53:27.247Z",
+    "activatedAt": null,
+    "userId": null,
+    "zumboRef": "test-bnd-f3d7417060b1"
+  },
+  {
+    "txId": "b0135dc8dd1f",
+    "type": "recharge",
+    "phone": "848060353",
+    "beneficiaryPhone": null,
+    "bundleId": null,
+    "bundleLabel": "Recarga 10 MT",
+    "amount": 10,
+    "method": "mpesa",
+    "status": "succeeded",
+    "sourceId": "rch-b0135dc8dd1f",
+    "ts": "2026-08-22T11:53:16.250Z",
+    "activatedAt": null,
+    "userId": "92aa482575ef",
+    "zumboRef": "test-rch-b0135dc8dd1f",
+    "rechargeCredited": true
+  },
+  {
     "txId": "cbe35414e57c",
     "type": "bundle",
     "phone": "841234567",
