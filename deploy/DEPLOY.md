@@ -82,11 +82,17 @@ Colar isto (substituir `SESSION_SECRET` por uma senha longa):
 ```env
 PORT=3001
 NODE_ENV=production
+NET_SERVICOS_PAYMENT_MODE=live
 SESSION_SECRET=COLOQUE_AQUI_UMA_SENHA_LONGA_E_ALEATORIA_MINIMO_32_CHARS
 NET_SERVICOS_AGENT_PAIRING_CODE=00220022a1
 ```
 
 Guardar: `Ctrl+X` → `Y` → `Enter`
+
+> Na preview da Replit, o servidor usa automaticamente `mock` quando
+> `NODE_ENV` não é `production`; os pagamentos são simulados e não movimentam
+> dinheiro. Na VPS, mantenha `NET_SERVICOS_PAYMENT_MODE=live` e configure as
+> credenciais reais apenas no `.env`.
 
 ---
 
