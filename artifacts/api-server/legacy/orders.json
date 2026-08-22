@@ -1,5 +1,37 @@
 [
   {
+    "txId": "5054618d7791",
+    "type": "recharge",
+    "phone": "848060353",
+    "beneficiaryPhone": null,
+    "bundleId": null,
+    "bundleLabel": "Recarga 100 MT",
+    "amount": 100,
+    "method": "mpesa",
+    "status": "pending",
+    "sourceId": "2bbb3be6-8655-47b4-b675-fa021215b44b",
+    "ts": "2026-08-22T15:58:40.623Z",
+    "activatedAt": null,
+    "userId": "842540b5cf36",
+    "zumboRef": "ZUMBO55E4F50A00"
+  },
+  {
+    "txId": "290e8474f9ae",
+    "type": "bundle",
+    "phone": "848060353",
+    "beneficiaryPhone": null,
+    "bundleId": "n01",
+    "bundleLabel": "380 MB",
+    "amount": 10,
+    "method": "mpesa",
+    "status": "pending",
+    "sourceId": "9943c9ef-61dc-49b8-90c0-c7fa93743ff9",
+    "ts": "2026-08-22T15:58:21.728Z",
+    "activatedAt": null,
+    "userId": null,
+    "zumboRef": "ZUMBO0140BB4904"
+  },
+  {
     "txId": "e67f3ac10fa4",
     "type": "bundle",
     "phone": "848060353",
