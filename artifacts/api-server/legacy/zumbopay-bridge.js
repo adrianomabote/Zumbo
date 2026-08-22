@@ -2973,9 +2973,7 @@ const requiredConfig = [
   'WALLET_MPESA',
   'WALLET_EMOLA',
   'ADMIN_PASS',
-  'APP_DB_URL',
-  'GW_MASTER_KEY',
-  'GW_MASTER_SECRET',
+  'SESSION_SECRET',
 ]
 const missingConfig = requiredConfig.filter(key => !process.env[key])
 const isLiveConfiguration = missingConfig.length === 0
