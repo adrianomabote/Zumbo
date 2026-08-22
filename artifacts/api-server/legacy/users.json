@@ -19,5 +19,14 @@
     "rechargeCredits": [
       "b0135dc8dd1f"
     ]
+  },
+  {
+    "id": "5bd81c439f53",
+    "name": "Adriano Manuel Mabote",
+    "phone": "848060352",
+    "passwordHash": "0a8680281fbe024a7261d7920daf74483149d0b43df62219fb63bfe2fa627d46",
+    "salt": "03968ee37d7a0950a8761a017a6fe20e",
+    "balance": 0,
+    "createdAt": "2026-08-22T12:02:36.299Z"
   }
 ]
