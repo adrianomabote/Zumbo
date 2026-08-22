@@ -1,0 +1,11 @@
+[
+  {
+    "id": "c10868196547",
+    "name": "Preview Test",
+    "phone": "841234567",
+    "passwordHash": "7e09e9380f46a9744a966a78cc6b9f1cc0389142c6f3d59ec10ca73e494f4ef2",
+    "salt": "92544947847477a205d37863c4df54c9",
+    "balance": 0,
+    "createdAt": "2026-08-22T11:49:50.783Z"
+  }
+]

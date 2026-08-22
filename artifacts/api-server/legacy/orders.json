@@ -1,0 +1,18 @@
+[
+  {
+    "txId": "cbe35414e57c",
+    "type": "bundle",
+    "phone": "841234567",
+    "beneficiaryPhone": null,
+    "bundleId": "n01",
+    "bundleLabel": "380 MB",
+    "amount": 10,
+    "method": "mpesa",
+    "status": "succeeded",
+    "sourceId": "bnd-cbe35414e57c",
+    "ts": "2026-08-22T11:49:50.803Z",
+    "activatedAt": null,
+    "userId": null,
+    "zumboRef": "test-bnd-cbe35414e57c"
+  }
+]
