@@ -17,6 +17,11 @@ const SITE_URL             = process.env.SITE_URL || 'https://net-servicos.onren
 const WALLET_MPESA         = process.env.WALLET_MPESA
 const WALLET_EMOLA         = process.env.WALLET_EMOLA
 const ADMIN_PASS           = process.env.ADMIN_PASS
+const PAYMENT_MODE         = String(
+  process.env.NET_SERVICOS_PAYMENT_MODE ||
+  (process.env.NODE_ENV === 'production' ? 'live' : 'mock')
+).toLowerCase()
+const isTestMode           = PAYMENT_MODE === 'mock' || PAYMENT_MODE === 'test'
 const ORDERS_FILE          = './orders.json'
 const USERS_FILE           = './users.json'
 const RECHARGE_CREDITS_FILE = './recharge-credits.json'
@@ -375,6 +380,16 @@ function notifyTx(txId, data) {
 async function initiateCharge(tx, customerName) {
   const walletId = tx.method === 'mpesa' ? WALLET_MPESA : WALLET_EMOLA
   const sourceId = tx.sourceId
+  if (isTestMode) {
+    tx.ref = `test-${sourceId}`
+    tx.status = 'succeeded'
+    console.log(`[ZumboPay] TEST charge simulated for ${tx.id}`)
+    updateOrderStatus(tx.id, 'succeeded', { zumboRef: tx.ref })
+    await creditRechargeOnce(tx)
+    notifyTx(tx.id, { status:'succeeded', method:tx.method, testMode:true })
+    gwFinalize(tx)
+    return
+  }
   try {
     const resp = await fetch(`${ZUMBO_BASE}/charges`, {
       method: 'POST',
@@ -1493,6 +1508,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
     </button>
   </div>
 </nav>
+${isTestMode ? '<div style="background:#fff3cd;color:#664d03;border-bottom:1px solid #ffecb5;padding:9px 16px;text-align:center;font-size:12px;font-weight:700;">MODO DE TESTE — os pagamentos desta preview são simulados e não movimentam dinheiro.</div>' : ''}
 
 <!-- Search overlay -->
 <div class="search-overlay" id="search-overlay" onclick="closeSearch(event)">
@@ -3038,7 +3054,7 @@ const requiredConfig = [
   'SESSION_SECRET',
 ]
 const missingConfig = requiredConfig.filter(key => !process.env[key])
-const isLiveConfiguration = missingConfig.length === 0
+const isLiveConfiguration = isTestMode || missingConfig.length === 0
 
 await dbInit()
 await loadOrders()
