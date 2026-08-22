@@ -44,7 +44,6 @@ module.exports = {
         WALLET_MPESA: process.env.WALLET_MPESA ?? "",
         WALLET_EMOLA: process.env.WALLET_EMOLA ?? "",
         ADMIN_PASS: process.env.ADMIN_PASS ?? "",
-        APP_DB_URL: process.env.APP_DB_URL ?? "",
         GW_MASTER_KEY: process.env.GW_MASTER_KEY ?? "",
         GW_MASTER_SECRET: process.env.GW_MASTER_SECRET ?? "",
       },

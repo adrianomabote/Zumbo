@@ -52,7 +52,6 @@ export function startLegacyBridge() {
     MAIN_API_PORT: process.env["PORT"] ?? "",
   };
   delete childEnv.DATABASE_URL;
-  delete childEnv.APP_DB_URL;
 
   legacyProcess = spawn(process.execPath, ["zumbopay-bridge.js"], {
     cwd: legacyDirectory(),

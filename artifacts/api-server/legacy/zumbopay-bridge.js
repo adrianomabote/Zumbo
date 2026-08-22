@@ -6,7 +6,6 @@
 import { createServer }                              from 'http'
 import { createHmac, timingSafeEqual, randomBytes }  from 'crypto'
 import { readFile, writeFile }                       from 'fs/promises'
-import pg                                            from 'pg'
 
 // ── Configuração ──────────────────────────────────────────────────────────────
 const PORT                 = process.env.PORT || 5000
@@ -56,41 +55,14 @@ const BUNDLES = new Map([
   ['d05',{label:'50 GB',  price:1490, cat:'diamante'}],
 ])
 
-// ── Base de dados permanente (opcional — resolve o disco efémero do Render) ──
-// Cole aqui o "External Database URL" do PostgreSQL criado no Render:
-const APP_DB_URL  = process.env.APP_DB_URL
-let dbPool = null
-if (APP_DB_URL) {
-  dbPool = new pg.Pool({
-    connectionString: APP_DB_URL,
-    ssl: /sslmode=disable/.test(APP_DB_URL) ? false : { rejectUnauthorized: false },
-    max: 3,
-  })
-  dbPool.on('error', e => console.error('[DB]', e.message))
-}
+// ── Armazenamento local persistente na VPS ─────────────────────────────────────
 async function dbInit() {
-  if (!dbPool) { console.log('[DB] sem base de dados — a usar ficheiros (dados perdem-se em cada deploy)'); return }
-  try {
-    await dbPool.query('CREATE TABLE IF NOT EXISTS app_store (k TEXT PRIMARY KEY, data JSONB NOT NULL, updated_at TIMESTAMPTZ DEFAULT now())')
-    console.log('[DB] ligado — dados persistentes activos')
-  } catch (e) { console.error('[DB] falha ao iniciar:', e.message); dbPool = null }
+  console.log('[DB] sem PostgreSQL externo — a usar ficheiros locais na VPS')
 }
 async function storeLoad(k, file) {
-  if (dbPool) {
-    try {
-      const r = await dbPool.query('SELECT data FROM app_store WHERE k=$1', [k])
-      if (r.rows[0]) return r.rows[0].data
-    } catch (e) { console.error('[DB] load', k, e.message) }
-  }
   try { return JSON.parse(await readFile(file, 'utf8')) } catch { return null }
 }
 async function storeSave(k, data, file) {
-  if (dbPool) {
-    try {
-      await dbPool.query('INSERT INTO app_store (k,data,updated_at) VALUES ($1,$2,now()) ON CONFLICT (k) DO UPDATE SET data=$2, updated_at=now()', [k, JSON.stringify(data)])
-      return
-    } catch (e) { console.error('[DB] save', k, e.message) }
-  }
   try { await writeFile(file, JSON.stringify(data, null, 2)) } catch {}
 }
 
