@@ -4,7 +4,7 @@
  */
 
 import { createServer }                              from 'http'
-import { createHmac, timingSafeEqual, randomBytes, randomUUID }  from 'crypto'
+import { createHmac, timingSafeEqual, randomBytes }  from 'crypto'
 import { readFile, writeFile, rename }               from 'fs/promises'
 
 // ── Configuração ──────────────────────────────────────────────────────────────
@@ -535,7 +535,8 @@ self.addEventListener('fetch',e=>{
     const msisdn = normalizeMsisdn(phone), meth = detectMethod(msisdn)
     if (!meth) return json(res, { error:'Número inválido. Use 84 ou 85.' }, 400)
     const txId = randomBytes(6).toString('hex')
-    const tx = { id:txId, type:'bundle', bundleId, bundleLabel:bundle.label, phone, beneficiaryPhone: beneficiaryPhone||null, msisdn, amount:bundle.price, method:meth, status:'pending', ref:null, error:null, sourceId:randomUUID(), ts:new Date().toISOString() }
+    // Compatibilidade com a integração que funcionava no Render.
+    const tx = { id:txId, type:'bundle', bundleId, bundleLabel:bundle.label, phone, beneficiaryPhone: beneficiaryPhone||null, msisdn, amount:bundle.price, method:meth, status:'pending', ref:null, error:null, sourceId:`bnd-${txId}`, ts:new Date().toISOString() }
     transactions.set(txId, tx)
     trackOrder(tx)
     json(res, { txId, status:'pending', method:meth })
@@ -690,7 +691,8 @@ self.addEventListener('fetch',e=>{
     const msisdn = normalizeMsisdn(user.phone), meth = detectMethod(msisdn)
     if (!meth) return json(res, { error:'Número de conta inválido para STK Push.' }, 400)
     const txId = randomBytes(6).toString('hex')
-    const tx = { id:txId, type:'recharge', bundleId:null, bundleLabel:`Recarga ${amount} MT`, phone:user.phone, beneficiaryPhone:null, msisdn, amount, method:meth, status:'pending', ref:null, error:null, sourceId:randomUUID(), ts:new Date().toISOString(), userId:user.id }
+    // Compatibilidade com a integração que funcionava no Render.
+    const tx = { id:txId, type:'recharge', bundleId:null, bundleLabel:`Recarga ${amount} MT`, phone:user.phone, beneficiaryPhone:null, msisdn, amount, method:meth, status:'pending', ref:null, error:null, sourceId:`rch-${txId}`, ts:new Date().toISOString(), userId:user.id }
     transactions.set(txId, tx)
     trackOrder(tx)
     json(res, { txId, status:'pending', method:meth })
@@ -829,7 +831,8 @@ NOTAS
       if (!callbackUrl) return json(res, { error:'callback_url inválido. Use um endereço HTTPS público.' }, 400)
     }
     const txId = randomBytes(6).toString('hex')
-    const tx = { id:txId, type:'gateway', bundleId:null, bundleLabel:`Gateway: ${gk.name}`, phone:String(body.phone), beneficiaryPhone:null, msisdn, amount, method:meth, status:'pending', ref:null, error:null, sourceId:randomUUID(), ts:new Date().toISOString(), gwKeyId:gk.id, extRef: body.reference ? String(body.reference).slice(0,64) : null, callbackUrl }
+    // Compatibilidade com a integração que funcionava no Render.
+    const tx = { id:txId, type:'gateway', bundleId:null, bundleLabel:`Gateway: ${gk.name}`, phone:String(body.phone), beneficiaryPhone:null, msisdn, amount, method:meth, status:'pending', ref:null, error:null, sourceId:`gw-${txId}`, ts:new Date().toISOString(), gwKeyId:gk.id, extRef: body.reference ? String(body.reference).slice(0,64) : null, callbackUrl }
     transactions.set(txId, tx)
     trackOrder(tx, { gwKey: gk.name, gwKeyId: gk.id, extRef: tx.extRef, callbackUrl })
     json(res, { ok:true, txId, status:'pending', method:meth, statusUrl:`${SITE_URL}/gateway/api/status/${txId}` }, 202)
