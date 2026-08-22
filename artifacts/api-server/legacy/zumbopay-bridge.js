@@ -369,6 +369,9 @@ function detectMethod(msisdn) {
   if (l.startsWith('84')||l.startsWith('85')) return 'mpesa'
   return null
 }
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ''))
+}
 
 function notifyTx(txId, data) {
   const clients = sseClients.get(txId)
@@ -391,6 +394,12 @@ async function initiateCharge(tx, customerName) {
     return
   }
   try {
+    console.log('[ZumboPay] charge identifier validation', JSON.stringify({
+      wallet_id_uuid: isUuid(walletId),
+      source_id_uuid: isUuid(sourceId),
+      merchant_id_present: Boolean(ZUMBO_MERCHANT_ID),
+      msisdn: /^\+?258\d{9}$/.test(tx.msisdn),
+    }))
     const resp = await fetch(`${ZUMBO_BASE}/charges`, {
       method: 'POST',
       headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${ZUMBO_API_KEY}`, 'X-Merchant-Id':ZUMBO_MERCHANT_ID },
