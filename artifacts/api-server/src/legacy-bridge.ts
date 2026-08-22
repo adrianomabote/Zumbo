@@ -59,11 +59,17 @@ export function startLegacyBridge() {
     stdio: ["ignore", "pipe", "pipe"],
   });
 
-  legacyProcess.stdout?.on("data", () => {
-    logger.info("Legacy bridge emitted startup output");
+  legacyProcess.stdout?.on("data", (chunk: Buffer) => {
+    const output = chunk.toString().trim();
+    if (output) {
+      logger.info({ legacyOutput: output }, "Legacy bridge output");
+    }
   });
-  legacyProcess.stderr?.on("data", () => {
-    logger.error("Legacy bridge reported an error");
+  legacyProcess.stderr?.on("data", (chunk: Buffer) => {
+    const output = chunk.toString().trim();
+    if (output) {
+      logger.error({ legacyError: output }, "Legacy bridge error");
+    }
   });
   legacyProcess.on("exit", (code, signal) => {
     logger.warn({ code, signal }, "Legacy bridge stopped");
