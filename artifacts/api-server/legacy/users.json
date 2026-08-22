@@ -1,1 +1,11 @@
-[]
+[
+  {
+    "id": "842540b5cf36",
+    "name": "Adriano Manuel Mabote",
+    "phone": "848060353",
+    "passwordHash": "ce6438727b99964104c1839d0c9285978783aa50a5823b1896c8722956f50d90",
+    "salt": "0e277355f9df605fc7de507975118712",
+    "balance": 0,
+    "createdAt": "2026-08-22T12:06:25.261Z"
+  }
+]
