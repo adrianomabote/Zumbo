@@ -25,6 +25,8 @@ description: Configuração da VPS MozServe, portas, domínio e outros projectos
 
 **Why:** `pm2 delete all` matou estes processos durante o setup — usar sempre `pm2 restart net-servicos-api` e nunca `pm2 delete all`.
 
+**Nota operacional:** Depois de alterar variáveis no `.env` ou no ecosystem config, o PM2 só as aplica com `pm2 reload deploy/ecosystem.config.cjs --update-env`; um restart simples pode manter o ambiente antigo.
+
 ## Ficheiros de deployment
 - `deploy/nginx.conf` — configuração Nginx
 - `deploy/ecosystem.config.cjs` — configuração PM2
