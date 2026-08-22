@@ -17,6 +17,14 @@ function bearerToken(request: Request) {
   return value?.startsWith("Bearer ") ? value.slice(7) : undefined;
 }
 
+router.get("/ussd-agent", (_req, res) => {
+  return res.json({
+    ok: true,
+    service: "Net Serviços USSD Agent",
+    pairing: "POST /api/ussd-agent/pair",
+  });
+});
+
 async function requireDevice(request: Request) {
   return authenticateDevice(bearerToken(request));
 }
