@@ -1,1 +1,2 @@
 - [VPS e deployment](vps-deployment.md) — VPS MozServe 169.58.173.16, Nginx porta 80/443, API porta 3004, domínio net-servicos.online com SSL
+- [Logs do bridge legado](legacy-bridge-logging.md) — o proxy deve preservar stdout/stderr do processo legado para diagnosticar respostas do provedor
