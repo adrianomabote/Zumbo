@@ -44,9 +44,9 @@ const AgentContext = createContext<AgentContextValue | null>(null);
 const deviceKey = "net-servicos-device";
 const tokenKey = "net-servicos-device-token";
 const apiBase =
-  process.env.EXPO_PUBLIC_API_URL ??
+  process.env.EXPO_PUBLIC_API_URL?.replace(/\/+$/, "") ??
   (process.env.EXPO_PUBLIC_DOMAIN
-    ? `http://${process.env.EXPO_PUBLIC_DOMAIN}/api/ussd-agent`
+    ? `https://${process.env.EXPO_PUBLIC_DOMAIN}/api/ussd-agent`
     : "https://net-servicos.online/api/ussd-agent");
 
 async function secureGet(key: string) {
@@ -64,15 +64,28 @@ async function secureSet(key: string, value: string) {
 
 async function request<T>(path: string, token?: string, init?: RequestInit): Promise<T> {
   if (!apiBase) throw new Error("Servidor do agente indisponível nesta compilação.");
-  const response = await fetch(`${apiBase}${path}`, {
-    ...init,
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(init?.headers ?? {}),
-    },
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  let response: Response;
+  try {
+    response = await fetch(`${apiBase}${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(init?.headers ?? {}),
+      },
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("O servidor demorou demasiado a responder. Verifique a internet do telefone.");
+    }
+    throw new Error("Não foi possível contactar o servidor. Verifique a internet do telefone.");
+  } finally {
+    clearTimeout(timeout);
+  }
   const json = (await response.json()) as T & { error?: string };
   if (!response.ok) throw new Error(json.error ?? "Não foi possível contactar o servidor.");
   return json;

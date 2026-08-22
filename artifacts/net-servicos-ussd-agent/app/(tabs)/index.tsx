@@ -19,15 +19,19 @@ export default function OperationsScreen() {
 
   const pairDevice = async () => {
     setBusy(true);
+    setNotice(null);
     try {
-      await pair(deviceName, pairingCode);
+      await pair(deviceName.trim(), pairingCode.trim().toLowerCase());
       setNotice("Dispositivo emparelhado e pronto para receber pedidos.");
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (pairError) {
       setNotice(pairError instanceof Error ? pairError.message : "Não foi possível emparelhar.");
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setBusy(false);
+    }
+    try {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      // Haptics are optional feedback and must never change the pairing result.
     }
   };
 
