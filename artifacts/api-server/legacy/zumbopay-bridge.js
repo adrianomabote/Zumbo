@@ -4,8 +4,8 @@
  */
 
 import { createServer }                              from 'http'
-import { createHmac, timingSafeEqual, randomBytes }  from 'crypto'
-import { readFile, writeFile }                       from 'fs/promises'
+import { createHmac, timingSafeEqual, randomBytes, randomUUID }  from 'crypto'
+import { readFile, writeFile, rename }               from 'fs/promises'
 
 // ── Configuração ──────────────────────────────────────────────────────────────
 const PORT                 = process.env.PORT || 5000
@@ -19,6 +19,7 @@ const WALLET_EMOLA         = process.env.WALLET_EMOLA
 const ADMIN_PASS           = process.env.ADMIN_PASS
 const ORDERS_FILE          = './orders.json'
 const USERS_FILE           = './users.json'
+const RECHARGE_CREDITS_FILE = './recharge-credits.json'
 
 function adminToken() {
   return createHmac('sha256', ZUMBO_WEBHOOK_SECRET + ADMIN_PASS).update('netservicos:admin').digest('hex')
@@ -65,11 +66,18 @@ async function storeLoad(k, file) {
 async function storeSave(k, data, file) {
   try { await writeFile(file, JSON.stringify(data, null, 2)) } catch {}
 }
+async function writeJsonAtomic(file, data) {
+  const tempFile = `${file}.tmp`
+  await writeFile(tempFile, JSON.stringify(data, null, 2))
+  await rename(tempFile, file)
+}
 
 // ── Estado em memória ─────────────────────────────────────────────────────────
 const transactions  = new Map()
 const sseClients    = new Map()
 let   orders        = []           // persiste em ORDERS_FILE
+let   rechargeCredits = []         // diário de créditos de saldo recuperável
+let   rechargeCreditQueue = Promise.resolve()
 
 // ── Anti-brute-force: login ───────────────────────────────────────────────────
 const loginAttempts = new Map()   // ip → { count, lockedUntil }
@@ -218,12 +226,18 @@ async function gwForwardCallback(tx) {
 // ── Persistência de encomendas ────────────────────────────────────────────────
 async function loadOrders() { const d = await storeLoad('orders', ORDERS_FILE); if (d) orders = d }
 async function saveOrders() { await storeSave('orders', orders, ORDERS_FILE) }
+async function loadRechargeCredits() {
+  const d = await storeLoad('recharge-credits', RECHARGE_CREDITS_FILE)
+  if (Array.isArray(d)) rechargeCredits = d
+}
+async function saveRechargeCredits() { await writeJsonAtomic(RECHARGE_CREDITS_FILE, rechargeCredits) }
 function trackOrder(tx, extra = {}) {
   const rec = {
     txId: tx.id, type: tx.type || 'bundle', phone: tx.phone,
     beneficiaryPhone: tx.beneficiaryPhone || null,
     bundleId: tx.bundleId || null, bundleLabel: tx.bundleLabel || null,
     amount: tx.amount, method: tx.method, status: 'pending',
+    sourceId: tx.sourceId || null,
     ts: tx.ts, activatedAt: null, userId: tx.userId || null, ...extra,
   }
   orders.unshift(rec)
@@ -238,6 +252,45 @@ function updateOrderStatus(txId, status, extra = {}) {
     saveOrders()
     if (status === 'succeeded' && rec.type === 'bundle' && rec.beneficiaryPhone) {
       enqueueUssdDelivery(rec).catch(e => console.error('[USSD] enqueue error:', e.message))
+    }
+  }
+}
+function creditRechargeOnce(tx) {
+  const work = rechargeCreditQueue.then(() => creditRechargeOnceLocked(tx))
+  rechargeCreditQueue = work.catch(() => {})
+  return work
+}
+async function creditRechargeOnceLocked(tx) {
+  if (tx.type !== 'recharge' || !tx.userId) return false
+  const rec = orders.find(o => o.txId === tx.id)
+  const user = findUserById(tx.userId)
+  if (!user) return false
+  let journal = rechargeCredits.find(entry => entry.txId === tx.id)
+  if (!journal) {
+    journal = { txId:tx.id, userId:tx.userId, amount:tx.amount, balanceApplied:false }
+    rechargeCredits.push(journal)
+    await saveRechargeCredits()
+  }
+  const appliedCredits = user.rechargeCredits || []
+  if (!appliedCredits.includes(tx.id)) {
+    user.balance = (user.balance||0) + tx.amount
+    user.rechargeCredits = [...appliedCredits, tx.id].slice(-1000)
+    await writeJsonAtomic(USERS_FILE, users)
+  }
+  if (!journal.balanceApplied) {
+    journal.balanceApplied = true
+    await saveRechargeCredits()
+  }
+  if (rec && !rec.rechargeCredited) {
+    rec.rechargeCredited = true
+    await writeJsonAtomic(ORDERS_FILE, orders)
+  }
+  return true
+}
+async function recoverRechargeCredits() {
+  for (const credit of rechargeCredits) {
+    if (!credit.balanceApplied) {
+      await creditRechargeOnce({ id:credit.txId, type:'recharge', userId:credit.userId, amount:credit.amount })
     }
   }
 }
@@ -319,8 +372,9 @@ function notifyTx(txId, data) {
   for (const r of clients) { try { r.write(msg) } catch {} }
 }
 
-async function initiateCharge(tx, sourceId, customerName) {
+async function initiateCharge(tx, customerName) {
   const walletId = tx.method === 'mpesa' ? WALLET_MPESA : WALLET_EMOLA
+  const sourceId = tx.sourceId
   try {
     const resp = await fetch(`${ZUMBO_BASE}/charges`, {
       method: 'POST',
@@ -331,8 +385,10 @@ async function initiateCharge(tx, sourceId, customerName) {
     console.log(`[ZumboPay] POST /charges → ${resp.status}`, JSON.stringify(data))
     if (resp.status === 200) {
       tx.ref = data.data?.reference || sourceId; tx.status = 'succeeded'
+      updateOrderStatus(tx.id, 'succeeded', { zumboRef: tx.ref })
+      await creditRechargeOnce(tx)
       notifyTx(tx.id, { status:'succeeded', method:tx.method })
-      updateOrderStatus(tx.id, 'succeeded', { zumboRef: tx.ref }); gwFinalize(tx); return
+      gwFinalize(tx); return
     }
     if (resp.status === 202) {
       tx.ref = data.data?.reference || sourceId; tx.status = 'pending'
@@ -479,11 +535,11 @@ self.addEventListener('fetch',e=>{
     const msisdn = normalizeMsisdn(phone), meth = detectMethod(msisdn)
     if (!meth) return json(res, { error:'Número inválido. Use 84 ou 85.' }, 400)
     const txId = randomBytes(6).toString('hex')
-    const tx = { id:txId, type:'bundle', bundleId, bundleLabel:bundle.label, phone, beneficiaryPhone: beneficiaryPhone||null, msisdn, amount:bundle.price, method:meth, status:'pending', ref:null, error:null, ts:new Date().toISOString() }
+    const tx = { id:txId, type:'bundle', bundleId, bundleLabel:bundle.label, phone, beneficiaryPhone: beneficiaryPhone||null, msisdn, amount:bundle.price, method:meth, status:'pending', ref:null, error:null, sourceId:randomUUID(), ts:new Date().toISOString() }
     transactions.set(txId, tx)
     trackOrder(tx)
     json(res, { txId, status:'pending', method:meth })
-    initiateCharge(tx, `bnd-${txId}`, `Mega ${bundle.label}`)
+    initiateCharge(tx, `Mega ${bundle.label}`)
     return
   }
 
@@ -504,17 +560,20 @@ self.addEventListener('fetch',e=>{
       let matched = false
       for (const [txId, tx] of transactions) {
         const src = 'dep-'+tx.id, bsrc = 'bnd-'+tx.id, gsrc = 'gw-'+tx.id
-        if ([tx.ref,tx.id,src,bsrc,gsrc,event.data?.source_id].includes(ref) || [tx.ref,tx.id,src,bsrc,gsrc].includes(event.data?.source_id)) {
+        const knownRefs = [tx.ref, tx.sourceId, tx.id, src, bsrc, gsrc].filter(Boolean)
+        if (knownRefs.includes(ref) || knownRefs.includes(event.data?.source_id)) {
           // confirmação tardia (depois do timeout): reabre para notificar de novo
           if (status === 'succeeded' && tx.gwDone && tx.status === 'failed') tx.gwDone = false
+          const isDuplicateTerminalEvent = tx.status === status && (status === 'succeeded' || status === 'failed')
           tx.status = status
           tx.error  = status==='failed' ? (event.data?.message||'Pagamento recusado.') : null
           if (event.data?.reference) tx.ref = event.data.reference
-          notifyTx(txId, { status, error:tx.error, method:tx.method })
-          updateOrderStatus(txId, status, { zumboRef: tx.ref || null })
-          if (status === 'succeeded' && tx.type === 'recharge' && tx.userId) {
-            const u = findUserById(tx.userId)
-            if (u) { u.balance = (u.balance||0) + tx.amount; saveUsers().catch(()=>{}) }
+          if (!isDuplicateTerminalEvent) {
+            notifyTx(txId, { status, error:tx.error, method:tx.method })
+            updateOrderStatus(txId, status, { zumboRef: tx.ref || null })
+            if (status === 'succeeded') {
+              await creditRechargeOnce(tx)
+            }
           }
           gwFinalize(tx)
           console.log(`[Webhook] ${txId} → ${status}`)
@@ -524,10 +583,35 @@ self.addEventListener('fetch',e=>{
       }
       // fallback: tx perdida após reinício — recupera do registo persistente
       if (!matched) {
+        const sourceId = event.data?.source_id
+        const persistedRec = orders.find(o =>
+          o.sourceId === ref || o.sourceId === sourceId || o.zumboRef === ref
+        )
+        const zumboRefFallback = event.data?.reference || null
+        if (persistedRec && (persistedRec.status === 'pending' || (status === 'succeeded' && persistedRec.status === 'failed'))) {
+          updateOrderStatus(persistedRec.txId, status, { zumboRef: zumboRefFallback })
+          if (status === 'succeeded' && persistedRec.type === 'recharge' && persistedRec.userId) {
+            await creditRechargeOnce({ id:persistedRec.txId, type:'recharge', userId:persistedRec.userId, amount:persistedRec.amount })
+          }
+          if (persistedRec.type === 'gateway') {
+            gwFinalize({
+              id:persistedRec.txId, type:'gateway', status, amount:persistedRec.amount,
+              phone:persistedRec.phone, method:persistedRec.method, extRef:persistedRec.extRef||null,
+              callbackUrl:persistedRec.callbackUrl||null, gwKeyId:persistedRec.gwKeyId,
+              error: status==='failed' ? (event.data?.message||'Pagamento recusado.') : null,
+            })
+          }
+          console.log(`[Webhook] (persistido) ${persistedRec.txId} → ${status} ref:${zumboRefFallback}`)
+          matched = true
+        }
+      }
+      if (!matched) {
         // Transacções gateway (prefixo gw-)
         const gid = String(ref).startsWith('gw-') ? String(ref).slice(3)
                   : String(event.data?.source_id||'').startsWith('gw-') ? String(event.data.source_id).slice(3) : null
-        const gwRec = gid ? orders.find(o => o.txId === gid && o.type === 'gateway') : null
+        const gwRec = orders.find(o => o.type === 'gateway' && (
+          (gid && o.txId === gid) || o.sourceId === ref || o.sourceId === event.data?.source_id
+        ))
         const zumboRefFallback = event.data?.reference || null
         if (gwRec && (gwRec.status === 'pending' || (status === 'succeeded' && gwRec.status === 'failed'))) {
           updateOrderStatus(gwRec.txId, status, { zumboRef: zumboRefFallback })
@@ -538,7 +622,9 @@ self.addEventListener('fetch',e=>{
         // Recargas de saldo (prefixo rch-)
         const rid = String(ref).startsWith('rch-') ? String(ref).slice(4)
                   : String(event.data?.source_id||'').startsWith('rch-') ? String(event.data.source_id).slice(4) : null
-        const rchRec = rid ? orders.find(o => o.txId === rid && o.type === 'recharge') : null
+        const rchRec = orders.find(o => o.type === 'recharge' && (
+          (rid && o.txId === rid) || o.sourceId === ref || o.sourceId === event.data?.source_id
+        ))
         if (rchRec && status === 'succeeded' && (rchRec.status === 'pending' || rchRec.status === 'failed')) {
           updateOrderStatus(rchRec.txId, status, { zumboRef: zumboRefFallback })
           if (rchRec.userId) {
@@ -604,11 +690,11 @@ self.addEventListener('fetch',e=>{
     const msisdn = normalizeMsisdn(user.phone), meth = detectMethod(msisdn)
     if (!meth) return json(res, { error:'Número de conta inválido para STK Push.' }, 400)
     const txId = randomBytes(6).toString('hex')
-    const tx = { id:txId, type:'recharge', bundleId:null, bundleLabel:`Recarga ${amount} MT`, phone:user.phone, beneficiaryPhone:null, msisdn, amount, method:meth, status:'pending', ref:null, error:null, ts:new Date().toISOString(), userId:user.id }
+    const tx = { id:txId, type:'recharge', bundleId:null, bundleLabel:`Recarga ${amount} MT`, phone:user.phone, beneficiaryPhone:null, msisdn, amount, method:meth, status:'pending', ref:null, error:null, sourceId:randomUUID(), ts:new Date().toISOString(), userId:user.id }
     transactions.set(txId, tx)
     trackOrder(tx)
     json(res, { txId, status:'pending', method:meth })
-    initiateCharge(tx, `rch-${txId}`, `Recarga Net Serviços ${amount} MT`)
+    initiateCharge(tx, `Recarga Net Serviços ${amount} MT`)
     return
   }
 
@@ -743,12 +829,12 @@ NOTAS
       if (!callbackUrl) return json(res, { error:'callback_url inválido. Use um endereço HTTPS público.' }, 400)
     }
     const txId = randomBytes(6).toString('hex')
-    const tx = { id:txId, type:'gateway', bundleId:null, bundleLabel:`Gateway: ${gk.name}`, phone:String(body.phone), beneficiaryPhone:null, msisdn, amount, method:meth, status:'pending', ref:null, error:null, ts:new Date().toISOString(), gwKeyId:gk.id, extRef: body.reference ? String(body.reference).slice(0,64) : null, callbackUrl }
+    const tx = { id:txId, type:'gateway', bundleId:null, bundleLabel:`Gateway: ${gk.name}`, phone:String(body.phone), beneficiaryPhone:null, msisdn, amount, method:meth, status:'pending', ref:null, error:null, sourceId:randomUUID(), ts:new Date().toISOString(), gwKeyId:gk.id, extRef: body.reference ? String(body.reference).slice(0,64) : null, callbackUrl }
     transactions.set(txId, tx)
     trackOrder(tx, { gwKey: gk.name, gwKeyId: gk.id, extRef: tx.extRef, callbackUrl })
     json(res, { ok:true, txId, status:'pending', method:meth, statusUrl:`${SITE_URL}/gateway/api/status/${txId}` }, 202)
     if (body.description) tx.extDesc = String(body.description).slice(0,120)
-    initiateCharge(tx, `gw-${txId}`, msisdn)
+    initiateCharge(tx, msisdn)
     return
   }
 
@@ -1258,8 +1344,9 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 /* ── Bottom sheet (Vodacom style) ── */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:none;backdrop-filter:blur(4px);}
 .overlay.open{display:block;}
-.sheet{position:fixed;bottom:0;left:0;right:0;max-width:480px;margin:0 auto;background:#fff;border-radius:22px 22px 0 0;z-index:101;padding:0;transform:translateY(100%);transition:transform .3s cubic-bezier(.32,.72,0,1);max-height:92vh;overflow-y:auto;}
+.sheet{position:fixed;bottom:0;left:0;right:0;max-width:480px;margin:0 auto;background:#fff;border-radius:22px 22px 0 0;z-index:101;padding:0;transform:translateY(100%);transition:transform .3s cubic-bezier(.32,.72,0,1);height:min(92dvh,720px);max-height:92dvh;overflow:hidden;display:flex;flex-direction:column;touch-action:pan-y;}
 .sheet.open{transform:translateY(0);}
+.sheet>div[id^="s-"]{min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-bottom:env(safe-area-inset-bottom);}
 /* close row */
 .sh-top{display:flex;justify-content:flex-end;padding:14px 14px 0;}
 .sh-close{background:none;border:none;font-size:20px;color:#636366;cursor:pointer;width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:50%;line-height:1;}
@@ -1292,7 +1379,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 /* error */
 .sh-err{background:#fff0f0;border:1px solid #ffcdd2;border-radius:10px;padding:10px 14px;font-size:13px;color:#cc0000;margin:12px 16px 0;display:none;}
 /* próximo button */
-.sh-next{width:calc(100% - 32px);margin:16px 16px 36px;padding:17px;border:none;border-radius:14px;font-size:16px;font-weight:700;font-family:inherit;cursor:pointer;background:linear-gradient(135deg,#e53935,#cc0000);color:#fff;transition:opacity .2s;}
+.sh-next{position:sticky;bottom:0;width:calc(100% - 32px);margin:16px 16px max(18px, env(safe-area-inset-bottom));padding:17px;border:none;border-radius:14px;font-size:16px;font-weight:700;font-family:inherit;cursor:pointer;background:linear-gradient(135deg,#e53935,#cc0000);color:#fff;transition:opacity .2s;box-shadow:0 -10px 18px rgba(255,255,255,.92);}
 .sh-next:disabled{opacity:.45;cursor:not-allowed;}
 .sh-next:active{opacity:.85;}
 .sh-hint{display:block;font-size:12px;color:#8e8e93;margin-top:-10px;margin-bottom:14px;padding:0 2px;}
@@ -2953,6 +3040,8 @@ const isLiveConfiguration = missingConfig.length === 0
 await dbInit()
 await loadOrders()
 await loadUsers()
+await loadRechargeCredits()
+await recoverRechargeCredits()
 await loadGwKeys()
 createServer((req, res) => {
   router(req, res).catch(err => {
