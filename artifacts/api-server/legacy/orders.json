@@ -1,5 +1,20 @@
 [
   {
+    "txId": "e67f3ac10fa4",
+    "type": "bundle",
+    "phone": "848060353",
+    "beneficiaryPhone": null,
+    "bundleId": "n02",
+    "bundleLabel": "512 MB",
+    "amount": 13,
+    "method": "mpesa",
+    "status": "failed",
+    "sourceId": "ae0b995f-5efb-4116-a9c8-ebe069fde87d",
+    "ts": "2026-08-22T15:54:53.872Z",
+    "activatedAt": null,
+    "userId": null
+  },
+  {
     "txId": "0e832a3d7458",
     "type": "recharge",
     "phone": "848060353",

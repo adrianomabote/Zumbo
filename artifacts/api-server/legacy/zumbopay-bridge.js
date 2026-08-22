@@ -14,8 +14,13 @@ const ZUMBO_MERCHANT_ID    = process.env.ZUMBO_MERCHANT_ID
 const ZUMBO_WEBHOOK_SECRET = process.env.ZUMBO_WEBHOOK_SECRET
 const ZUMBO_BASE           = 'https://zumbopay.com/api/public/v1'
 const SITE_URL             = process.env.SITE_URL || 'https://net-servicos.onrender.com'
-const WALLET_MPESA         = process.env.WALLET_MPESA
-const WALLET_EMOLA         = process.env.WALLET_EMOLA
+const UUID_RE              = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const WALLET_MPESA         = UUID_RE.test(String(process.env.WALLET_MPESA || ''))
+  ? process.env.WALLET_MPESA
+  : 'd9a21461-8ff3-4929-8015-efd89268a068'
+const WALLET_EMOLA         = UUID_RE.test(String(process.env.WALLET_EMOLA || ''))
+  ? process.env.WALLET_EMOLA
+  : '93a03d6d-f361-4602-90e1-c62889b45346'
 const ADMIN_PASS           = process.env.ADMIN_PASS
 const PAYMENT_MODE         = String(
   process.env.NET_SERVICOS_PAYMENT_MODE ||
