@@ -21,3 +21,9 @@ timeoutMs = 20000
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.development]
+NET_SERVICOS_PAYMENT_MODE = "live"
+SITE_URL = "https://net-servicos.online"
