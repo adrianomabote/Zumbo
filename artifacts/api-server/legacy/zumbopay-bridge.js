@@ -449,7 +449,8 @@ async function router(req, res) {
     '/api/config', '/api/bundles', '/api/auth/me', '/api/auth/logout',
   ].includes(path) || staticPath
   const accountSetupPath = ['/api/auth/register', '/api/auth/login'].includes(path)
-  if (!isLiveConfiguration && !(method === 'GET' && readOnlyPath) && !accountSetupPath) {
+  const adminLoginPath = path === '/admin/office'
+  if (!isLiveConfiguration && !(method === 'GET' && readOnlyPath) && !accountSetupPath && !adminLoginPath) {
     return json(res, {
       error: 'Operações temporariamente indisponíveis enquanto a configuração segura do serviço não é concluída.',
     }, 503)
