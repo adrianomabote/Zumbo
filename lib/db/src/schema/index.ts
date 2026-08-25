@@ -1,20 +1,26 @@
-// Export your models here. Add one export per file
-// export * from "./posts";
-//
-// Each model/table should ideally be split into different files.
-// Each model/table should define a Drizzle table, insert schema, and types:
-//
-//   import { pgTable, text, serial } from "drizzle-orm/pg-core";
-//   import { createInsertSchema } from "drizzle-zod";
-//   import { z } from "zod/v4";
-//
-//   export const postsTable = pgTable("posts", {
-//     id: serial("id").primaryKey(),
-//     title: text("title").notNull(),
-//   });
-//
-//   export const insertPostSchema = createInsertSchema(postsTable).omit({ id: true });
-//   export type InsertPost = z.infer<typeof insertPostSchema>;
-//   export type Post = typeof postsTable.$inferSelect;
+import { integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
-export {}
+export const pagarOperations = pgTable("pagar_operations", {
+  internalId: text("internal_id").primaryKey(),
+  pagarOperationId: text("pagar_operation_id").unique(),
+  pagarReference: text("pagar_reference").notNull().unique(),
+  type: text("type").notNull(),
+  amountMzn: integer("amount_mzn").notNull(),
+  status: text("status").notNull(),
+  idempotencyKey: text("idempotency_key").notNull().unique(),
+  sourceId: text("source_id").notNull().unique(),
+  localTransactionId: text("local_transaction_id").notNull().unique(),
+  title: text("title").notNull(),
+  method: text("method").notNull(),
+  payerPhone: text("payer_phone").notNull(),
+  receiptNumber: text("receipt_number"),
+  receiptUrl: text("receipt_url"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+});
+
+export const pagarWebhookEvents = pgTable("pagar_webhook_events", {
+  eventId: text("event_id").primaryKey(),
+  eventType: text("event_type").notNull(),
+  processedAt: timestamp("processed_at", { withTimezone: true }).notNull().defaultNow(),
+});
