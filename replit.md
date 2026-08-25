@@ -1,6 +1,6 @@
-# [Project name]
+# Net Serviços
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Plataforma de venda de pacotes de dados e entrega USSD em Moçambique.
 
 ## Run & Operate
 
@@ -10,6 +10,7 @@ _Replace the heading above with the project's name, and this line with one sente
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - Required env: `DATABASE_URL` — Postgres connection string
+- Payment env (server-only): `PAGAR_API_BASE_URL`, `PAGAR_API_KEY`, `PAGAR_SIGNING_SECRET`, `PAGAR_WEBHOOK_SECRET`
 
 ## Stack
 
@@ -22,15 +23,20 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/api-server/src/services/pagar.ts` — Pagar API client, request signatures, persistence, and webhook verification
+- `artifacts/api-server/src/routes/pagar.ts` — backend payment and webhook routes
+- `lib/db/src/schema/index.ts` — PostgreSQL models for Pagar operations and webhook event deduplication
+- `artifacts/api-server/legacy/zumbopay-bridge.js` — legacy UI/auth and internal order bridge; payment calls are delegated to the parent API
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Pagar mutations are signed server-side with a fresh timestamp and nonce, and retried with the same idempotency key/body when applicable.
+- A payment is released to the USSD delivery queue only after a validated Pagar webhook reports `PAID`; HTTP 202 is never treated as success.
+- Legacy JSON orders/users remain compatible, while Pagar operations and webhook event IDs are persisted in PostgreSQL.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+Users can buy data bundles, recharge internal credit, and send confirmed purchases to a paired USSD delivery device.
 
 ## User preferences
 
@@ -38,7 +44,8 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Pagar accepts integer MZN values from 20 through 40000. Existing bundles below 20 MZN are rejected by the backend rather than silently adjusted.
+- Configure TEST credentials separately from LIVE credentials; never place Pagar secrets in browser variables, Git, URLs, or logs.
 
 ## Pointers
 
