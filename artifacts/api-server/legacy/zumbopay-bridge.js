@@ -28,7 +28,7 @@ const USERS_FILE           = './users.json'
 const RECHARGE_CREDITS_FILE = './recharge-credits.json'
 
 function adminToken() {
-  return createHmac('sha256', ZUMBO_WEBHOOK_SECRET + ADMIN_PASS).update('netservicos:admin').digest('hex')
+  return createHmac('sha256', (process.env.PAGAR_WEBHOOK_SECRET || '') + ADMIN_PASS).update('netservicos:admin').digest('hex')
 }
 function checkAdminCookie(req) {
   const cookies = req.headers.cookie || ''
@@ -561,6 +561,38 @@ self.addEventListener('fetch',e=>{
     return
   }
 
+  if (method === 'POST' && path === '/internal/pagar-event') {
+    const raw = await readBody(req)
+    let body = {}
+    try { body = JSON.parse(raw.toString()) } catch {}
+    if (!process.env.SESSION_SECRET || req.headers['x-internal-payment-key'] !== process.env.SESSION_SECRET) {
+      return json(res, { error:'Origem não autorizada.' }, 401)
+    }
+    const status = body.eventType === 'payment.succeeded' ? 'succeeded' : body.eventType === 'payment.failed' ? 'failed' : null
+    if (!status) return json(res, { ok:true })
+    const rec = orders.find(o => o.sourceId === body.reference || o.sourceId === body.operationId ||
+      o.txId === body.reference || o.pagarRef === body.reference || o.pagarRef === body.operationId)
+    const tx = [...transactions.values()].find(t => t.id === body.reference || t.sourceId === body.reference ||
+      t.id === body.operationId || t.sourceId === body.operationId)
+    const target = tx || rec
+    if (!target) return json(res, { ok:true })
+    const txId = target.id || target.txId
+    const liveTx = transactions.get(txId) || { id:txId, type:rec?.type, amount:rec?.amount, phone:rec?.phone, method:rec?.method,
+      extRef:rec?.extRef, callbackUrl:rec?.callbackUrl, gwKeyId:rec?.gwKeyId, status:rec?.status }
+    const duplicate = liveTx.status === status
+    liveTx.status = status
+    if (body.reference) liveTx.ref = body.reference
+    if (status === 'failed') liveTx.error = 'Pagamento recusado.'
+    transactions.set(txId, liveTx)
+    if (!duplicate) {
+      updateOrderStatus(txId, status, { pagarRef: body.reference || null })
+      if (status === 'succeeded') await creditRechargeOnce(liveTx)
+      notifyTx(txId, { status, method:liveTx.method, error:liveTx.error || null })
+      gwFinalize(liveTx)
+    }
+    return json(res, { ok:true })
+  }
+
   // Pagar webhooks are handled by the parent Express server at /api/pagar/webhook.
   if (method === 'POST' && path === '/webhook') {
     return json(res, { error:'Use /api/pagar/webhook.' }, 410)
@@ -762,7 +794,7 @@ NOTAS
     trackOrder(tx, { gwKey: gk.name, gwKeyId: gk.id, extRef: tx.extRef, callbackUrl })
     json(res, { ok:true, txId, status:'pending', method:meth, statusUrl:`${SITE_URL}/gateway/api/status/${txId}` }, 202)
     if (body.description) tx.extDesc = String(body.description).slice(0,120)
-    initiateCharge(tx, msisdn)
+    initiateCharge(tx, tx.extDesc || tx.extRef || 'Pagamento Net Serviços')
     return
   }
 
@@ -2955,11 +2987,9 @@ async function activateOrder(txId,btn){
 
 // ── Servidor ──────────────────────────────────────────────────────────────────
 const requiredConfig = [
-  'ZUMBO_API_KEY',
-  'ZUMBO_MERCHANT_ID',
-  'ZUMBO_WEBHOOK_SECRET',
-  'WALLET_MPESA',
-  'WALLET_EMOLA',
+  'PAGAR_API_KEY',
+  'PAGAR_SIGNING_SECRET',
+  'PAGAR_WEBHOOK_SECRET',
   'ADMIN_PASS',
   'SESSION_SECRET',
 ]

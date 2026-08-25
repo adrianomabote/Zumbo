@@ -14,11 +14,10 @@ router.post("/pagar/webhook", async (req, res) => {
   try {
     const result = await processPagarWebhook(eventId, eventType, rawBody);
     if (!result.duplicate && result.reference && (eventType === "payment.succeeded" || eventType === "payment.failed")) {
-      const payload = await processPagarWebhook(eventId, eventType, rawBody);
       await fetch("http://127.0.0.1:8099/internal/pagar-event", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-internal-payment-key": process.env.SESSION_SECRET || "" },
-        body: JSON.stringify({ eventId, eventType, operationId: result.operationId, reference: result.reference, status: payload.status }),
+        body: JSON.stringify({ eventId, eventType, operationId: result.operationId, reference: result.reference, status: result.status }),
         signal: AbortSignal.timeout(5_000),
       }).catch(() => undefined);
     }
