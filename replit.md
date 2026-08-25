@@ -1,4 +1,4 @@
-# Net Serviços
+# Megabyte
 
 Plataforma de venda de pacotes de dados e entrega USSD em Moçambique.
 

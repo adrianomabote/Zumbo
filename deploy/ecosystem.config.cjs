@@ -1,4 +1,4 @@
-// Configuração PM2 para o servidor Net Serviços
+// Configuração PM2 para o servidor Megabyte
 // Correr: pm2 start deploy/ecosystem.config.cjs
 
 const path = require("path");

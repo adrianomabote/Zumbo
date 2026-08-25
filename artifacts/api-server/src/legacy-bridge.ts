@@ -158,7 +158,7 @@ export function proxyLegacyBridge(req: Request, res: Response) {
 
   upstream.on("error", (error) => {
     req.log.error({ err: error }, "Legacy bridge is unavailable");
-    res.status(502).json({ error: "O serviço Net Serviços está a iniciar." });
+    res.status(502).json({ error: "O serviço Megabyte está a iniciar." });
   });
 
   req.pipe(upstream);

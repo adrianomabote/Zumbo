@@ -14,7 +14,7 @@ NODE_ENV=development pnpm install --no-frozen-lockfile
 echo "==> Compilar servidor API..."
 pnpm --filter @workspace/api-server run build
 
-echo "==> Compilar site Net Serviços..."
+echo "==> Compilar site Megabyte..."
 BASE_PATH=/ NODE_ENV=production \
   pnpm --filter @workspace/net-servicos run build
 

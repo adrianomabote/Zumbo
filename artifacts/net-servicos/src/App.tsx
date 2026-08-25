@@ -16,7 +16,7 @@ function App() {
 
   return (
     <iframe
-      title="Net Serviços"
+      title="Megabyte"
       src={`${import.meta.env.BASE_URL}api/legacy/megas`}
       style={{
         border: 0,

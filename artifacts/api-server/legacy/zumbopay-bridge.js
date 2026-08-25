@@ -1,5 +1,5 @@
 /**
- * Net Serviços — Plataforma de internet e pagamentos em Moçambique
+ * Megabyte — Plataforma de internet e pagamentos em Moçambique
  * Node.js puro · zero dependências externas
  */
 
@@ -488,7 +488,7 @@ async function router(req, res) {
   }
   if (method === 'GET' && path === '/manifest.json') {
     const manifest = JSON.stringify({
-      name:'Net Serviços',short_name:'Net Serviços',
+      name:'Megabyte',short_name:'Megabyte',
       description:'Pacotes de internet Vodacom com pagamento M-Pesa',
       start_url:'/megas',scope:'/',display:'standalone',
       background_color:'#f2f2f7',theme_color:'#cc0000',orientation:'portrait-primary',
@@ -669,7 +669,7 @@ self.addEventListener('fetch',e=>{
     transactions.set(txId, tx)
     trackOrder(tx)
     json(res, { txId, status:'pending', method:meth })
-    initiateCharge(tx, `Recarga Net Serviços ${amount} MT`)
+    initiateCharge(tx, `Recarga Megabyte ${amount} MT`)
     return
   }
 
@@ -809,7 +809,7 @@ NOTAS
     trackOrder(tx, { gwKey: gk.name, gwKeyId: gk.id, extRef: tx.extRef, callbackUrl })
     json(res, { ok:true, txId, status:'pending', method:meth, statusUrl:`${SITE_URL}/gateway/api/status/${txId}` }, 202)
     if (body.description) tx.extDesc = String(body.description).slice(0,120)
-    initiateCharge(tx, tx.extDesc || tx.extRef || 'Pagamento Net Serviços')
+    initiateCharge(tx, tx.extDesc || tx.extRef || 'Pagamento Megabyte')
     return
   }
 
@@ -1103,9 +1103,9 @@ function megasPage() {
   return `<!DOCTYPE html>
 <html lang="pt"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
-<title>Megas — Net Serviços</title>
+<title>Megas — Megabyte</title>
 <link rel="canonical" href="${SITE_URL}/megas">
-<meta property="og:title" content="Net Serviços — Pacotes de Internet">
+<meta property="og:title" content="Megabyte — Pacotes de Internet">
 <meta property="og:description" content="Ofertas de internet Vodacom com pagamento M-Pesa. Activa o teu pacote em segundos.">
 <meta property="og:url" content="${SITE_URL}/megas">
 <meta property="og:image" content="${SITE_URL}/static/icon-512.png">
@@ -1116,7 +1116,7 @@ function megasPage() {
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Net Serviços">
+<meta name="apple-mobile-web-app-title" content="Megabyte">
 <link rel="apple-touch-icon" href="/static/icon-192.png?v=3">
 <script>(function(){document.addEventListener('contextmenu',e=>e.preventDefault());document.addEventListener('keydown',function(e){const c=e.ctrlKey||e.metaKey;if(e.key==='F12'){e.preventDefault();return false}if(c&&e.shiftKey&&['I','J','C','K'].includes(e.key.toUpperCase())){e.preventDefault();return false}if(c&&['u','U','s','S','a','A','c','C','x','X'].includes(e.key)){e.preventDefault();return false}},true);['copy','cut','selectstart','dragstart'].forEach(ev=>document.addEventListener(ev,e=>e.preventDefault(),true))})()
 </script>
@@ -1445,7 +1445,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 
 <nav class="nav">
   <a href="/" class="nav-logo">
-    <img src="/static/vodacom.webp" alt="Net Serviços" class="nav-logo-img">
+    <img src="/static/vodacom.webp" alt="Megabyte" class="nav-logo-img">
     <div class="nav-logo-text">Net <span>Serviços</span></div>
   </a>
   <div id="nav-balance" class="nav-balance">
@@ -1615,10 +1615,10 @@ ${allListHtml}
 <!-- ── Banner instalar app ── -->
 <div class="pwa-banner" id="pwa-banner">
   <div class="pwa-banner-icon">
-    <img src="/static/icon.svg" alt="Net Serviços">
+    <img src="/static/icon.svg" alt="Megabyte">
   </div>
   <div class="pwa-banner-text">
-    <strong>Net Serviços</strong>
+    <strong>Megabyte</strong>
     <span>Instala a app no teu telemóvel</span>
   </div>
   <button class="pwa-banner-install" id="pwa-install-btn">Instalar</button>
@@ -1647,7 +1647,7 @@ ${allListHtml}
 <footer class="site-footer">
   <div class="footer-top">
     <div class="footer-brand">
-      <div class="footer-logo-wrap"><img src="/static/vodafone-logo.jpg" alt="Net Serviços" class="footer-logo-img"></div>
+      <div class="footer-logo-wrap"><img src="/static/vodafone-logo.jpg" alt="Megabyte" class="footer-logo-img"></div>
       <div class="footer-brand-name">Net <span>Serviços</span></div>
     </div>
     <div class="footer-links">
@@ -1690,7 +1690,7 @@ ${allListHtml}
         </a>
       </div>
     </div>
-    <p class="footer-copy">© 2025 Net Serviços · Todos os direitos reservados</p>
+    <p class="footer-copy">© 2025 Megabyte · Todos os direitos reservados</p>
   </div>
 </footer>
 
@@ -1864,7 +1864,7 @@ ${allListHtml}
       </button>
       <div class="auth-card-head">
         <img src="/static/vodacom.webp" alt="logo" class="auth-card-logo">
-        <div class="auth-card-title">Net Serviços</div>
+        <div class="auth-card-title">Megabyte</div>
         <div class="auth-card-sub">Para comprar, precisa de uma conta</div>
       </div>
       <div class="auth-tabs">
@@ -2318,7 +2318,7 @@ checkAuth()
 function adminLoginPage(err = '') {
   return `<!DOCTYPE html><html lang="pt"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Admin — Net Serviços</title>
+<title>Admin — Megabyte</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;}
@@ -2652,7 +2652,7 @@ function adminDashboard(filter = 'all') {
 
   return `<!DOCTYPE html><html lang="pt"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Painel Admin — Net Serviços</title>
+<title>Painel Admin — Megabyte</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;color:#1c1c1e;display:flex;flex-direction:column;}
@@ -3020,6 +3020,6 @@ createServer((req, res) => {
     try { json(res, { error:'Erro interno.' }, 500) } catch {}
   })
 }).listen(PORT, '0.0.0.0', () => {
-  console.log(`Net Serviços a correr em :${PORT}`)
+  console.log(`Megabyte a correr em :${PORT}`)
   console.log('Admin: /admin/office')
 })
