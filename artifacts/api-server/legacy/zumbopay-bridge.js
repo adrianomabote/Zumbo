@@ -446,7 +446,7 @@ async function router(req, res) {
   const staticPath = path.startsWith('/static/')
   const readOnlyPath = [
     '/', '/megas', '/ping', '/favicon.ico', '/manifest.json', '/sw.js',
-    '/api/config', '/api/bundles',
+    '/api/config', '/api/bundles', '/api/auth/me', '/api/auth/logout',
   ].includes(path) || staticPath
   if (!isLiveConfiguration && !(method === 'GET' && readOnlyPath)) {
     return json(res, {
@@ -596,6 +596,19 @@ self.addEventListener('fetch',e=>{
   // Pagar webhooks are handled by the parent Express server at /api/pagar/webhook.
   if (method === 'POST' && path === '/webhook') {
     return json(res, { error:'Use /api/pagar/webhook.' }, 410)
+  }
+
+  // Public read-only metadata used by the storefront during startup.
+  if (method === 'GET' && path === '/api/config') {
+    return json(res, {
+      ok: true,
+      paymentMode: isTestMode ? 'test' : 'live',
+      minAmountMzn: 20,
+      maxAmountMzn: 40000,
+    })
+  }
+  if (method === 'GET' && path === '/api/bundles') {
+    return json(res, Array.from(BUNDLES, ([id, bundle]) => ({ id, ...bundle })))
   }
 
   // ── Auth: Criar conta ────────────────────────────────────────────────────
