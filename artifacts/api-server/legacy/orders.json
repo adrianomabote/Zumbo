@@ -1,5 +1,21 @@
 [
   {
+    "txId": "83a5d1ba1d18",
+    "type": "bundle",
+    "phone": "840000001",
+    "beneficiaryPhone": null,
+    "bundleId": "n04",
+    "bundleLabel": "780 MB",
+    "amount": 20,
+    "method": "mpesa",
+    "status": "succeeded",
+    "sourceId": "ff48a6ee-5709-4716-ad08-a29293e5d05e",
+    "ts": "2026-08-25T13:14:58.830Z",
+    "activatedAt": null,
+    "userId": null,
+    "pagarRef": "net-83a5d1ba1d18"
+  },
+  {
     "txId": "d4f7d159fc38",
     "type": "recharge",
     "phone": "848060353",
