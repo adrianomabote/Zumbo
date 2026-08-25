@@ -72,7 +72,40 @@ cd /opt/net-servicos
 
 ---
 
-## Passo 2 — Criar o ficheiro de variáveis de ambiente
+## Passo 2 — Instalar PostgreSQL no VPS
+
+A API precisa de PostgreSQL para guardar as operações Pagar e os eventos de
+webhook. Instale e active o serviço:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y postgresql postgresql-contrib
+sudo systemctl enable --now postgresql
+sudo systemctl is-active postgresql
+```
+
+Crie uma base e um utilizador exclusivos do Megabyte:
+
+```bash
+sudo -u postgres psql
+```
+
+Dentro do `psql`:
+
+```sql
+CREATE USER megabyte_app WITH LOGIN;
+\password megabyte_app
+CREATE DATABASE megabyte OWNER megabyte_app;
+\q
+```
+
+Quando pedir a palavra-passe, use uma palavra-passe forte. Para evitar
+problemas na `DATABASE_URL`, prefira letras e números, sem `@`, `:`, `/` ou
+`#`. O PostgreSQL fica acessível apenas localmente no VPS.
+
+---
+
+## Passo 3 — Criar o ficheiro de variáveis de ambiente
 
 ```bash
 nano /opt/net-servicos/.env
@@ -83,6 +116,7 @@ Colar isto (substituir `SESSION_SECRET` por uma senha longa):
 ```env
 PORT=3004
 NODE_ENV=production
+DATABASE_URL=postgresql://megabyte_app:PASSWORD_DO_POSTGRES@127.0.0.1:5432/megabyte
 NET_SERVICOS_PAYMENT_MODE=live
 SITE_URL=https://net-servicos.online
 SESSION_SECRET=COLOQUE_AQUI_UMA_SENHA_LONGA_E_ALEATORIA_MINIMO_32_CHARS
@@ -106,7 +140,7 @@ na raiz do projeto serve apenas como modelo sem credenciais.
 
 ---
 
-## Passo 3 — Compilar o projecto
+## Passo 4 — Compilar o projecto
 
 ```bash
 cd /opt/net-servicos
@@ -122,7 +156,7 @@ Demora 2–5 minutos. No final deve ver:
 
 ---
 
-## Passo 4 — Iniciar o servidor com PM2
+## Passo 5 — Iniciar o servidor com PM2
 
 ```bash
 cd /opt/net-servicos
@@ -149,7 +183,7 @@ pm2 startup
 
 ---
 
-## Passo 5 — Configurar o Nginx
+## Passo 6 — Configurar o Nginx
 
 **5.1 — Activar a configuração deste projecto:**
 ```bash
@@ -178,7 +212,7 @@ O site fica acessível em: `http://IP_DA_VPS:3003`
 
 ---
 
-## Passo 6 — Configurar o telefone Android (agente USSD)
+## Passo 7 — Configurar o telefone Android (agente USSD)
 
 ### 6.1 — Definir o endereço do servidor na app
 
