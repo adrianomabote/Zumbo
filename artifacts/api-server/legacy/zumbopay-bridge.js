@@ -1561,6 +1561,54 @@ ${allListHtml}
       </div>
     </div>
 
+    <div class="mo-card">
+      <div class="mo-img-wrap"><img src="/static/offer-ya.webp" alt="Yá" class="mo-img"></div>
+      <div class="mo-body">
+        <div class="mo-name">Yá</div>
+        <div class="mo-desc">Mais megas e minutos para a malta jovem.</div>
+        <div class="mo-footer">
+          <span class="mo-price">A partir de 2 MT</span>
+          <button class="mo-btn" onclick="openOffer('ya')">Ver mais</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="mo-card">
+      <div class="mo-img-wrap"><img src="/static/offer-bomdia.webp" alt="Bom Dia" class="mo-img"></div>
+      <div class="mo-body">
+        <div class="mo-name">Bom Dia</div>
+        <div class="mo-desc">Bom Dia é o serviço em que podes activar uma oferta de Voz ou Dados, diariamente, no horário das 0h as 12h.</div>
+        <div class="mo-footer">
+          <span class="mo-price">A partir de 2 MT</span>
+          <button class="mo-btn" onclick="openOffer('bomdia')">Ver mais</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="mo-card">
+      <div class="mo-img-wrap"><img src="/static/offer-turnonoite.webp" alt="Turno da Noite" class="mo-img"></div>
+      <div class="mo-body">
+        <div class="mo-name">Turno da Noite</div>
+        <div class="mo-desc">As melhores ofertas para manter aquele papo durante à noite.</div>
+        <div class="mo-footer">
+          <span class="mo-price">A partir de 5 MT</span>
+          <button class="mo-btn" onclick="openOffer('turnonoite')">Ver mais</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="mo-card">
+      <div class="mo-img-wrap"><img src="/static/offer-jackpot.webp" alt="Todas Redes Jackpot" class="mo-img"></div>
+      <div class="mo-body">
+        <div class="mo-name">Todas Redes Jackpot</div>
+        <div class="mo-desc">É uma oferta de voz para todas as redes que permite aumentar as tuas chamadas em até 4X mais.</div>
+        <div class="mo-footer">
+          <span class="mo-price">A partir de 2 MT</span>
+          <button class="mo-btn" onclick="openOffer('jackpot')">Ver mais</button>
+        </div>
+      </div>
+    </div>
+
   </div>
 </section>
 
