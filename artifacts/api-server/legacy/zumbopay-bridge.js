@@ -966,9 +966,6 @@ function megasPage() {
     diarias: {
       note: null,
       pkgs: [
-        {id:'n01',name:'Diário 10', size:'380 MB', price:10,  dur:'1 dia(s)'},
-        {id:'n02',name:'Diário 13', size:'512 MB', price:13,  dur:'1 dia(s)'},
-        {id:'n03',name:'Diário 17', size:'624 MB', price:17,  dur:'1 dia(s)'},
         {id:'n04',name:'Diário 20', size:'780 MB', price:20,  dur:'1 dia(s)'},
         {id:'n05',name:'Diário 25', size:'1 GB',   price:25,  dur:'1 dia(s)'},
         {id:'n06',name:'Diário 28', size:'1.1 GB', price:28,  dur:'1 dia(s)'},
@@ -1542,7 +1539,7 @@ ${allListHtml}
         <div class="mo-name">Ofertas SóPraTi</div>
         <div class="mo-desc">Serviço de Ofertas personalizadas de acordo com o perfil de cada cliente.</div>
         <div class="mo-footer">
-          <span class="mo-price">A partir de 10 MT</span>
+          <span class="mo-price">A partir de 20 MT</span>
           <button class="mo-btn" onclick="openOffer('soprati')">Ver mais</button>
         </div>
       </div>
