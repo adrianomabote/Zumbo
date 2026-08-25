@@ -4,6 +4,7 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { proxyLegacyBridge } from "./legacy-bridge";
+import pagarRouter from "./routes/pagar";
 
 const app: Express = express();
 
@@ -27,6 +28,10 @@ app.use(
   }),
 );
 app.use(cors());
+app.use("/api", express.raw({ type: "application/json" }), (req, res, next) => {
+  if (req.path === "/pagar/webhook") return pagarRouter(req, res, next);
+  return next();
+});
 app.use("/api/legacy", proxyLegacyBridge);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

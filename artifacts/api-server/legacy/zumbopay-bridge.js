@@ -9,10 +9,7 @@ import { readFile, writeFile, rename }               from 'fs/promises'
 
 // ── Configuração ──────────────────────────────────────────────────────────────
 const PORT                 = process.env.PORT || 5000
-const ZUMBO_API_KEY        = process.env.ZUMBO_API_KEY
-const ZUMBO_MERCHANT_ID    = process.env.ZUMBO_MERCHANT_ID
-const ZUMBO_WEBHOOK_SECRET = process.env.ZUMBO_WEBHOOK_SECRET
-const ZUMBO_BASE           = 'https://zumbopay.com/api/public/v1'
+const PAGAR_API_BASE_URL   = process.env.PAGAR_API_BASE_URL || 'https://api.pagar.co.mz/api/v1'
 const SITE_URL             = process.env.SITE_URL || 'https://net-servicos.onrender.com'
 const UUID_RE              = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const WALLET_MPESA         = UUID_RE.test(String(process.env.WALLET_MPESA || ''))
@@ -386,8 +383,6 @@ function notifyTx(txId, data) {
 }
 
 async function initiateCharge(tx, customerName) {
-  const walletId = tx.method === 'mpesa' ? WALLET_MPESA : WALLET_EMOLA
-  const sourceId = tx.sourceId
   if (isTestMode) {
     tx.ref = `test-${sourceId}`
     tx.status = 'succeeded'
@@ -399,38 +394,35 @@ async function initiateCharge(tx, customerName) {
     return
   }
   try {
-    console.log('[ZumboPay] charge identifier validation', JSON.stringify({
-      wallet_id_uuid: isUuid(walletId),
-      source_id_uuid: isUuid(sourceId),
-      merchant_id_present: Boolean(ZUMBO_MERCHANT_ID),
-      msisdn: /^\+?258\d{9}$/.test(tx.msisdn),
-    }))
-    const resp = await fetch(`${ZUMBO_BASE}/charges`, {
+    const resp = await fetch(`http://localhost:${process.env.MAIN_API_PORT}/api/pagar/internal/payments`, {
       method: 'POST',
-      headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${ZUMBO_API_KEY}`, 'X-Merchant-Id':ZUMBO_MERCHANT_ID },
-      body: JSON.stringify({ wallet_id:walletId, amount:tx.amount, msisdn:tx.msisdn, customer_name:customerName, source_id:sourceId }),
+      headers: { 'Content-Type':'application/json', 'x-internal-payment-key':process.env.SESSION_SECRET },
+      body: JSON.stringify({
+        localTransactionId: tx.id,
+        sourceId: tx.sourceId,
+        reference: `net-${tx.id}`,
+        title: customerName,
+        description: customerName,
+        amountMzn: tx.amount,
+        method: tx.method === 'mpesa' ? 'MPESA' : 'EMOLA',
+        payerPhone: tx.phone,
+        idempotencyKey: `pagar-${tx.id}`,
+      }),
     })
     const data = await resp.json().catch(()=>({}))
-    console.log(`[ZumboPay] POST /charges → ${resp.status}`, JSON.stringify(data))
-    if (resp.status === 200) {
-      tx.ref = data.data?.reference || sourceId; tx.status = 'succeeded'
-      updateOrderStatus(tx.id, 'succeeded', { zumboRef: tx.ref })
-      await creditRechargeOnce(tx)
-      notifyTx(tx.id, { status:'succeeded', method:tx.method })
-      gwFinalize(tx); return
-    }
+    console.log(`[Pagar] POST /payments → ${resp.status}`, JSON.stringify({ status:data.status, reference:data.reference }))
     if (resp.status === 202) {
-      tx.ref = data.data?.reference || sourceId; tx.status = 'pending'
+      tx.ref = data.reference || `net-${tx.id}`; tx.status = 'pending'
       notifyTx(tx.id, { status:'pending', method:tx.method })
-      updateOrderStatus(tx.id, 'pending', { zumboRef: tx.ref })
+      updateOrderStatus(tx.id, 'pending', { pagarRef: tx.ref })
       scheduleTimeout(tx); return
     }
-    const msg = data.error?.message || data.message || data.detail || `Erro ${resp.status}`
+    const msg = data.error || data.message || `Erro ${resp.status}`
     tx.status = 'failed'; tx.error = msg
     notifyTx(tx.id, { status:'failed', error:msg, method:tx.method })
     updateOrderStatus(tx.id, 'failed'); gwFinalize(tx)
   } catch (err) {
-    console.error('[ZumboPay]', err.message)
+    console.error('[Pagar]', err.message)
     tx.status = 'failed'; tx.error = 'Erro de ligação. Tente novamente.'
     notifyTx(tx.id, { status:'failed', error:tx.error, method:tx.method })
     updateOrderStatus(tx.id, 'failed'); gwFinalize(tx)

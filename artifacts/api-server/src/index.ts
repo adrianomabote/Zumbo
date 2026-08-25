@@ -5,6 +5,7 @@ import {
   waitForLegacyBridge,
 } from "./legacy-bridge";
 import { logger } from "./lib/logger";
+import { ensurePagarTables } from "./services/pagar";
 
 const rawPort = process.env["PORT"];
 
@@ -22,6 +23,7 @@ if (Number.isNaN(port) || port <= 0) {
 
 startLegacyBridge();
 await waitForLegacyBridge();
+await ensurePagarTables();
 
 app.listen(port, (err) => {
   if (err) {
