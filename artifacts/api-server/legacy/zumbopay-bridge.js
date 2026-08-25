@@ -383,7 +383,7 @@ function notifyTx(txId, data) {
 
 async function initiateCharge(tx, customerName) {
   if (isTestMode) {
-    tx.ref = `test-${sourceId}`
+    tx.ref = `test-${tx.sourceId || tx.id}`
     tx.status = 'succeeded'
     console.log(`[ZumboPay] TEST charge simulated for ${tx.id}`)
     updateOrderStatus(tx.id, 'succeeded', { zumboRef: tx.ref })
@@ -446,6 +446,7 @@ async function router(req, res) {
   const staticPath = path.startsWith('/static/')
   const readOnlyPath = [
     '/', '/megas', '/ping', '/favicon.ico', '/manifest.json', '/sw.js',
+    '/api/config', '/api/bundles',
   ].includes(path) || staticPath
   if (!isLiveConfiguration && !(method === 'GET' && readOnlyPath)) {
     return json(res, {
