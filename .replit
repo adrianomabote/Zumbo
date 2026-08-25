@@ -28,3 +28,8 @@ packages = ["eas-cli"]
 [userenv.development]
 NET_SERVICOS_PAYMENT_MODE = "live"
 SITE_URL = "https://megabyte.live"
+
+[userenv.production]
+NET_SERVICOS_PAYMENT_MODE = "live"
+PAGAR_WEBHOOK_URL = "https://megabyte.live/api/pagar/webhook"
+SITE_URL = "https://megabyte.live"
