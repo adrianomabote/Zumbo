@@ -38,8 +38,7 @@ function checkAdminCookie(req) {
 
 // ── Catálogo de pacotes ───────────────────────────────────────────────────────
 const BUNDLES = new Map([
-  ['n01',{label:'380 MB', price:10,  cat:'normal'}],['n02',{label:'512 MB', price:13,  cat:'normal'}],
-  ['n03',{label:'624 MB', price:17,  cat:'normal'}],['n04',{label:'780 MB', price:20,  cat:'normal'}],
+  ['n04',{label:'780 MB', price:20,  cat:'normal'}],
   ['n05',{label:'1 GB',   price:25,  cat:'normal'}],['n06',{label:'1.1 GB', price:28,  cat:'normal'}],
   ['n07',{label:'1.6 GB', price:41,  cat:'normal'}],['n08',{label:'2 GB',   price:50,  cat:'normal'}],
   ['n09',{label:'3 GB',   price:75,  cat:'normal'}],['n10',{label:'4 GB',   price:100, cat:'normal'}],
