@@ -6,6 +6,7 @@ import {
 } from "./legacy-bridge";
 import { logger } from "./lib/logger";
 import { ensurePagarTables } from "./services/pagar";
+import { hasDatabase } from "@workspace/db";
 
 const rawPort = process.env["PORT"];
 
@@ -23,7 +24,11 @@ if (Number.isNaN(port) || port <= 0) {
 
 startLegacyBridge();
 await waitForLegacyBridge();
-await ensurePagarTables();
+if (hasDatabase) {
+  await ensurePagarTables();
+} else {
+  logger.warn("PostgreSQL não configurado; pagamentos desactivados.");
+}
 
 app.listen(port, (err) => {
   if (err) {

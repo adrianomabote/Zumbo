@@ -1,8 +1,15 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { pool } from "@workspace/db";
+import { hasDatabase, pool } from "@workspace/db";
 
 const DEFAULT_BASE_URL = "https://api.pagar.co.mz/api/v1";
 const terminalStates = new Set(["PAID", "FAILED", "CANCELLED", "REFUNDED"]);
+
+function requirePool() {
+  if (!hasDatabase || !pool) {
+    throw new Error("Pagamentos indisponíveis: PostgreSQL não configurado.");
+  }
+  return pool;
+}
 
 export type PagarMethod = "MPESA" | "EMOLA";
 
@@ -96,6 +103,7 @@ function validateInput(input: PagarPaymentInput) {
 }
 
 export async function ensurePagarTables() {
+  if (!hasDatabase || !pool) return;
   await pool.query(`
     CREATE TABLE IF NOT EXISTS pagar_operations (
       internal_id text PRIMARY KEY,
@@ -124,14 +132,15 @@ export async function ensurePagarTables() {
 }
 
 export async function createPagarPayment(input: PagarPaymentInput) {
+  const database = requirePool();
   validateInput(input);
-  const existing = await pool.query(
+  const existing = await database.query(
     "SELECT internal_id, pagar_operation_id, pagar_reference, amount_mzn, status FROM pagar_operations WHERE local_transaction_id = $1 OR idempotency_key = $2",
     [input.localTransactionId, input.idempotencyKey],
   );
   if (existing.rows[0]) return existing.rows[0];
 
-  const inserted = await pool.query(
+  const inserted = await database.query(
     `INSERT INTO pagar_operations (internal_id, pagar_reference, type, amount_mzn, status, idempotency_key, source_id, local_transaction_id, title, method, payer_phone)
      VALUES ($1,$2,'payment',$3,'PENDING',$4,$5,$6,$7,$8,$9) RETURNING *`,
     [input.localTransactionId, input.reference, input.amountMzn, input.idempotencyKey, input.sourceId, input.localTransactionId, input.title, input.method, input.payerPhone],
@@ -147,13 +156,13 @@ export async function createPagarPayment(input: PagarPaymentInput) {
   try {
     const data = await request("POST", "/payments", body, input.idempotencyKey);
     const operation = (data.payment || data) as Record<string, unknown>;
-    const updated = await pool.query(
+    const updated = await database.query(
       "UPDATE pagar_operations SET pagar_operation_id = $1, status = $2 WHERE internal_id = $3 RETURNING *",
       [String(operation.id || ""), String(operation.status || "PENDING"), input.localTransactionId],
     );
     return updated.rows[0] || inserted.rows[0];
   } catch (error) {
-    await pool.query("UPDATE pagar_operations SET status = 'FAILED' WHERE internal_id = $1", [input.localTransactionId]);
+    await database.query("UPDATE pagar_operations SET status = 'FAILED' WHERE internal_id = $1", [input.localTransactionId]);
     throw error;
   }
 }
@@ -190,12 +199,13 @@ export function verifyPagarWebhook(rawBody: Buffer, signatureHeader: string) {
 }
 
 export async function processPagarWebhook(eventId: string, eventType: string, rawBody: Buffer) {
+  const database = requirePool();
   const payload = JSON.parse(rawBody.toString("utf8")) as { data?: Record<string, unknown> };
   const data = payload.data || {};
   const operationId = typeof data.id === "string" ? data.id : undefined;
   const reference = typeof data.reference === "string" ? data.reference : undefined;
   const status = typeof data.status === "string" ? data.status : undefined;
-  const client = await pool.connect();
+  const client = await database.connect();
   try {
     await client.query("BEGIN");
     const eventInsert = await client.query(
