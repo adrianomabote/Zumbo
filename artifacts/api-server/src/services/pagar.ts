@@ -203,8 +203,11 @@ export async function processPagarWebhook(eventId: string, eventType: string, ra
         [operationId || "", reference || ""],
       );
       const local = current.rows[0];
-      if (local && status && ["PAID", "FAILED", "CANCELLED", "REFUNDED", "PENDING", "PROCESSING", "RECONCILIATION_REQUIRED"].includes(status)) {
-        const nextStatus = eventType === "payment.succeeded" ? "PAID" : status;
+      const eventAmount = typeof data.amountMzn === "number" ? data.amountMzn : undefined;
+      const acceptedStatus = !status || ["PAID", "FAILED", "CANCELLED", "REFUNDED", "PENDING", "PROCESSING", "RECONCILIATION_REQUIRED"].includes(status);
+      const identifiersMatch = Boolean(local && (operationId || reference));
+      if (local && identifiersMatch && acceptedStatus && (eventAmount === undefined || eventAmount === local.amount_mzn)) {
+        const nextStatus = eventType === "payment.succeeded" ? "PAID" : status || "FAILED";
         const receipt = (data.receipt || {}) as Record<string, unknown>;
         await client.query(
           "UPDATE pagar_operations SET status = $1, pagar_operation_id = COALESCE($2,pagar_operation_id), receipt_number = COALESCE($3,receipt_number), receipt_url = COALESCE($4,receipt_url), confirmed_at = CASE WHEN $1 = 'PAID' THEN now() ELSE confirmed_at END WHERE internal_id = $5",

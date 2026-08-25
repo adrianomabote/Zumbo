@@ -9,7 +9,6 @@ import { readFile, writeFile, rename }               from 'fs/promises'
 
 // ── Configuração ──────────────────────────────────────────────────────────────
 const PORT                 = process.env.PORT || 5000
-const PAGAR_API_BASE_URL   = process.env.PAGAR_API_BASE_URL || 'https://api.pagar.co.mz/api/v1'
 const SITE_URL             = process.env.SITE_URL || 'https://net-servicos.onrender.com'
 const UUID_RE              = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const WALLET_MPESA         = UUID_RE.test(String(process.env.WALLET_MPESA || ''))
@@ -369,6 +368,7 @@ function normalizeMsisdn(p) { const d = String(p).replace(/\D/g,''); return d.st
 function detectMethod(msisdn) {
   const l = msisdn.replace(/^258/,'')
   if (l.startsWith('84')||l.startsWith('85')) return 'mpesa'
+  if (l.startsWith('86')) return 'emola'
   return null
 }
 function isUuid(value) {
@@ -537,14 +537,11 @@ self.addEventListener('fetch',e=>{
 
   // ── API webhook-status ────────────────────────────────────────────────────
   if (method === 'GET' && path === '/api/webhook-status') {
-    try {
-      const r = await fetch(`${ZUMBO_BASE}/merchant/validate`, {
-        headers: { 'Authorization':`Bearer ${ZUMBO_API_KEY}`, 'X-Merchant-Id':ZUMBO_MERCHANT_ID },
-      })
-      const data = await r.json().catch(()=>({}))
-      const wh = data?.data?.webhook
-      return json(res, { registered:!!wh, url:wh?.url||null, active:wh?.is_active||false })
-    } catch { return json(res, { registered:false, url:null, active:false }) }
+    return json(res, {
+      registered: Boolean(process.env.PAGAR_WEBHOOK_SECRET),
+      url: process.env.PAGAR_WEBHOOK_URL || null,
+      active: Boolean(process.env.PAGAR_API_KEY && process.env.PAGAR_SIGNING_SECRET),
+    })
   }
 
   // ── API encomenda de megas ────────────────────────────────────────────────
@@ -564,99 +561,9 @@ self.addEventListener('fetch',e=>{
     return
   }
 
-  // ── Webhook ZumboPay ──────────────────────────────────────────────────────
+  // Pagar webhooks are handled by the parent Express server at /api/pagar/webhook.
   if (method === 'POST' && path === '/webhook') {
-    const raw = await readBody(req), rawStr = raw.toString()
-    const sig = req.headers['x-zumbopay-signature'] || ''
-    if (ZUMBO_WEBHOOK_SECRET) {
-      try {
-        const exp = createHmac('sha256', ZUMBO_WEBHOOK_SECRET).update(rawStr).digest('hex')
-        if (!sig || !safeEqual(String(sig), exp)) return json(res, { error:'Assinatura inválida.' }, 401)
-      } catch { return json(res, { error:'Assinatura inválida.' }, 401) }
-    }
-    let event = {}; try { event = JSON.parse(rawStr) } catch {}
-    const ref    = event.data?.reference || event.data?.source_id || event.data?.id
-    const status = event.event === 'payment.succeeded' ? 'succeeded' : event.event === 'payment.failed' ? 'failed' : null
-    if (status && ref) {
-      let matched = false
-      for (const [txId, tx] of transactions) {
-        const src = 'dep-'+tx.id, bsrc = 'bnd-'+tx.id, gsrc = 'gw-'+tx.id
-        const knownRefs = [tx.ref, tx.sourceId, tx.id, src, bsrc, gsrc].filter(Boolean)
-        if (knownRefs.includes(ref) || knownRefs.includes(event.data?.source_id)) {
-          // confirmação tardia (depois do timeout): reabre para notificar de novo
-          if (status === 'succeeded' && tx.gwDone && tx.status === 'failed') tx.gwDone = false
-          const isDuplicateTerminalEvent = tx.status === status && (status === 'succeeded' || status === 'failed')
-          tx.status = status
-          tx.error  = status==='failed' ? (event.data?.message||'Pagamento recusado.') : null
-          if (event.data?.reference) tx.ref = event.data.reference
-          if (!isDuplicateTerminalEvent) {
-            notifyTx(txId, { status, error:tx.error, method:tx.method })
-            updateOrderStatus(txId, status, { zumboRef: tx.ref || null })
-            if (status === 'succeeded') {
-              await creditRechargeOnce(tx)
-            }
-          }
-          gwFinalize(tx)
-          console.log(`[Webhook] ${txId} → ${status}`)
-          matched = true
-          break
-        }
-      }
-      // fallback: tx perdida após reinício — recupera do registo persistente
-      if (!matched) {
-        const sourceId = event.data?.source_id
-        const persistedRec = orders.find(o =>
-          o.sourceId === ref || o.sourceId === sourceId || o.zumboRef === ref
-        )
-        const zumboRefFallback = event.data?.reference || null
-        if (persistedRec && (persistedRec.status === 'pending' || (status === 'succeeded' && persistedRec.status === 'failed'))) {
-          updateOrderStatus(persistedRec.txId, status, { zumboRef: zumboRefFallback })
-          if (status === 'succeeded' && persistedRec.type === 'recharge' && persistedRec.userId) {
-            await creditRechargeOnce({ id:persistedRec.txId, type:'recharge', userId:persistedRec.userId, amount:persistedRec.amount })
-          }
-          if (persistedRec.type === 'gateway') {
-            gwFinalize({
-              id:persistedRec.txId, type:'gateway', status, amount:persistedRec.amount,
-              phone:persistedRec.phone, method:persistedRec.method, extRef:persistedRec.extRef||null,
-              callbackUrl:persistedRec.callbackUrl||null, gwKeyId:persistedRec.gwKeyId,
-              error: status==='failed' ? (event.data?.message||'Pagamento recusado.') : null,
-            })
-          }
-          console.log(`[Webhook] (persistido) ${persistedRec.txId} → ${status} ref:${zumboRefFallback}`)
-          matched = true
-        }
-      }
-      if (!matched) {
-        // Transacções gateway (prefixo gw-)
-        const gid = String(ref).startsWith('gw-') ? String(ref).slice(3)
-                  : String(event.data?.source_id||'').startsWith('gw-') ? String(event.data.source_id).slice(3) : null
-        const gwRec = orders.find(o => o.type === 'gateway' && (
-          (gid && o.txId === gid) || o.sourceId === ref || o.sourceId === event.data?.source_id
-        ))
-        const zumboRefFallback = event.data?.reference || null
-        if (gwRec && (gwRec.status === 'pending' || (status === 'succeeded' && gwRec.status === 'failed'))) {
-          updateOrderStatus(gwRec.txId, status, { zumboRef: zumboRefFallback })
-          const tx = { id:gwRec.txId, type:'gateway', status, amount:gwRec.amount, phone:gwRec.phone, method:gwRec.method, extRef:gwRec.extRef||null, callbackUrl:gwRec.callbackUrl||null, gwKeyId:gwRec.gwKeyId, error: status==='failed' ? (event.data?.message||'Pagamento recusado.') : null }
-          gwFinalize(tx)
-          console.log(`[Webhook] (persistido gateway) ${gwRec.txId} → ${status} ref:${zumboRefFallback}`)
-        }
-        // Recargas de saldo (prefixo rch-)
-        const rid = String(ref).startsWith('rch-') ? String(ref).slice(4)
-                  : String(event.data?.source_id||'').startsWith('rch-') ? String(event.data.source_id).slice(4) : null
-        const rchRec = orders.find(o => o.type === 'recharge' && (
-          (rid && o.txId === rid) || o.sourceId === ref || o.sourceId === event.data?.source_id
-        ))
-        if (rchRec && status === 'succeeded' && (rchRec.status === 'pending' || rchRec.status === 'failed')) {
-          updateOrderStatus(rchRec.txId, status, { zumboRef: zumboRefFallback })
-          if (rchRec.userId) {
-            const u = findUserById(rchRec.userId)
-            if (u) { u.balance = (u.balance||0) + rchRec.amount; saveUsers().catch(()=>{}) }
-          }
-          console.log(`[Webhook] (persistido recarga) ${rchRec.txId} → ${status} utilizador ${rchRec.userId} ref:${zumboRefFallback}`)
-        }
-      }
-    }
-    return json(res, { ok:true })
+    return json(res, { error:'Use /api/pagar/webhook.' }, 410)
   }
 
   // ── Auth: Criar conta ────────────────────────────────────────────────────

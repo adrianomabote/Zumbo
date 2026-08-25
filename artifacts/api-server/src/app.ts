@@ -28,7 +28,13 @@ app.use(
   }),
 );
 app.use(cors());
-app.use("/api", express.raw({ type: "application/json" }), (req, res, next) => {
+app.use("/api", (req, res, next) => {
+  if (req.path === "/pagar/webhook") {
+    return express.raw({ type: "application/json", limit: "256kb" })(req, res, next);
+  }
+  return next();
+});
+app.use("/api", (req, res, next) => {
   if (req.path === "/pagar/webhook") return pagarRouter(req, res, next);
   return next();
 });
