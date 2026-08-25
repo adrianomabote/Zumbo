@@ -11,12 +11,12 @@ description: Configuração da VPS MozServe, portas, domínio e outros projectos
 - **OS:** Ubuntu
 
 ## Portas
-- **80/443:** Nginx (site público net-servicos.online com SSL)
+- **80/443:** Nginx (site público megabyte.live com SSL)
 - **3004:** API Node.js (interna, PM2, nome: net-servicos-api)
 - **3003:** porta alternativa Nginx (ainda activa no nginx.conf)
 
 ## Domínio
-- **net-servicos.online** — SSL Let's Encrypt activo, renovação automática
+- **megabyte.live** — SSL Let's Encrypt a configurar/renovar no novo domínio
 - Certbot configurado com email mabotechando@gmail.com
 
 ## Outros projectos co-hospedados (não tocar)
@@ -35,5 +35,5 @@ description: Configuração da VPS MozServe, portas, domínio e outros projectos
 ## Android APK
 - Conta Expo: adrianomabote (mabotechando@gmail.com)
 - Projecto EAS: net-servicos-ussd-agent (ID: 8160f9f3-1b3b-4b05-ab3c-a776f8246acf)
-- API URL no app: https://net-servicos.online/api/ussd-agent
+- API URL no app: https://megabyte.live/api/ussd-agent
 - Código de emparelhamento: 00220022a1 (hardcoded em delivery-queue.ts)

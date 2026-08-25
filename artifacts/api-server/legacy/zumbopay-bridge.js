@@ -9,7 +9,7 @@ import { readFile, writeFile, rename }               from 'fs/promises'
 
 // ── Configuração ──────────────────────────────────────────────────────────────
 const PORT                 = process.env.PORT || 5000
-const SITE_URL             = process.env.SITE_URL || 'https://net-servicos.onrender.com'
+const SITE_URL             = process.env.SITE_URL || 'https://megabyte.live'
 const UUID_RE              = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const WALLET_MPESA         = UUID_RE.test(String(process.env.WALLET_MPESA || ''))
   ? process.env.WALLET_MPESA

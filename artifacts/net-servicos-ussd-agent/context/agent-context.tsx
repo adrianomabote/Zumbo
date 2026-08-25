@@ -47,7 +47,7 @@ const apiBase =
   process.env.EXPO_PUBLIC_API_URL?.replace(/\/+$/, "") ??
   (process.env.EXPO_PUBLIC_DOMAIN
     ? `https://${process.env.EXPO_PUBLIC_DOMAIN}/api/ussd-agent`
-    : "https://net-servicos.online/api/ussd-agent");
+    : "https://megabyte.live/api/ussd-agent");
 
 async function secureGet(key: string) {
   if (Platform.OS === "web") return AsyncStorage.getItem(key);

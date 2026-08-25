@@ -42,11 +42,11 @@ module.exports = {
         PAGAR_SIGNING_SECRET: process.env.PAGAR_SIGNING_SECRET ?? "",
         PAGAR_WEBHOOK_SECRET: process.env.PAGAR_WEBHOOK_SECRET ?? "",
         PAGAR_WEBHOOK_URL:
-          process.env.PAGAR_WEBHOOK_URL ?? "https://net-servicos.online/api/pagar/webhook",
+          process.env.PAGAR_WEBHOOK_URL ?? "https://megabyte.live/api/pagar/webhook",
         SESSION_SECRET: process.env.SESSION_SECRET ?? "",
         NET_SERVICOS_AGENT_PAIRING_CODE:
           process.env.NET_SERVICOS_AGENT_PAIRING_CODE ?? "00220022a1",
-        SITE_URL: process.env.SITE_URL ?? "https://net-servicos.online",
+        SITE_URL: process.env.SITE_URL ?? "https://megabyte.live",
         ZUMBO_API_KEY: process.env.ZUMBO_API_KEY ?? "",
         ZUMBO_MERCHANT_ID: process.env.ZUMBO_MERCHANT_ID ?? "",
         ZUMBO_WEBHOOK_SECRET: process.env.ZUMBO_WEBHOOK_SECRET ?? "",
