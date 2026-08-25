@@ -4,11 +4,12 @@
 
 | Serviço | Porta | Quem acede |
 |---|---|---|
-| Nginx (site público) | **3000** | Internet |
-| API Node.js | **3001** | Só interno — o Nginx encaminha para cá |
+| Nginx (site público) | **80/443/3003** | Internet |
+| API Node.js | **3004** | Só interno — o Nginx encaminha para cá |
 | Legacy bridge | **8099** | Só interno — iniciado automaticamente pela API |
 
-As portas 3001 e 8099 **não ficam expostas** — só o Nginx na 7000 fica visível.
+A porta 3004 **não fica exposta** — o Nginx nas portas 80, 443 e 3003 encaminha
+as requisições para ela.
 
 ---
 
@@ -167,16 +168,13 @@ systemctl reload nginx
 **5.3 — Testar:**
 ```bash
 # Testar API internamente
-curl http://localhost:3001/api/health
+curl http://localhost:3004/api/healthz
 
-# Testar site pela porta pública
-curl http://localhost:7000
+# Testar site pela porta pública usada pelo projeto
+curl http://localhost:3003
 ```
 
-O site fica acessível em: `http://IP_DA_VPS:7000`
-
-> **Mudar para porta 10000?**
-> Edite `deploy/nginx.conf` e mude `listen 7000;` para `listen 10000;`, depois recarregue o Nginx.
+O site fica acessível em: `http://IP_DA_VPS:3003`
 
 ---
 
@@ -244,12 +242,12 @@ systemctl reload nginx
 pm2 status | grep net-servicos-api
 
 # 2. API responde?
-curl -s http://localhost:3001/api/health
+curl -s http://localhost:3004/api/healthz
 
 # 3. Site abre?
-curl -s http://localhost:7000 | head -5
+curl -s http://localhost:3003 | head -5
 
-# 4. Porta 7000 está aberta no firewall?
-ufw status | grep 7000
-# Se não estiver: ufw allow 7000/tcp
+# 4. Porta 3003 está aberta no firewall?
+ufw status | grep 3003
+# Se não estiver: ufw allow 3003/tcp
 ```
