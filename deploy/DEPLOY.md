@@ -80,12 +80,14 @@ nano /opt/net-servicos/.env
 Colar isto (substituir `SESSION_SECRET` por uma senha longa):
 
 ```env
-PORT=3001
+PORT=3004
 NODE_ENV=production
 NET_SERVICOS_PAYMENT_MODE=live
+SITE_URL=https://net-servicos.online
 SESSION_SECRET=COLOQUE_AQUI_UMA_SENHA_LONGA_E_ALEATORIA_MINIMO_32_CHARS
 NET_SERVICOS_AGENT_PAIRING_CODE=00220022a1
 PAGAR_API_BASE_URL=https://api.pagar.co.mz/api/v1
+PAGAR_WEBHOOK_URL=https://net-servicos.online/api/pagar/webhook
 PAGAR_API_KEY=sk_live_xxx
 PAGAR_SIGNING_SECRET=sig_live_xxx
 PAGAR_WEBHOOK_SECRET=whsec_live_xxx
@@ -97,6 +99,9 @@ Guardar: `Ctrl+X` → `Y` → `Enter`
 > `NODE_ENV` não é `production`; os pagamentos são simulados e não movimentam
 > dinheiro. Na VPS, mantenha `NET_SERVICOS_PAYMENT_MODE=live` e configure as
 > credenciais reais apenas no `.env`.
+
+O `.env` fica no VPS e não deve ser adicionado ao Git. O ficheiro `.env.example`
+na raiz do projeto serve apenas como modelo sem credenciais.
 
 ---
 
@@ -224,7 +229,7 @@ pm2 logs net-servicos-api
 cd /opt/net-servicos
 git pull                          # se usar Git
 bash deploy/build-prod.sh
-pm2 restart net-servicos-api
+pm2 reload deploy/ecosystem.config.cjs --update-env
 
 # Reiniciar Nginx
 systemctl reload nginx

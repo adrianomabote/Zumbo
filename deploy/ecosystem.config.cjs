@@ -34,6 +34,14 @@ module.exports = {
       env: {
         NODE_ENV: "production",
         PORT: process.env.PORT ?? "3004",
+        NET_SERVICOS_PAYMENT_MODE: process.env.NET_SERVICOS_PAYMENT_MODE ?? "live",
+        PAGAR_API_BASE_URL:
+          process.env.PAGAR_API_BASE_URL ?? "https://api.pagar.co.mz/api/v1",
+        PAGAR_API_KEY: process.env.PAGAR_API_KEY ?? "",
+        PAGAR_SIGNING_SECRET: process.env.PAGAR_SIGNING_SECRET ?? "",
+        PAGAR_WEBHOOK_SECRET: process.env.PAGAR_WEBHOOK_SECRET ?? "",
+        PAGAR_WEBHOOK_URL:
+          process.env.PAGAR_WEBHOOK_URL ?? "https://net-servicos.online/api/pagar/webhook",
         SESSION_SECRET: process.env.SESSION_SECRET ?? "",
         NET_SERVICOS_AGENT_PAIRING_CODE:
           process.env.NET_SERVICOS_AGENT_PAIRING_CODE ?? "00220022a1",
