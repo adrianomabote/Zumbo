@@ -1446,7 +1446,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 <nav class="nav">
   <a href="/" class="nav-logo">
     <img src="/static/vodacom.webp" alt="Megabyte" class="nav-logo-img">
-    <div class="nav-logo-text">Megabyte</div>
+    <div class="nav-logo-text">Mega<span>byte</span></div>
   </a>
   <div id="nav-balance" class="nav-balance">
     <img src="/static/coins.png" class="nav-bal-ico" alt="saldo">
@@ -1479,7 +1479,7 @@ ${isTestMode ? '<div style="background:#fff3cd;color:#664d03;border-bottom:1px s
 <div class="drawer" id="drawer">
   <div class="drawer-head">
     <img src="/static/vodacom.webp" alt="logo" class="drawer-logo">
-    <div class="drawer-brand">Megabyte</div>
+    <div class="drawer-brand">Mega<span>byte</span></div>
   </div>
   <ul class="drawer-menu">
     <li><a href="/">
@@ -1570,7 +1570,7 @@ ${allListHtml}
     <img src="/static/icon.svg" alt="Megabyte">
   </div>
   <div class="pwa-banner-text">
-    <strong>Megabyte</strong>
+      <strong>Mega<span style="color:#cc0000">byte</span></strong>
     <span>Instala a app no teu telemóvel</span>
   </div>
   <button class="pwa-banner-install" id="pwa-install-btn">Instalar</button>
@@ -1600,7 +1600,7 @@ ${allListHtml}
   <div class="footer-top">
     <div class="footer-brand">
       <div class="footer-logo-wrap"><img src="/static/vodafone-logo.jpg" alt="Megabyte" class="footer-logo-img"></div>
-      <div class="footer-brand-name">Megabyte</div>
+      <div class="footer-brand-name">Mega<span>byte</span></div>
     </div>
     <div class="footer-links">
       <a href="/megas">Pacotes de Internet</a>
@@ -1816,7 +1816,7 @@ ${allListHtml}
       </button>
       <div class="auth-card-head">
         <img src="/static/vodacom.webp" alt="logo" class="auth-card-logo">
-        <div class="auth-card-title">Megabyte</div>
+        <div class="auth-card-title">Mega<span style="color:#cc0000">byte</span></div>
         <div class="auth-card-sub">Para comprar, precisa de uma conta</div>
       </div>
       <div class="auth-tabs">
@@ -2291,7 +2291,7 @@ button:active{opacity:.85;}
 <div class="card">
   <div class="logo">
     <img src="/static/vodacom.webp" alt="logo">
-    <div class="logo-text">Megabyte</div>
+    <div class="logo-text">Mega<span>byte</span></div>
   </div>
   <h2>Área Reservada</h2>
   <p>Acesso exclusivo a administradores</p>
