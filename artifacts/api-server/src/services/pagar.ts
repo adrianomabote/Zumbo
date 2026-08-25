@@ -32,9 +32,18 @@ function config() {
 }
 
 function safeMessage(status: number, data: unknown) {
-  const body = data as { safeMessage?: unknown; error?: unknown; requestId?: unknown };
-  const message = typeof body?.safeMessage === "string" ? body.safeMessage : "Pedido Pagar recusado.";
-  return { message, requestId: typeof body?.requestId === "string" ? body.requestId : undefined, error: typeof body?.error === "string" ? body.error : undefined, status };
+  const body = data as { safeMessage?: unknown; message?: unknown; error?: unknown; requestId?: unknown };
+  const message = typeof body?.safeMessage === "string"
+    ? body.safeMessage
+    : typeof body?.message === "string"
+      ? body.message
+      : "Pedido Pagar recusado.";
+  return {
+    message,
+    requestId: typeof body?.requestId === "string" ? body.requestId : undefined,
+    error: typeof body?.error === "string" ? body.error : undefined,
+    status,
+  };
 }
 
 async function parseResponse(response: Response) {
