@@ -448,7 +448,8 @@ async function router(req, res) {
     '/', '/megas', '/ping', '/favicon.ico', '/manifest.json', '/sw.js',
     '/api/config', '/api/bundles', '/api/auth/me', '/api/auth/logout',
   ].includes(path) || staticPath
-  if (!isLiveConfiguration && !(method === 'GET' && readOnlyPath)) {
+  const accountSetupPath = ['/api/auth/register', '/api/auth/login'].includes(path)
+  if (!isLiveConfiguration && !(method === 'GET' && readOnlyPath) && !accountSetupPath) {
     return json(res, {
       error: 'Operações temporariamente indisponíveis enquanto a configuração segura do serviço não é concluída.',
     }, 503)
