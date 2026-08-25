@@ -34,6 +34,7 @@ module.exports = {
       env: {
         NODE_ENV: "production",
         PORT: process.env.PORT ?? "3004",
+        DATABASE_URL: process.env.DATABASE_URL ?? "",
         NET_SERVICOS_PAYMENT_MODE: process.env.NET_SERVICOS_PAYMENT_MODE ?? "live",
         PAGAR_API_BASE_URL:
           process.env.PAGAR_API_BASE_URL ?? "https://api.pagar.co.mz/api/v1",
