@@ -1090,7 +1090,7 @@ NOTAS
     if (!checkAdminCookie(req)) return json(res, { error:'Não autorizado.' }, 401)
     let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
     const rec = orders.find(o => o.txId === body.txId)
-    if (!rec) return json(res, { error:'Encomenda não encontrada.' }, 404)
+    if (!rec || rec.type !== 'bundle') return json(res, { error:'Encomenda Megabyte não encontrada.' }, 404)
     rec.status = 'activated'; rec.activatedAt = new Date().toISOString()
     await saveOrders()
     return json(res, { ok:true })
@@ -1193,8 +1193,9 @@ NOTAS
     const q     = parseQuery(req)
     const page  = Math.max(1, parseInt(q.page)  || 1)
     const limit = Math.min(100, Math.max(1, parseInt(q.limit) || 50))
-    const total = orders.length
-    const data  = orders.slice((page - 1) * limit, page * limit).map(o => ({
+    const megabyteTransactions = orders.filter(o => o.type !== 'gateway')
+    const total = megabyteTransactions.length
+    const data  = megabyteTransactions.slice((page - 1) * limit, page * limit).map(o => ({
       id:          o.txId,
       phone:       o.phone,
       beneficiary: o.beneficiaryPhone || o.phone,
@@ -3299,8 +3300,8 @@ body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:1
   </div>
   <div class="topbar-right">
     <div class="topbar-revenue">
-      <span class="revenue-label">Total Recebido</span>
-      <span class="revenue-value">${totalReceived.toLocaleString('pt-MZ')} MT</span>
+       <span class="revenue-label">${isGatewayView ? 'Gateway confirmado' : 'Total Megabyte'}</span>
+       <span class="revenue-value">${activeTotal.toLocaleString('pt-MZ')} MT</span>
     </div>
     <div class="topbar-divider"></div>
     <a href="/admin/logout" class="logout-btn">Sair</a>
