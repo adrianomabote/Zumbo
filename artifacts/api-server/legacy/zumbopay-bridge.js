@@ -2075,6 +2075,7 @@ function updateNavAuth() {
     dlo.style.display = 'none'
     dli.style.display = 'block'
     document.getElementById('drawer-user-name').textContent = u.name
+    document.getElementById('drawer-user-phone').textContent = u.phone
     document.getElementById('drawer-user-bal').textContent = (u.balance||0).toLocaleString('pt-MZ') + ' MT saldo'
     if (srch) srch.style.display = 'none'
   } else {
@@ -2083,6 +2084,15 @@ function updateNavAuth() {
     dli.style.display = 'none'
     if (srch) srch.style.display = 'flex'
   }
+}
+function phoneMethod(phone) {
+  const digits = String(phone || '').replace(/\D/g,'')
+  if (/^(84|85)\d{7}$/.test(digits)) return 'mpesa'
+  if (/^(86|87)\d{7}$/.test(digits)) return 'emola'
+  return null
+}
+function paymentMethodLabel(method) {
+  return method === 'emola' ? 'e-Mola' : 'M-Pesa'
 }
 function openAuthDialog(tab) {
   authSetTab(tab || 'register')
@@ -2135,6 +2145,60 @@ async function loginUser() {
 async function logoutUser() {
   await fetch('/api/auth/logout').catch(()=>{})
   authState.user=null; updateNavAuth(); closeDrawer()
+}
+
+function openProfileDialog() {
+  if (!authState.user) { openAuthDialog('login'); return }
+  document.getElementById('profile-name').value = authState.user.name || ''
+  document.getElementById('profile-phone').value = authState.user.phone || ''
+  ;['profile-err','password-err'].forEach(id => {
+    const el = document.getElementById(id)
+    el.style.display='none'
+    el.style.color=''
+    el.style.background=''
+    el.style.borderColor=''
+  })
+  ;['profile-current-pass','profile-new-pass','profile-new-pass2'].forEach(id => { document.getElementById(id).value='' })
+  document.getElementById('profile-modal').style.display='flex'
+  setTimeout(() => document.getElementById('profile-card').classList.add('open'), 10)
+}
+function closeProfileDialog() {
+  document.getElementById('profile-card').classList.remove('open')
+  setTimeout(() => { document.getElementById('profile-modal').style.display='none' }, 250)
+}
+async function saveProfile() {
+  const name=document.getElementById('profile-name').value.trim()
+  const phone=document.getElementById('profile-phone').value.trim().replace(/\D/g,'')
+  const err=document.getElementById('profile-err'); err.style.display='none'
+  if (!name) { err.textContent='Introduza o seu nome.'; err.style.display='block'; return }
+  if (!phoneMethod(phone)) { err.textContent='Número inválido. Use M-Pesa 84/85 ou e-Mola 86/87.'; err.style.display='block'; return }
+  const btn=document.getElementById('profile-btn'); btn.disabled=true; btn.textContent='A guardar…'
+  try {
+    const r=await fetch('/api/auth/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,phone})})
+    const d=await r.json()
+    if (!r.ok) { err.textContent=d.error||'Não foi possível guardar os dados.'; err.style.display='block'; return }
+    authState.user=d.user; updateNavAuth(); closeProfileDialog()
+  } catch { err.textContent='Erro de ligação.'; err.style.display='block' }
+  finally { btn.disabled=false; btn.textContent='Guardar dados' }
+}
+async function changePassword() {
+  const currentPassword=document.getElementById('profile-current-pass').value
+  const newPassword=document.getElementById('profile-new-pass').value
+  const newPassword2=document.getElementById('profile-new-pass2').value
+  const err=document.getElementById('password-err'); err.style.display='none'
+  if (!currentPassword) { err.textContent='Introduza a senha actual.'; err.style.display='block'; return }
+  if (newPassword.length<6) { err.textContent='A nova senha deve ter pelo menos 6 caracteres.'; err.style.display='block'; return }
+  if (newPassword!==newPassword2) { err.textContent='As novas senhas não coincidem.'; err.style.display='block'; return }
+  const btn=document.getElementById('password-btn'); btn.disabled=true; btn.textContent='A alterar…'
+  try {
+    const r=await fetch('/api/auth/change-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({currentPassword,newPassword})})
+    const d=await r.json()
+    if (!r.ok) { err.textContent=d.error||'Não foi possível alterar a senha.'; err.style.display='block'; return }
+    ;['profile-current-pass','profile-new-pass','profile-new-pass2'].forEach(id => { document.getElementById(id).value='' })
+    err.textContent='Senha alterada com sucesso.'
+    err.style.color='#2e7d32'; err.style.background='#e8f5e9'; err.style.borderColor='#a5d6a7'; err.style.display='block'
+  } catch { err.textContent='Erro de ligação.'; err.style.display='block' }
+  finally { btn.disabled=false; btn.textContent='Alterar senha' }
 }
 
 // ── Recarga ──────────────────────────────────────────────────────────────────
