@@ -35,7 +35,9 @@ module.exports = {
         NODE_ENV: "production",
         PORT: process.env.PORT ?? "3004",
         DATABASE_URL: process.env.DATABASE_URL ?? "",
-        NET_SERVICOS_PAYMENT_MODE: process.env.NET_SERVICOS_PAYMENT_MODE ?? "live",
+        // Este ecosystem só é usado na VPS. O preview local mantém o modo mock
+        // através do seu próprio comando, mas produção deve sempre chamar o Pagar live.
+        NET_SERVICOS_PAYMENT_MODE: "live",
         PAGAR_API_BASE_URL:
           process.env.PAGAR_API_BASE_URL ?? "https://api.pagar.co.mz/api/v1",
         PAGAR_API_KEY: process.env.PAGAR_API_KEY ?? "",

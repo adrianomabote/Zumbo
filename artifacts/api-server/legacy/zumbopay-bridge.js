@@ -2709,30 +2709,30 @@ function openDrawer()  { document.getElementById('drawer').classList.add('open')
 function closeDrawer() { document.getElementById('drawer').classList.remove('open'); document.getElementById('drawer-overlay').classList.remove('open') }
 
 // ── PWA Install ─────────────────────────────────────────────────────────────
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(()=>{}))
-}
-let _pwaPrompt = null
 const _pwaBanner = document.getElementById('pwa-banner')
 const _pwaKey = 'pwa-dismissed'
-window.addEventListener('beforeinstallprompt', e => {
-  e.preventDefault()
-  _pwaPrompt = e
-  if (!sessionStorage.getItem(_pwaKey)) _pwaBanner.classList.add('show')
+function showPwaInstallBanner() {
+  if (_pwaBanner && !sessionStorage.getItem(_pwaKey)) _pwaBanner.classList.add('show')
+}
+function hidePwaInstallBanner() {
+  _pwaBanner?.classList.remove('show')
+}
+window.addEventListener('message', event => {
+  if (event.origin !== window.location.origin) return
+  const type = event.data?.type
+  if (type === 'pwa-install-available') showPwaInstallBanner()
+  if (type === 'pwa-installed') hidePwaInstallBanner()
+  if (type === 'pwa-install-result') {
+    hidePwaInstallBanner()
+    if (event.data.outcome === 'dismissed') sessionStorage.removeItem(_pwaKey)
+  }
 })
-window.addEventListener('appinstalled', () => {
-  _pwaBanner.classList.remove('show')
-  _pwaPrompt = null
+document.getElementById('pwa-install-btn')?.addEventListener('click', () => {
+  hidePwaInstallBanner()
+  window.parent.postMessage({ type: 'pwa-install-request' }, window.location.origin)
 })
-document.getElementById('pwa-install-btn').addEventListener('click', async () => {
-  if (!_pwaPrompt) return
-  _pwaBanner.classList.remove('show')
-  _pwaPrompt.prompt()
-  const { outcome } = await _pwaPrompt.userChoice
-  if (outcome === 'accepted') _pwaPrompt = null
-})
-document.getElementById('pwa-dismiss-btn').addEventListener('click', () => {
-  _pwaBanner.classList.remove('show')
+document.getElementById('pwa-dismiss-btn')?.addEventListener('click', () => {
+  hidePwaInstallBanner()
   sessionStorage.setItem(_pwaKey, '1')
 })
 
