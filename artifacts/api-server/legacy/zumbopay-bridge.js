@@ -2205,7 +2205,7 @@ async function changePassword() {
 function openRechargeDialog() {
   document.getElementById('rech-amount').value=''
   document.getElementById('rech-err').style.display='none'
-  const btn=document.getElementById('rech-btn'); btn.disabled=false; btn.textContent='Pagar com M-Pesa'
+  const btn=document.getElementById('rech-btn'); btn.disabled=false; btn.textContent='Continuar'
   document.getElementById('recharge-modal').style.display='flex'
   setTimeout(()=>document.getElementById('recharge-card').classList.add('open'),10)
 }
@@ -2221,14 +2221,14 @@ async function submitRecharge() {
   try {
     const r=await fetch('/api/recharge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount})})
     const d=await r.json()
-    if(!r.ok){err.textContent=d.error||'Erro ao processar.';err.style.display='block';btn.disabled=false;btn.textContent='Pagar com M-Pesa';return}
+    if(!r.ok){err.textContent=d.error||'Erro ao processar.';err.style.display='block';btn.disabled=false;btn.textContent='Continuar';return}
     closeRechargeDialog()
-    document.getElementById('rech-method-lbl').textContent='M-Pesa'
+    document.getElementById('rech-method-lbl').textContent=paymentMethodLabel(d.method)
     document.getElementById('overlay').classList.add('open')
     setTimeout(()=>document.getElementById('sheet').classList.add('open'),10)
     shShow('recharging')
     listenRecharge(d.txId, amount)
-  } catch{err.textContent='Erro de ligação.';err.style.display='block';btn.disabled=false;btn.textContent='Pagar com M-Pesa'}
+  } catch{err.textContent='Erro de ligação.';err.style.display='block';btn.disabled=false;btn.textContent='Continuar'}
 }
 function listenRecharge(txId, amount) {
   const es=new EventSource('/events/'+txId)
@@ -2299,10 +2299,14 @@ function openBuyDirect(id) {
   document.getElementById('ico-dur').textContent  = p.dur
   document.getElementById('ico-calls').textContent = p.calls ? 'Ilim.' : '0 MT'
   document.getElementById('ico-sms').textContent   = p.calls ? '+ SMS' : '0 SMS'
-  document.getElementById('sh-phone').value = ''
+  const selfPhone = authState.user?.phone || ''
+  const selfInput = document.getElementById('sh-phone')
+  selfInput.value = selfPhone
+  selfInput.readOnly = Boolean(selfPhone)
+  selfInput.title = selfPhone ? 'O número da conta autenticada é usado para esta compra.' : ''
   document.getElementById('sh-err').style.display = 'none'
-  payVia = 'mpesa'
-  document.querySelectorAll('.via-btn').forEach(b => b.classList.toggle('active', b.dataset.via==='mpesa'))
+  payVia = phoneMethod(selfPhone) || 'mpesa'
+  document.querySelectorAll('.via-btn').forEach(b => b.classList.toggle('active', b.dataset.via===payVia))
   updateCreditBtn()
   const btn = document.getElementById('sh-btn'); btn.disabled=false; btn.textContent='Próximo'; btn.style.display='block'
   shSetTab('mim')
@@ -2328,10 +2332,10 @@ function getPhoneFromSheet() {
   if (shCurTab==='outro') {
     const phone=document.getElementById('sh-phone-payer').value.trim().replace(/\D/g,'')
     const bene=document.getElementById('sh-phone-bene').value.trim().replace(/\D/g,'')
-    return { phone, beneficiaryPhone:bene, error: !phone?'Introduza o seu número de pagamento.':phone.length!==9||!/^(84|85)/.test(phone)?'Número de pagamento inválido. Use 84 ou 85.':!bene?'Introduza o número do beneficiário.':bene.length!==9?'Número do beneficiário deve ter 9 dígitos.':null }
+    return { phone, beneficiaryPhone:bene, error: !phone?'Introduza o seu número de pagamento.':!phoneMethod(phone)?'Número de pagamento incompatível. M-Pesa: 84/85 · e-Mola: 86/87.':!bene?'Introduza o número do beneficiário.':!phoneMethod(bene)?'Número do beneficiário inválido. Use 84, 85, 86 ou 87.':phoneMethod(phone)!==payVia?'Escolha o método correspondente ao número de pagamento.':null }
   }
-  const phone=document.getElementById('sh-phone').value.trim().replace(/\D/g,'')
-  return { phone, beneficiaryPhone:null, error: !phone?'Introduza o número de telemóvel.':phone.length!==9?'O número deve ter exactamente 9 dígitos.':!/^(84|85)/.test(phone)?'Número inválido. Use 84 ou 85.':null }
+  const phone=authState.user?.phone || document.getElementById('sh-phone').value.trim().replace(/\D/g,'')
+  return { phone, beneficiaryPhone:null, error: !authState.user?'Faça login para comprar para si.':!phoneMethod(phone)?'Número da conta inválido. Use M-Pesa 84/85 ou e-Mola 86/87.':phoneMethod(phone)!==payVia?'Escolha o método correspondente ao seu número.':null }
 }
 
 async function pay() {
@@ -2341,11 +2345,11 @@ async function pay() {
   if (error) { ee.textContent=error; ee.style.display='block'; return }
   const btn = document.getElementById('sh-btn'); btn.disabled=true; btn.textContent='A processar…'
   try {
-    const payload={phone,bundleId:curPkg.id}; if(beneficiaryPhone) payload.beneficiaryPhone=beneficiaryPhone
+    const payload={phone,bundleId:curPkg.id,paymentMethod:payVia}; if(beneficiaryPhone) payload.beneficiaryPhone=beneficiaryPhone
     const r = await fetch('/api/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
     const d = await r.json()
     if (!r.ok) { ee.textContent=d.error||'Erro ao processar.'; ee.style.display='block'; btn.disabled=false; btn.textContent='Próximo'; return }
-    document.getElementById('sh-method-lbl').textContent = 'M-Pesa'
+    document.getElementById('sh-method-lbl').textContent = paymentMethodLabel(d.method || payVia)
     document.getElementById('sh-ok-pkg').textContent = curPkg.name+' — '+curPkg.price+' MT'
     shShow('pending'); listenOrder(d.txId)
   } catch { ee.textContent='Erro de ligação. Tente novamente.'; ee.style.display='block'; btn.disabled=false; btn.textContent='Próximo' }
