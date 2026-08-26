@@ -50,6 +50,7 @@ interface StoredQueue {
 const dataPath = path.resolve(process.cwd(), "legacy", "ussd-deliveries.json");
 let state: StoredQueue = { deliveries: [], devices: [] };
 let initialized = false;
+let enqueueQueue = Promise.resolve();
 
 function now() {
   return new Date().toISOString();
@@ -120,7 +121,7 @@ export async function authenticateDevice(token?: string) {
   return device;
 }
 
-export async function enqueuePaidDelivery(input: {
+async function enqueuePaidDeliveryLocked(input: {
   idempotencyKey: string;
   paymentId: string;
   beneficiaryPhone: string;
@@ -151,6 +152,18 @@ export async function enqueuePaidDelivery(input: {
   state.deliveries.push(delivery);
   await persist();
   return delivery;
+}
+
+export function enqueuePaidDelivery(input: {
+  idempotencyKey: string;
+  paymentId: string;
+  beneficiaryPhone: string;
+  packageLabel: string;
+  ussdSequence: string[];
+}) {
+  const work = enqueueQueue.then(() => enqueuePaidDeliveryLocked(input));
+  enqueueQueue = work.then(() => undefined, () => undefined);
+  return work;
 }
 
 export async function leaseNextDelivery(deviceId: string) {

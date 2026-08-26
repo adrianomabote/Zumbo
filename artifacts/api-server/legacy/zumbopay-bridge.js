@@ -250,14 +250,26 @@ function trackOrder(tx, extra = {}) {
   saveOrders()
   return rec
 }
-function updateOrderStatus(txId, status, extra = {}) {
+async function updateOrderStatus(txId, status, extra = {}) {
   const rec = orders.find(o => o.txId === txId)
-  if (rec) {
-    Object.assign(rec, { status, ...extra })
-    saveOrders()
-    if (status === 'succeeded' && rec.type === 'bundle' && rec.beneficiaryPhone) {
-      enqueueUssdDelivery(rec).catch(e => console.error('[USSD] enqueue error:', e.message))
-    }
+  if (!rec) return
+  Object.assign(rec, { status, ...extra })
+  await saveOrders()
+  if (status !== 'succeeded' || rec.type !== 'bundle') return
+
+  try {
+    const delivery = await enqueueUssdDelivery(rec)
+    Object.assign(rec, {
+      deliveryId: delivery.id,
+      deliveryStatus: delivery.status,
+      deliveryFailureReason: delivery.failureReason || null,
+    })
+    await saveOrders()
+  } catch (e) {
+    rec.deliveryStatus = 'failed'
+    rec.deliveryFailureReason = e.message || 'Não foi possível enfileirar a entrega USSD.'
+    await saveOrders()
+    console.error('[USSD] enqueue error:', rec.deliveryFailureReason)
   }
 }
 function creditRechargeOnce(tx) {
@@ -308,13 +320,15 @@ function bundleUssdSequence(bundleLabel, beneficiaryPhone) {
 async function enqueueUssdDelivery(order) {
   const mainPort = process.env.MAIN_API_PORT
   const secret   = process.env.SESSION_SECRET
-  if (!mainPort || !secret) return
+  if (!mainPort || !secret) throw new Error('Servidor de entregas USSD não configurado.')
+  const beneficiaryPhone = order.beneficiaryPhone || order.phone
+  if (!beneficiaryPhone) throw new Error('Número do beneficiário ausente.')
   const body = JSON.stringify({
     paymentId:           order.txId,
     idempotencyKey:      `order-${order.txId}`,
-    beneficiaryPhone:    order.beneficiaryPhone,
+    beneficiaryPhone,
     packageLabel:        order.bundleLabel || 'Pacote de dados',
-    ussdSequence:        bundleUssdSequence(order.bundleLabel || 'Pacote de dados', order.beneficiaryPhone),
+    ussdSequence:        bundleUssdSequence(order.bundleLabel || 'Pacote de dados', beneficiaryPhone),
   })
   try {
     const res = await fetch(`http://localhost:${mainPort}/api/ussd-agent/internal/paid-deliveries`, {
@@ -323,10 +337,87 @@ async function enqueueUssdDelivery(order) {
       body,
       signal:  AbortSignal.timeout(5000),
     })
-    if (res.ok) console.log(`[USSD] Entrega enfileirada para ${order.beneficiaryPhone}`)
-    else        console.error(`[USSD] Servidor recusou enfileiramento: ${res.status}`)
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(data.error || `Servidor recusou enfileiramento: ${res.status}`)
+    }
+    console.log(`[USSD] Entrega enfileirada para ${beneficiaryPhone}`)
+    return data.delivery
   } catch (e) {
-    console.error('[USSD] Falha de rede ao enfileirar:', e.message)
+    if (e.name === 'AbortError' || e.name === 'TimeoutError') {
+      throw new Error('Tempo esgotado ao contactar o servidor de entregas USSD.')
+    }
+    throw e
+  }
+}
+
+async function retryUssdDelivery(order) {
+  const mainPort = process.env.MAIN_API_PORT
+  const secret = process.env.SESSION_SECRET
+  if (!mainPort || !secret) throw new Error('Servidor de entregas USSD não configurado.')
+
+  const hasExistingDelivery = Boolean(order.deliveryId)
+  const endpoint = hasExistingDelivery
+    ? `/api/ussd-agent/admin/deliveries/${encodeURIComponent(order.deliveryId)}/retry`
+    : '/api/ussd-agent/internal/paid-deliveries'
+  const body = hasExistingDelivery
+    ? undefined
+    : JSON.stringify({
+      paymentId: order.txId,
+      idempotencyKey: `order-${order.txId}`,
+      beneficiaryPhone: order.beneficiaryPhone || order.phone,
+      packageLabel: order.bundleLabel || 'Pacote de dados',
+      ussdSequence: bundleUssdSequence(order.bundleLabel || 'Pacote de dados', order.beneficiaryPhone || order.phone),
+    })
+  const res = await fetch(`http://localhost:${mainPort}${endpoint}`, {
+    method: 'POST',
+    headers: {
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+      'x-internal-delivery-key': secret,
+    },
+    body,
+    signal: AbortSignal.timeout(5000),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `Servidor recusou a repetição: ${res.status}`)
+  return data.delivery
+}
+
+async function refreshDeliveryStates() {
+  const mainPort = process.env.MAIN_API_PORT
+  const secret = process.env.SESSION_SECRET
+  if (!mainPort || !secret) return
+  try {
+    const res = await fetch(`http://localhost:${mainPort}/api/ussd-agent/admin/deliveries`, {
+      headers: { 'x-internal-delivery-key': secret },
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!res.ok) return
+    const data = await res.json().catch(() => ({}))
+    if (!Array.isArray(data.deliveries)) return
+    let changed = false
+    for (const delivery of data.deliveries) {
+      const key = String(delivery.idempotencyKey || '')
+      if (!key.startsWith('order-')) continue
+      const rec = orders.find(order => order.txId === key.slice('order-'.length))
+      if (!rec) continue
+      const next = {
+        deliveryId: delivery.id,
+        deliveryStatus: delivery.status,
+        deliveryFailureReason: delivery.failureReason || null,
+      }
+      if (delivery.status === 'completed' && rec.status === 'succeeded') {
+        next.status = 'activated'
+        next.activatedAt = delivery.updatedAt || new Date().toISOString()
+      }
+      if (Object.entries(next).some(([field, value]) => rec[field] !== value)) {
+        Object.assign(rec, next)
+        changed = true
+      }
+    }
+    if (changed) await saveOrders()
+  } catch (e) {
+    console.error('[USSD] Falha ao actualizar estados no painel:', e.message)
   }
 }
 
@@ -396,7 +487,7 @@ async function initiateCharge(tx, customerName) {
     tx.ref = `test-${tx.sourceId || tx.id}`
     tx.status = 'succeeded'
     console.log(`[ZumboPay] TEST charge simulated for ${tx.id}`)
-    updateOrderStatus(tx.id, 'succeeded', { zumboRef: tx.ref })
+    await updateOrderStatus(tx.id, 'succeeded', { zumboRef: tx.ref })
     await creditRechargeOnce(tx)
     notifyTx(tx.id, { status:'succeeded', method:tx.method, testMode:true })
     gwFinalize(tx)
@@ -423,27 +514,27 @@ async function initiateCharge(tx, customerName) {
     if (resp.status === 202) {
       tx.ref = data.reference || `net-${tx.id}`; tx.status = 'pending'
       notifyTx(tx.id, { status:'pending', method:tx.method })
-      updateOrderStatus(tx.id, 'pending', { pagarRef: tx.ref })
+      await updateOrderStatus(tx.id, 'pending', { pagarRef: tx.ref })
       scheduleTimeout(tx); return
     }
     const msg = data.error || data.message || `Erro ${resp.status}`
     tx.status = 'failed'; tx.error = msg
     notifyTx(tx.id, { status:'failed', error:msg, method:tx.method })
-    updateOrderStatus(tx.id, 'failed'); gwFinalize(tx)
+    await updateOrderStatus(tx.id, 'failed'); gwFinalize(tx)
   } catch (err) {
     console.error('[Pagar]', err.message)
     tx.status = 'failed'; tx.error = 'Erro de ligação. Tente novamente.'
     notifyTx(tx.id, { status:'failed', error:tx.error, method:tx.method })
-    updateOrderStatus(tx.id, 'failed'); gwFinalize(tx)
+    await updateOrderStatus(tx.id, 'failed'); gwFinalize(tx)
   }
 }
 
 function scheduleTimeout(tx) {
-  setTimeout(() => {
+  setTimeout(async () => {
     if (tx.status !== 'pending') return
     tx.status = 'failed'; tx.error = 'Tempo esgotado. O PIN não foi introduzido.'
     notifyTx(tx.id, { status:'failed', error:tx.error, method:tx.method })
-    updateOrderStatus(tx.id, 'failed'); gwFinalize(tx)
+    await updateOrderStatus(tx.id, 'failed'); gwFinalize(tx)
   }, 5 * 60 * 1000)
 }
 
@@ -608,8 +699,8 @@ self.addEventListener('fetch',e=>{
     if (body.reference) liveTx.ref = body.reference
     if (status === 'failed') liveTx.error = 'Pagamento recusado.'
     transactions.set(txId, liveTx)
+    await updateOrderStatus(txId, status, { pagarRef: body.reference || null })
     if (!duplicate) {
-      updateOrderStatus(txId, status, { pagarRef: body.reference || null })
       if (status === 'succeeded') await creditRechargeOnce(liveTx)
       notifyTx(txId, { status, method:liveTx.method, error:liveTx.error || null })
       gwFinalize(liveTx)
@@ -747,7 +838,7 @@ self.addEventListener('fetch',e=>{
     const tx = { id:txId, type:'bundle', bundleId, bundleLabel:bundle.label, phone:user.phone, beneficiaryPhone:beneficiary, msisdn:normalizeMsisdn(user.phone), amount:bundle.price, method:'credit', status:'succeeded', ref:'credit-'+txId, error:null, ts:new Date().toISOString(), userId:user.id }
     transactions.set(txId, tx)
     trackOrder(tx)
-    updateOrderStatus(txId, 'succeeded')
+    await updateOrderStatus(txId, 'succeeded')
     return json(res, { ok:true, txId, newBalance:user.balance })
   }
 
@@ -938,6 +1029,7 @@ NOTAS
   if (path === '/admin/office') {
     if (method === 'GET') {
       if (!checkAdminCookie(req)) return html(res, adminLoginPage())
+      await refreshDeliveryStates()
       const q = parseQuery(req)
       return html(res, adminDashboard(q.filter || 'all'))
     }
@@ -965,6 +1057,35 @@ NOTAS
     rec.status = 'activated'; rec.activatedAt = new Date().toISOString()
     await saveOrders()
     return json(res, { ok:true })
+  }
+
+  if (method === 'POST' && path === '/admin/retry-delivery') {
+    if (!checkAdminCookie(req)) return json(res, { error:'Não autorizado.' }, 401)
+    let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
+    const rec = orders.find(o => o.txId === body.txId)
+    if (!rec || rec.type !== 'bundle') return json(res, { error:'Encomenda não encontrada.' }, 404)
+    if (rec.status !== 'succeeded' && rec.status !== 'activated') {
+      return json(res, { error:'Só pagamentos confirmados podem ser reenviados.' }, 400)
+    }
+    try {
+      const delivery = await retryUssdDelivery(rec)
+      Object.assign(rec, {
+        deliveryId: delivery.id,
+        deliveryStatus: delivery.status,
+        deliveryFailureReason: null,
+      })
+      if (rec.status === 'activated' && delivery.status !== 'completed') {
+        rec.status = 'succeeded'
+        rec.activatedAt = null
+      }
+      await saveOrders()
+      return json(res, { ok:true, delivery })
+    } catch (e) {
+      rec.deliveryStatus = 'failed'
+      rec.deliveryFailureReason = e.message || 'Não foi possível repetir a entrega USSD.'
+      await saveOrders()
+      return json(res, { error:rec.deliveryFailureReason }, 502)
+    }
   }
 
   if (method === 'POST' && path === '/admin/manual-credit') {
@@ -2545,6 +2666,7 @@ function adminDashboard(filter = 'all') {
     pending:   orders.filter(o=>o.status==='pending'),
     succeeded: orders.filter(o=>o.status==='succeeded'),
     activated: orders.filter(o=>o.status==='activated'),
+    'delivery-failed': orders.filter(o=>['failed','manual_intervention'].includes(o.deliveryStatus)),
     failed:    orders.filter(o=>o.status==='failed'),
   }
   const filtered = filterMap[filter] ?? orders
@@ -2571,6 +2693,7 @@ function adminDashboard(filter = 'all') {
       { f:'all',       label:'Todas as transacções',   icon:'M3 7h18M3 12h18M3 17h18' },
       { f:'succeeded', label:'Pendentes de Activação', icon:'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
       { f:'activated', label:'Activações Confirmadas', icon:'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
+      { f:'delivery-failed', label:'Falhas de Entrega USSD', icon:'M12 9v4m0 4h.01M10.29 3.86l-8.18 14a2 2 0 001.74 3h16.3a2 2 0 001.74-3l-8.18-14a2 2 0 00-3.48 0z' },
       { f:'pending',   label:'A aguardar Pagamento',   icon:'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
       { f:'failed',    label:'Pagamentos Falhados',    icon:'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z' },
     ]},
@@ -2763,7 +2886,8 @@ function adminDashboard(filter = 'all') {
           + ' ' + dt.toLocaleTimeString('pt-MZ',{hour:'2-digit',minute:'2-digit'})
         const benef = o.beneficiaryPhone || o.phone
         const isForOther = o.beneficiaryPhone && o.beneficiaryPhone !== o.phone
-        const canActivate = o.status === 'succeeded'
+        const deliveryAttention = ['failed','manual_intervention'].includes(o.deliveryStatus)
+        const canActivate = o.status === 'succeeded' && !o.deliveryStatus
         return `<div class="order-card" id="card-${o.txId}">
   <div class="card-header">
     <div class="card-left">
@@ -2805,8 +2929,13 @@ function adminDashboard(filter = 'all') {
       <span class="info-label">ID Transacção</span>
       <span class="info-value mono">${o.txId}</span>
     </div>
+    ${o.deliveryStatus && !deliveryAttention ? `<div class="delivery-state">Entrega USSD: ${o.deliveryStatus === 'queued' ? 'na fila' : o.deliveryStatus === 'leased' ? 'reservada pelo agente' : o.deliveryStatus}</div>` : ''}
   </div>
-  ${canActivate ? `<div class="card-footer">
+  ${deliveryAttention ? `<div class="delivery-alert">
+    <strong>Falha na entrega USSD</strong>
+    <span>${o.deliveryFailureReason || 'A entrega precisa de intervenção.'}</span>
+    <button class="retry-btn" onclick="retryDelivery('${o.txId}',this)">Reprocessar entrega</button>
+  </div>` : canActivate ? `<div class="card-footer">
     <button class="activate-btn" onclick="activateOrder('${o.txId}',this)">
       <svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
       Marcar como Activado
@@ -2904,6 +3033,11 @@ body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:1
 .copy-btn svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
 .copy-btn:active,.copy-btn.copied{background:#d1fae5;color:#065f46;}
 .card-footer{padding:10px 16px 14px;}
+.delivery-state{font-size:12px;color:#636366;background:#f9f9fb;border-radius:9px;padding:8px 10px;text-align:center;}
+.delivery-alert{display:flex;flex-direction:column;gap:5px;padding:12px 16px 14px;background:#fff7ed;border-top:1px solid #fed7aa;color:#9a3412;font-size:12px;}
+.delivery-alert strong{font-size:13px;}
+.retry-btn{margin-top:4px;padding:10px 12px;border:none;border-radius:10px;background:#c2410c;color:#fff;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;}
+.retry-btn:disabled{opacity:.55;cursor:not-allowed;}
 .activate-btn{width:100%;padding:13px;border:none;border-radius:12px;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;display:flex;align-items:center;justify-content:center;gap:8px;transition:opacity .15s;}
 .activate-btn svg{width:18px;height:18px;stroke:#fff;fill:none;stroke-width:2;}
 .activate-btn:active{opacity:.85;}
@@ -3157,6 +3291,24 @@ async function activateOrder(txId,btn){
       }
     } else { showToast(d.error||'Erro ao guardar.',false); btn.disabled=false; btn.textContent='Marcar como Activado' }
   } catch { showToast('Erro de ligação.',false); btn.disabled=false; btn.textContent='Marcar como Activado' }
+}
+async function retryDelivery(txId,btn){
+  if(!confirm('Confirma que quer repetir a entrega deste pacote?')) return
+  btn.disabled=true; btn.textContent='A reenviar…'
+  try {
+    const r=await fetch('/admin/retry-delivery',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({txId})})
+    const d=await r.json()
+    if(r.ok){
+      showToast('Entrega novamente colocada na fila!')
+      setTimeout(()=>location.reload(),700)
+    } else {
+      showToast(d.error||'Não foi possível repetir a entrega.',false)
+      btn.disabled=false; btn.textContent='Reprocessar entrega'
+    }
+  } catch {
+    showToast('Erro de ligação.',false)
+    btn.disabled=false; btn.textContent='Reprocessar entrega'
+  }
 }
 </script>
 </body></html>`
