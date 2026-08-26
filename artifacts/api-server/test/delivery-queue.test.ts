@@ -166,6 +166,7 @@ async function stopDelayedBridge() {
 
 async function startApiProcess() {
   const apiPort = await findFreePort();
+  const legacyBridgePort = await findFreePort();
   const tsxEntry = fileURLToPath(new URL("../../../scripts/node_modules/tsx/dist/cli.mjs", import.meta.url));
   const apiEntry = fileURLToPath(new URL("../src/index.ts", import.meta.url));
   apiProcessOutput = "";
@@ -174,6 +175,7 @@ async function startApiProcess() {
     env: {
       ...process.env,
       PORT: String(apiPort),
+      LEGACY_BRIDGE_PORT: String(legacyBridgePort),
       NODE_ENV: "test",
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -588,8 +590,10 @@ test("concurrent workers reclaim one stale forwarding with one bridge delivery",
   const [firstResult, secondResult] = await Promise.all([firstForwarding, secondForwarding]);
 
   assert.equal(delayedBridgeRequestCount, 1);
-  assert.equal(firstResult?.forwardingStatus, "delivered");
-  assert.equal(secondResult?.forwardingStatus, "forwarding");
+  assert.deepEqual(
+    [firstResult?.forwardingStatus, secondResult?.forwardingStatus].sort(),
+    ["delivered", "forwarding"],
+  );
   const finalEvent = await getPagarWebhookEvent(eventId);
   assert.equal(finalEvent?.forwardingStatus, "delivered");
   assert.equal(finalEvent?.forwardingAttempts, 2);

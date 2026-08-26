@@ -5,7 +5,12 @@ import path from "node:path";
 import type { Request, Response } from "express";
 import { logger } from "./lib/logger";
 
-const legacyPort = 8099;
+const configuredLegacyPort = process.env.LEGACY_BRIDGE_PORT || "8099";
+const legacyPort = Number(configuredLegacyPort);
+
+if (!Number.isInteger(legacyPort) || legacyPort <= 0 || legacyPort > 65_535) {
+  throw new Error(`Invalid LEGACY_BRIDGE_PORT value: "${configuredLegacyPort}"`);
+}
 let legacyProcess: ChildProcess | undefined;
 
 function legacyDirectory() {
