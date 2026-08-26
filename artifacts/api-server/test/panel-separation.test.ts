@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 const bridgeDirectory = await mkdtemp(path.join(os.tmpdir(), "net-servicos-panel-"));
 const bridgePort = await findFreePort();
 const masterKey = "gw-master-panel-test-key";
+const adminPassword = "panel-test-admin-pass";
 const gatewayTransactionId = "GATEWAY-ONLY-PANEL-SENTINEL";
 const externalReference = "PRIVATE-EXTERNAL-REFERENCE-SENTINEL";
 const externalDescription = "PRIVATE-DESCRIPTION-SENTINEL";
@@ -88,6 +89,15 @@ async function panelRequest(filter: string, page?: number) {
   return response.text();
 }
 
+async function technicalRequest(page?: number, limit?: number, authorization = `Bearer ${adminPassword}`) {
+  const query = new URLSearchParams();
+  if (page !== undefined) query.set("page", String(page));
+  if (limit !== undefined) query.set("limit", String(limit));
+  return fetch(`${baseUrl}/api/transactions?${query}`, {
+    headers: { authorization },
+  });
+}
+
 async function stopBridge() {
   const processToStop = bridgeProcess;
   bridgeProcess = undefined;
@@ -128,7 +138,7 @@ before(async () => {
       PORT: String(bridgePort),
       NODE_ENV: "production",
       NET_SERVICOS_PAYMENT_MODE: "mock",
-      ADMIN_PASS: "panel-test-admin-pass",
+      ADMIN_PASS: adminPassword,
       SESSION_SECRET: "panel-test-session-secret",
       PAGAR_API_KEY: "panel-test-api-key",
       PAGAR_SIGNING_SECRET: "panel-test-signing-secret",
@@ -149,7 +159,7 @@ before(async () => {
   const login = await fetch(`${baseUrl}/admin/office`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ password: "panel-test-admin-pass" }),
+    body: JSON.stringify({ password: adminPassword }),
     redirect: "manual",
   });
   assert.equal(login.status, 302);
@@ -196,6 +206,48 @@ test("não expõe referência externa, descrição, callback nem copiar na vista
   assert.doesNotMatch(gatewayView, /class="copy-btn"/);
   assert.match(gatewayView, /Referência interna/);
   assert.match(gatewayView, /Histórico do Gateway privado/);
+});
+
+test("consulta técnica pagina mais de 1.000 vendas sem incluir operações gateway", async () => {
+  const unauthorized = await technicalRequest(undefined, undefined, "");
+  assert.equal(unauthorized.status, 401);
+
+  const firstResponse = await technicalRequest(1, 100);
+  assert.equal(firstResponse.status, 200);
+  const firstPage = await firstResponse.json();
+
+  assert.deepEqual(Object.keys(firstPage).sort(), ["data", "limit", "ok", "page", "pages", "total"]);
+  assert.equal(firstPage.ok, true);
+  assert.equal(firstPage.total, 1001);
+  assert.equal(firstPage.page, 1);
+  assert.equal(firstPage.limit, 100);
+  assert.equal(firstPage.pages, 11);
+  assert.equal(firstPage.data.length, 100);
+  assert.equal(firstPage.data[0].id, "MEGA-FIRST-PAGE-SENTINEL");
+  assert.equal(firstPage.data.some((transaction: { type?: string; id?: string }) => transaction.type === "gateway"), false);
+  assert.equal(firstPage.data.some((transaction: { id?: string }) => transaction.id === gatewayTransactionId), false);
+  assert.deepEqual(Object.keys(firstPage.data[0]).sort(), [
+    "activatedAt",
+    "amount",
+    "beneficiary",
+    "bundle",
+    "id",
+    "method",
+    "phone",
+    "status",
+    "ts",
+  ]);
+
+  const lastResponse = await technicalRequest(11, 100);
+  assert.equal(lastResponse.status, 200);
+  const lastPage = await lastResponse.json();
+
+  assert.equal(lastPage.total, 1001);
+  assert.equal(lastPage.page, 11);
+  assert.equal(lastPage.pages, 11);
+  assert.equal(lastPage.data.length, 1);
+  assert.equal(lastPage.data[0].id, "MEGA-LAST-PAGE-SENTINEL");
+  assert.equal(lastPage.data.some((transaction: { id?: string }) => transaction.id === gatewayTransactionId), false);
 });
 
 test("preserva o contrato público de criação e consulta do gateway", async () => {
