@@ -2809,6 +2809,15 @@ function adminDashboard(filter = 'all') {
   const filtered = filterMap[filter] ?? megabyteTransactions
   const isGatewayView = filter === 'gateway' || filter === 'gateway-transactions'
   const activeTotal = isGatewayView ? gatewayTotalReceived : totalReceived
+  const statsCards = isGatewayView
+    ? `<div class="stat-card s-all"><div class="stat-num">${gatewayCounts.all}</div><div class="stat-lbl">Total do Gateway</div></div>
+       <div class="stat-card s-conf"><div class="stat-num">${gatewayCounts.succeeded}</div><div class="stat-lbl">Pagamentos Confirmados</div></div>
+       <div class="stat-card s-pend"><div class="stat-num">${gatewayCounts.pending}</div><div class="stat-lbl">A aguardar Pagamento</div></div>
+       <div class="stat-card s-fail"><div class="stat-num">${gatewayCounts.failed}</div><div class="stat-lbl">Pagamentos Falhados</div></div>`
+    : `<div class="stat-card s-all"><div class="stat-num">${counts.all}</div><div class="stat-lbl">Total Megabyte</div></div>
+       <div class="stat-card s-conf"><div class="stat-num">${counts.succeeded}</div><div class="stat-lbl">Pagamentos Confirmados</div></div>
+       <div class="stat-card s-act"><div class="stat-num">${counts.activated}</div><div class="stat-lbl">Activações Concluídas</div></div>
+       <div class="stat-card s-pend"><div class="stat-num">${counts.pending}</div><div class="stat-lbl">A aguardar Pagamento</div></div>`
 
   const SL = { pending:'A aguardar pagamento', succeeded:'Pagamento confirmado', activated:'Activado', failed:'Falhado' }
   const SC = { pending:'#92400e', succeeded:'#065f46', activated:'#1e3a8a', failed:'#991b1b' }
@@ -2848,7 +2857,7 @@ function adminDashboard(filter = 'all') {
     </a>`).join('')
   ).join('')
 
-  const pageTitle = allNavItems.find(n=>n.f===filter)?.label || 'Todas as transacções'
+  const pageTitle = allNavItems.find(n=>n.f===filter)?.label || 'Pagamentos Megabyte'
 
   // ── Vista especial: tabela ZumboPay ─────────────────────────────────────────
   const zumboTable = false && filter === 'zumbo'
@@ -3051,7 +3060,8 @@ function adminDashboard(filter = 'all') {
 </div>`
     : null
 
-  const cards = manualCreditView !== null ? manualCreditView
+  const cards = gatewayTransactionsView !== null ? gatewayTransactionsView
+    : manualCreditView !== null ? manualCreditView
     : gatewayView !== null ? gatewayView
     : usersTable !== null ? usersTable
     : zumboTable !== null ? zumboTable
