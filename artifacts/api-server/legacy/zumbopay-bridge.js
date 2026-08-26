@@ -246,7 +246,6 @@ function trackOrder(tx, extra = {}) {
     ts: tx.ts, activatedAt: null, userId: tx.userId || null, ...extra,
   }
   orders.unshift(rec)
-  if (orders.length > 1000) orders = orders.slice(0, 1000)
   saveOrders()
   return rec
 }
@@ -291,7 +290,7 @@ async function creditRechargeOnceLocked(tx) {
   const appliedCredits = user.rechargeCredits || []
   if (!appliedCredits.includes(tx.id)) {
     user.balance = (user.balance||0) + tx.amount
-    user.rechargeCredits = [...appliedCredits, tx.id].slice(-1000)
+    user.rechargeCredits = [...appliedCredits, tx.id]
     await writeJsonAtomic(USERS_FILE, users)
   }
   if (!journal.balanceApplied) {
@@ -1171,7 +1170,6 @@ NOTAS
       ts: new Date().toISOString(), activatedAt: new Date().toISOString(), userId: u.id,
       zumboRef, adminNote: `Crédito manual pelo admin — ref ZumboPay: ${zumboRef}` }
     orders.unshift(rec)
-    if (orders.length > 1000) orders = orders.slice(0, 1000)
     await saveOrders()
     console.log(`[Admin] Crédito manual: ${u.phone} +${amount} MT ref:${zumboRef} novo saldo:${u.balance}`)
     return json(res, { ok:true, phone: u.phone, name: u.name, newBalance: u.balance })
@@ -2780,27 +2778,37 @@ function handleLogin(e){
 
 // ── Admin: Dashboard ──────────────────────────────────────────────────────────
 function adminDashboard(filter = 'all') {
+  const megabyteTransactions = orders.filter(o => o.type !== 'gateway')
+  const gatewayTransactions = orders.filter(o => o.type === 'gateway')
   const counts = { all:0, pending:0, succeeded:0, activated:0, failed:0 }
   let totalReceived = 0
-  orders.forEach(o => {
+  megabyteTransactions.forEach(o => {
     counts.all++
     if (counts[o.status] !== undefined) counts[o.status]++
     if (o.status==='succeeded'||o.status==='activated') totalReceived += (o.amount||0)
   })
+  const gatewayCounts = { all: gatewayTransactions.length, pending: 0, succeeded: 0, failed: 0 }
+  let gatewayTotalReceived = 0
+  gatewayTransactions.forEach(o => {
+    if (gatewayCounts[o.status] !== undefined) gatewayCounts[o.status]++
+    if (o.status === 'succeeded') gatewayTotalReceived += (o.amount || 0)
+  })
 
   const filterMap = {
-    all:       orders,
-    zumbo:     orders,
+    all:       megabyteTransactions,
     users:     users,
     gateway:   gwKeys,
-    pending:   orders.filter(o=>o.status==='pending'),
-    succeeded: orders.filter(o=>o.status==='succeeded'),
-    activated: orders.filter(o=>o.status==='activated'),
-    'delivery-failed': orders.filter(o=>['failed','manual_intervention'].includes(o.deliveryStatus)),
-    'payment-forwarding': orders.filter(o=>['pending','forwarding','failed'].includes(o.pagarForwardingStatus)),
-    failed:    orders.filter(o=>o.status==='failed'),
+    'gateway-transactions': gatewayTransactions,
+    pending:   megabyteTransactions.filter(o=>o.status==='pending'),
+    succeeded: megabyteTransactions.filter(o=>o.status==='succeeded'),
+    activated: megabyteTransactions.filter(o=>o.status==='activated'),
+    'delivery-failed': megabyteTransactions.filter(o=>['failed','manual_intervention'].includes(o.deliveryStatus)),
+    'payment-forwarding': megabyteTransactions.filter(o=>['pending','forwarding','failed'].includes(o.pagarForwardingStatus)),
+    failed:    megabyteTransactions.filter(o=>o.status==='failed'),
   }
-  const filtered = filterMap[filter] ?? orders
+  const filtered = filterMap[filter] ?? megabyteTransactions
+  const isGatewayView = filter === 'gateway' || filter === 'gateway-transactions'
+  const activeTotal = isGatewayView ? gatewayTotalReceived : totalReceived
 
   const SL = { pending:'A aguardar pagamento', succeeded:'Pagamento confirmado', activated:'Activado', failed:'Falhado' }
   const SC = { pending:'#92400e', succeeded:'#065f46', activated:'#1e3a8a', failed:'#991b1b' }
@@ -2808,26 +2816,24 @@ function adminDashboard(filter = 'all') {
   const ML = { mpesa:'M-Pesa', emola:'e-Mola' }
 
   const navSections = [
-    { label: 'ZumboPay', items: [
-      { f:'zumbo', label:'Transações ZumboPay', icon:'M12 2a10 10 0 100 20A10 10 0 0012 2zm1 14H11v-4H9l3-6 3 6h-2v4z' },
-    ]},
-    { label: 'Gateway', items: [
-      { f:'gateway', label:'Chaves de API (Terceiros)', icon:'M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4' },
-    ]},
-    { label: 'Utilizadores', items: [
-      { f:'users', label:'Contas de Utilizadores', icon:'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75' },
-    ]},
-    { label: 'Ferramentas', items: [
-      { f:'manual-credit', label:'Crédito Manual', icon:'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
-    ]},
-    { label: 'Encomendas', items: [
-      { f:'all',       label:'Todas as transacções',   icon:'M3 7h18M3 12h18M3 17h18' },
+    { label: 'Megabyte', items: [
+      { f:'all',       label:'Pagamentos Megabyte',   icon:'M3 7h18M3 12h18M3 17h18' },
       { f:'succeeded', label:'Pendentes de Activação', icon:'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
       { f:'activated', label:'Activações Confirmadas', icon:'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
       { f:'delivery-failed', label:'Falhas de Entrega USSD', icon:'M12 9v4m0 4h.01M10.29 3.86l-8.18 14a2 2 0 001.74 3h16.3a2 2 0 001.74-3l-8.18-14a2 2 0 00-3.48 0z' },
       { f:'payment-forwarding', label:'Encaminhamentos Pagar', icon:'M13 2L3 14h9l-1 8 10-12h-9l1-8z' },
       { f:'pending',   label:'A aguardar Pagamento',   icon:'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
       { f:'failed',    label:'Pagamentos Falhados',    icon:'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z' },
+    ]},
+    { label: 'Gateway Privado', items: [
+      { f:'gateway-transactions', label:'Transacções do Gateway', icon:'M2 12h20M12 2v20M5 5l14 14M19 5L5 19' },
+      { f:'gateway', label:'Chaves de API', icon:'M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4' },
+    ]},
+    { label: 'Utilizadores', items: [
+      { f:'users', label:'Contas de Utilizadores', icon:'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75' },
+    ]},
+    { label: 'Ferramentas', items: [
+      { f:'manual-credit', label:'Crédito Manual', icon:'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
     ]},
   ]
   const allNavItems = navSections.flatMap(s=>s.items)
