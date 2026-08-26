@@ -98,7 +98,7 @@ function validateInput(input: PagarPaymentInput) {
   }
   const digits = input.payerPhone.replace(/\D/g, "");
   const local = digits.startsWith("258") ? digits.slice(3) : digits;
-  const valid = input.method === "MPESA" ? /^(84|85)\d{7}$/.test(local) : /^86\d{7}$/.test(local);
+   const valid = input.method === "MPESA" ? /^(84|85)\d{7}$/.test(local) : /^(86|87)\d{7}$/.test(local);
   if (!valid) throw new Error("O telefone não corresponde ao método de pagamento.");
 }
 

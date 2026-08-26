@@ -367,8 +367,18 @@ function normalizeMsisdn(p) { const d = String(p).replace(/\D/g,''); return d.st
 function detectMethod(msisdn) {
   const l = msisdn.replace(/^258/,'')
   if (l.startsWith('84')||l.startsWith('85')) return 'mpesa'
-  if (l.startsWith('86')) return 'emola'
+  if (l.startsWith('86')||l.startsWith('87')) return 'emola'
   return null
+}
+function normalizeLocalPhone(p) {
+  const digits = String(p || '').replace(/\D/g,'')
+  return digits.startsWith('258') ? digits.slice(3) : digits
+}
+function isSupportedLocalPhone(p) {
+  return /^(84|85|86|87)\d{7}$/.test(normalizeLocalPhone(p))
+}
+function publicUser(user) {
+  return { id:user.id, name:user.name, phone:user.phone, balance:user.balance||0 }
 }
 function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ''))
@@ -549,13 +559,24 @@ self.addEventListener('fetch',e=>{
   // ── API encomenda de megas ────────────────────────────────────────────────
   if (method === 'POST' && path === '/api/order') {
     let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
+    const user = checkUserCookie(req)
+    if (!user) return json(res, { error:'Faça login para comprar um pacote.' }, 401)
     const { phone, beneficiaryPhone, bundleId } = body
     const bundle = BUNDLES.get(bundleId)
     if (!bundle) return json(res, { error:'Pacote inválido.' }, 400)
-    const msisdn = normalizeMsisdn(phone), meth = detectMethod(msisdn)
-    if (!meth) return json(res, { error:'Número inválido. Use 84 ou 85.' }, 400)
+    const isSelfPurchase = !beneficiaryPhone
+    const payerPhone = isSelfPurchase ? user.phone : normalizeLocalPhone(phone)
+    const selectedMethod = String(body.paymentMethod || body.method || '').toLowerCase()
+    if (!isSupportedLocalPhone(payerPhone)) return json(res, { error:'Número de pagamento inválido. Use M-Pesa 84/85 ou e-Mola 86/87.' }, 400)
+    if (!isSelfPurchase && !beneficiaryPhone) return json(res, { error:'Introduza o número do beneficiário.' }, 400)
+    const beneficiary = beneficiaryPhone ? normalizeLocalPhone(beneficiaryPhone) : null
+    if (beneficiary && !isSupportedLocalPhone(beneficiary)) return json(res, { error:'Número do beneficiário inválido. Use uma faixa 84, 85, 86 ou 87.' }, 400)
+    const msisdn = normalizeMsisdn(payerPhone), detectedMethod = detectMethod(msisdn)
+    const meth = selectedMethod || detectedMethod
+    if (!['mpesa','emola'].includes(meth) || meth !== detectedMethod)
+      return json(res, { error:'O método escolhido não corresponde ao número de pagamento.' }, 400)
     const txId = randomBytes(6).toString('hex')
-    const tx = { id:txId, type:'bundle', bundleId, bundleLabel:bundle.label, phone, beneficiaryPhone: beneficiaryPhone||null, msisdn, amount:bundle.price, method:meth, status:'pending', ref:null, error:null, sourceId:randomUUID(), ts:new Date().toISOString() }
+    const tx = { id:txId, type:'bundle', bundleId, bundleLabel:bundle.label, phone:payerPhone, beneficiaryPhone:beneficiary, msisdn, amount:bundle.price, method:meth, status:'pending', ref:null, error:null, sourceId:randomUUID(), ts:new Date().toISOString(), userId:user.id }
     transactions.set(txId, tx)
     trackOrder(tx)
     json(res, { txId, status:'pending', method:meth })
@@ -618,16 +639,16 @@ self.addEventListener('fetch',e=>{
     let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
     const { name, phone, password } = body
     if (!name||!name.trim())       return json(res, { error:'Nome é obrigatório.' }, 400)
-    if (!phone||String(phone).replace(/\D/g,'').length !== 9)
-                                   return json(res, { error:'Número deve ter 9 dígitos.' }, 400)
+    if (!isSupportedLocalPhone(phone))
+                                   return json(res, { error:'Número inválido. Use M-Pesa 84/85 ou e-Mola 86/87.' }, 400)
     if (!password||password.length < 6) return json(res, { error:'Senha deve ter pelo menos 6 caracteres.' }, 400)
-    const ph = String(phone).replace(/\D/g,'')
+    const ph = normalizeLocalPhone(phone)
     if (findUserByPhone(ph))       return json(res, { error:'Este número já tem uma conta.' }, 409)
     const salt = randomBytes(16).toString('hex')
     const user = { id: randomBytes(6).toString('hex'), name: name.trim(), phone: ph, passwordHash: hashPwd(password, salt), salt, balance: 0, createdAt: new Date().toISOString() }
     users.push(user)
     await saveUsers()
-    const pub = { id:user.id, name:user.name, phone:user.phone, balance:user.balance }
+    const pub = publicUser(user)
     return json(res, { ok:true, user:pub }, 201, { 'Set-Cookie': userCookieHeader(user) })
   }
 
@@ -639,7 +660,7 @@ self.addEventListener('fetch',e=>{
     const user = findUserByPhone(ph)
     if (!user || hashPwd(password||'', user.salt) !== user.passwordHash)
       return json(res, { error:'Número ou senha incorrectos.' }, 401)
-    const pub = { id:user.id, name:user.name, phone:user.phone, balance:user.balance }
+    const pub = publicUser(user)
     return json(res, { ok:true, user:pub }, 200, { 'Set-Cookie': userCookieHeader(user) })
   }
 
@@ -652,7 +673,41 @@ self.addEventListener('fetch',e=>{
   if (method === 'GET' && path === '/api/auth/me') {
     const user = checkUserCookie(req)
     if (!user) return json(res, { error:'Não autenticado.' }, 401)
-    return json(res, { id:user.id, name:user.name, phone:user.phone, balance:user.balance||0 })
+    return json(res, publicUser(user))
+  }
+
+  // ── Auth: actualizar perfil ───────────────────────────────────────────────
+  if (method === 'POST' && path === '/api/auth/profile') {
+    const user = checkUserCookie(req)
+    if (!user) return json(res, { error:'Não autenticado.' }, 401)
+    let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
+    const name = String(body.name || '').trim()
+    const phone = normalizeLocalPhone(body.phone)
+    if (!name) return json(res, { error:'Nome é obrigatório.' }, 400)
+    if (!isSupportedLocalPhone(phone)) return json(res, { error:'Número inválido. Use M-Pesa 84/85 ou e-Mola 86/87.' }, 400)
+    const existing = findUserByPhone(phone)
+    if (existing && existing.id !== user.id) return json(res, { error:'Este número já tem uma conta.' }, 409)
+    user.name = name
+    user.phone = phone
+    await saveUsers()
+    return json(res, { ok:true, user:publicUser(user) }, 200, { 'Set-Cookie': userCookieHeader(user) })
+  }
+
+  // ── Auth: alterar senha ───────────────────────────────────────────────────
+  if (method === 'POST' && path === '/api/auth/change-password') {
+    const user = checkUserCookie(req)
+    if (!user) return json(res, { error:'Não autenticado.' }, 401)
+    let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
+    const currentPassword = String(body.currentPassword || '')
+    const newPassword = String(body.newPassword || '')
+    if (!currentPassword || hashPwd(currentPassword, user.salt) !== user.passwordHash)
+      return json(res, { error:'A senha actual está incorrecta.' }, 400)
+    if (newPassword.length < 6) return json(res, { error:'A nova senha deve ter pelo menos 6 caracteres.' }, 400)
+    const salt = randomBytes(16).toString('hex')
+    user.salt = salt
+    user.passwordHash = hashPwd(newPassword, salt)
+    await saveUsers()
+    return json(res, { ok:true })
   }
 
   // ── Recarga de crédito ────────────────────────────────────────────────────
@@ -797,7 +852,7 @@ NOTAS
     const amount = Math.round(Number(body.amount))
     if (!amount || amount < 1) return json(res, { error:'Valor (amount) inválido.' }, 400)
     const msisdn = normalizeMsisdn(body.phone), meth = detectMethod(msisdn)
-    if (!meth) return json(res, { error:'Número inválido. Use 84 ou 85 (M-Pesa).' }, 400)
+    if (!meth) return json(res, { error:'Número inválido. Use M-Pesa 84/85 ou e-Mola 86/87.' }, 400)
     let callbackUrl = null
     if (body.callback_url) {
       callbackUrl = await gwValidateCallbackUrl(body.callback_url)
