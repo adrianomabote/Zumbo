@@ -1599,7 +1599,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .sh-recipient-phone{font-size:14px;font-weight:700;color:#1c1c1e;white-space:nowrap;}
 /* states: pending / success / failed */
 .sh-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 20px 44px;text-align:center;}
-.sheet.pending-full{bottom:auto!important;top:50%!important;left:50%!important;right:auto!important;width:88%!important;max-width:380px!important;border-radius:22px!important;max-height:90vh!important;transform:translate(-50%,-50%)!important;}
+.sheet.pending-full{bottom:auto!important;top:50%!important;left:50%!important;right:auto!important;width:88%!important;max-width:380px!important;height:auto!important;max-height:calc(100dvh - 40px)!important;margin:0!important;border-radius:22px!important;overflow-y:auto!important;box-shadow:0 20px 60px rgba(0,0,0,.24);transform:translate(-50%,-50%)!important;}
 #s-pending{display:flex;flex-direction:column;}
 #s-pending .sh-state{padding:32px 24px 40px;}
 .voda-gif{width:220px;height:220px;object-fit:contain;display:block;}
