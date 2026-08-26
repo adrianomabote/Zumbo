@@ -47,7 +47,8 @@ interface StoredQueue {
   devices: AgentDevice[];
 }
 
-const dataPath = path.resolve(process.cwd(), "legacy", "ussd-deliveries.json");
+const dataPath = process.env.DELIVERY_QUEUE_FILE ||
+  path.resolve(process.cwd(), "legacy", "ussd-deliveries.json");
 let state: StoredQueue = { deliveries: [], devices: [] };
 let initialized = false;
 let enqueueQueue = Promise.resolve();
@@ -260,6 +261,7 @@ export async function retryDelivery(deliveryId: string) {
   }
   delivery.deviceId = undefined;
   delivery.leaseExpiresAt = undefined;
+  delivery.failureReason = undefined;
   appendEvent(delivery, "queued", "Nova tentativa autorizada pelo painel.");
   await persist();
   return delivery;
