@@ -2851,7 +2851,7 @@ function adminDashboard(filter = 'all') {
   const pageTitle = allNavItems.find(n=>n.f===filter)?.label || 'Todas as transacções'
 
   // ── Vista especial: tabela ZumboPay ─────────────────────────────────────────
-  const zumboTable = filter === 'zumbo'
+  const zumboTable = false && filter === 'zumbo'
     ? (filtered.length === 0
         ? `<div class="empty"><div class="empty-icon">📭</div><p>Nenhuma transacção encontrada.</p></div>`
         : `<div class="zumbo-panel">
