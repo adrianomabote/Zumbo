@@ -696,7 +696,7 @@ self.addEventListener('fetch',e=>{
     if (!isSupportedLocalPhone(payerPhone)) return json(res, { error:'Número de pagamento inválido. Use M-Pesa 84/85 ou e-Mola 86/87.' }, 400)
     if (!isSelfPurchase && !beneficiaryPhone) return json(res, { error:'Introduza o número do beneficiário.' }, 400)
     const beneficiary = isSelfPurchase ? normalizeLocalPhone(user.phone) : normalizeLocalPhone(beneficiaryPhone)
-    if (beneficiary && detectMethod(normalizeMsisdn(beneficiary)) !== 'mpesa')
+    if (!isSelfPurchase && beneficiary && detectMethod(normalizeMsisdn(beneficiary)) !== 'mpesa')
       return json(res, { error:'Número do beneficiário inválido. Use apenas uma faixa 84 ou 85.' }, 400)
     const msisdn = normalizeMsisdn(payerPhone), detectedMethod = detectMethod(msisdn)
     const meth = selectedMethod || detectedMethod
@@ -866,7 +866,7 @@ self.addEventListener('fetch',e=>{
     const bundle = BUNDLES.get(bundleId)
     if (!bundle) return json(res, { error:'Pacote inválido.' }, 400)
     const beneficiary = isSelfPurchase ? normalizeLocalPhone(user.phone) : normalizeLocalPhone(beneficiaryPhone)
-    if (beneficiary && detectMethod(normalizeMsisdn(beneficiary)) !== 'mpesa')
+    if (!isSelfPurchase && beneficiary && detectMethod(normalizeMsisdn(beneficiary)) !== 'mpesa')
       return json(res, { error:'Número do beneficiário inválido. Use apenas uma faixa 84 ou 85.' }, 400)
     if ((user.balance||0) < bundle.price) return json(res, { error:`Saldo insuficiente. Tens ${user.balance||0} MT, precisas de ${bundle.price} MT.` }, 402)
     user.balance = (user.balance||0) - bundle.price
