@@ -3189,7 +3189,7 @@ body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:1
 
 /* ── Main ── */
 .main{flex:1;min-width:0;overflow-x:hidden;}
-.content{max-width:700px;margin:0 auto;padding:24px 16px 60px;}
+.content{max-width:1100px;margin:0 auto;padding:24px 16px 60px;}
 
 /* ── Stats ── */
 .stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:28px;}
@@ -3199,6 +3199,7 @@ body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:1
 .stat-card.s-act{border-color:#3b82f6;}
 .stat-card.s-pend{border-color:#f59e0b;}
 .stat-card.s-fail{border-color:#ef4444;}
+.stat-card.s-all{border-color:#8b5cf6;}
 .stat-num{font-size:28px;font-weight:800;color:#1c1c1e;line-height:1;}
 .stat-lbl{font-size:12px;color:#636366;font-weight:600;margin-top:4px;}
 
@@ -3263,6 +3264,19 @@ body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:1
 .zt-amount{font-weight:800;color:#1c1c1e;white-space:nowrap;}
 @media(max-width:640px){.content{max-width:100%;}.zumbo-panel{max-width:100%;}}
 
+/* ── Gateway history ── */
+.gateway-panel{max-width:1100px;}
+.gateway-intro{display:flex;align-items:flex-start;gap:12px;background:linear-gradient(135deg,#f0fdfa,#ecfeff);border:1px solid #99f6e4;border-radius:16px;padding:16px 18px;margin-bottom:18px;color:#115e59;line-height:1.45;}
+.gateway-intro strong{display:block;font-size:15px;color:#134e4a;margin-bottom:3px;}
+.gateway-intro p{font-size:12px;color:#0f766e;}
+.gateway-mark{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:11px;background:#0f766e;color:#fff;font-size:23px;line-height:1;flex-shrink:0;}
+.gateway-table-wrap{overflow-x:auto;}
+.gateway-table{min-width:820px;}
+.internal-reference{display:flex;flex-direction:column;gap:2px;font-size:12px;font-weight:700;color:#134e4a;white-space:nowrap;}
+.internal-reference small{font-family:monospace;font-size:10px;font-weight:600;color:#0f766e;}
+.reference-dot{width:7px;height:7px;border-radius:50%;background:#14b8a6;display:inline-block;margin-bottom:1px;}
+.channel-tag{font-size:11px;font-weight:700;color:#4338ca;background:#eef2ff;border:1px solid #c7d2fe;border-radius:20px;padding:4px 8px;white-space:nowrap;}
+
 /* ── Utilizadores ── */
 .ubal-badge{display:inline-block;background:#ecfdf5;color:#065f46;font-weight:700;font-size:12px;padding:3px 10px;border-radius:20px;border:1px solid #6ee7b7;}
 .uedit-btn{padding:6px 14px;border:1.5px solid #e5e5ea;border-radius:8px;background:#fff;font-size:12px;font-weight:600;color:#636366;cursor:pointer;font-family:inherit;transition:border-color .12s,color .12s;}
@@ -3314,22 +3328,7 @@ body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:1
 
       <!-- Stats -->
       <div class="stats-grid">
-        <div class="stat-card s-conf">
-          <div class="stat-num">${counts.succeeded}</div>
-          <div class="stat-lbl">Pagamentos Confirmados</div>
-        </div>
-        <div class="stat-card s-act">
-          <div class="stat-num">${counts.activated}</div>
-          <div class="stat-lbl">Activações Concluídas</div>
-        </div>
-        <div class="stat-card s-pend">
-          <div class="stat-num">${counts.pending}</div>
-          <div class="stat-lbl">A aguardar Pagamento</div>
-        </div>
-        <div class="stat-card s-fail">
-          <div class="stat-num">${counts.failed}</div>
-          <div class="stat-lbl">Pagamentos Falhados</div>
-        </div>
+        ${statsCards}
       </div>
 
       <!-- Orders -->
