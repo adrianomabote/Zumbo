@@ -344,61 +344,95 @@ export async function forwardPagarWebhook(event: PagarWebhookEvent, options: { f
   if (!forwardableEventTypes.has(event.eventType) || (!event.operationId && !event.reference)) {
     return event;
   }
-  const claimed = await database.query(
-    `UPDATE pagar_webhook_events
-        SET forwarding_status = 'forwarding',
-            forwarding_attempts = forwarding_attempts + 1,
-            forwarding_started_at = now(),
-            forwarding_updated_at = now(),
-            forwarding_last_error = NULL
-      WHERE event_id = $1
-        AND forwarding_status IN ('pending', 'failed')
-        AND ($2 OR forwarding_next_retry_at IS NULL OR forwarding_next_retry_at <= now())
-      RETURNING forwarding_attempts`,
-    [event.eventId, Boolean(options.force)],
-  );
-  if (!claimed.rowCount) return event;
-
+  const client = await database.connect();
+  const lockKey = `pagar-webhook-forward:${event.eventId}`;
+  let lockAcquired = false;
   try {
-    const bridgePort = process.env.PAGAR_BRIDGE_PORT || "8099";
-    const response = await fetch(`http://127.0.0.1:${bridgePort}/internal/pagar-event`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-internal-payment-key": process.env.SESSION_SECRET || "" },
-      body: JSON.stringify({
-        eventId: event.eventId,
-        eventType: event.eventType,
-        operationId: event.operationId,
-        reference: event.reference,
-        status: event.status,
-      }),
-      signal: AbortSignal.timeout(5_000),
-    });
-    if (!response.ok) throw new Error(`Bridge recusou o encaminhamento (${response.status}).`);
-    await database.query(
+    // The lock must live for the complete bridge request. A transaction lock
+    // would be released before the network call and would not protect against
+    // another worker reclaiming a stale forwarding attempt.
+    await client.query("SELECT pg_advisory_lock(hashtext($1))", [lockKey]);
+    lockAcquired = true;
+
+    const claimed = await client.query(
       `UPDATE pagar_webhook_events
-          SET forwarding_status = 'delivered',
-              forwarding_last_error = NULL,
-              forwarding_next_retry_at = NULL,
-              forwarding_started_at = NULL,
-              forwarding_updated_at = now()
-        WHERE event_id = $1 AND forwarding_status = 'forwarding'`,
+          SET forwarding_status = 'forwarding',
+              forwarding_attempts = forwarding_attempts + 1,
+              forwarding_started_at = now(),
+              forwarding_updated_at = now(),
+              forwarding_last_error = NULL
+        WHERE event_id = $1
+          AND (
+            (
+              forwarding_status IN ('pending', 'failed')
+              AND ($2 OR forwarding_next_retry_at IS NULL OR forwarding_next_retry_at <= now())
+            )
+            OR (
+              forwarding_status = 'forwarding'
+              AND forwarding_started_at < now() - interval '2 minutes'
+            )
+          )
+        RETURNING forwarding_attempts`,
+      [event.eventId, Boolean(options.force)],
+    );
+    if (!claimed.rowCount) return event;
+
+    try {
+      const bridgePort = process.env.PAGAR_BRIDGE_PORT || "8099";
+      const response = await fetch(`http://127.0.0.1:${bridgePort}/internal/pagar-event`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-internal-payment-key": process.env.SESSION_SECRET || "" },
+        body: JSON.stringify({
+          eventId: event.eventId,
+          eventType: event.eventType,
+          operationId: event.operationId,
+          reference: event.reference,
+          status: event.status,
+        }),
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (!response.ok) throw new Error(`Bridge recusou o encaminhamento (${response.status}).`);
+      await client.query(
+        `UPDATE pagar_webhook_events
+            SET forwarding_status = 'delivered',
+                forwarding_last_error = NULL,
+                forwarding_next_retry_at = NULL,
+                forwarding_started_at = NULL,
+                forwarding_updated_at = now()
+          WHERE event_id = $1 AND forwarding_status = 'forwarding'`,
+        [event.eventId],
+      );
+    } catch (error) {
+      const attempts = Number(claimed.rows[0]?.forwarding_attempts || 1);
+      const reason = error instanceof Error ? error.message : "Não foi possível contactar o bridge.";
+      await client.query(
+        `UPDATE pagar_webhook_events
+            SET forwarding_status = 'failed',
+                forwarding_last_error = $2,
+                forwarding_next_retry_at = $3,
+                forwarding_started_at = NULL,
+                forwarding_updated_at = now()
+          WHERE event_id = $1 AND forwarding_status = 'forwarding'`,
+        [event.eventId, reason.slice(0, 500), new Date(Date.now() + retryDelayMs(attempts))],
+      );
+    }
+    const current = await client.query(
+      `SELECT event_id, event_type, operation_id, reference, payment_status,
+              forwarding_status, forwarding_attempts, forwarding_last_error,
+              forwarding_next_retry_at, forwarding_updated_at
+         FROM pagar_webhook_events WHERE event_id = $1`,
       [event.eventId],
     );
-  } catch (error) {
-    const attempts = Number(claimed.rows[0]?.forwarding_attempts || 1);
-    const reason = error instanceof Error ? error.message : "Não foi possível contactar o bridge.";
-    await database.query(
-      `UPDATE pagar_webhook_events
-          SET forwarding_status = 'failed',
-              forwarding_last_error = $2,
-              forwarding_next_retry_at = $3,
-              forwarding_started_at = NULL,
-              forwarding_updated_at = now()
-        WHERE event_id = $1 AND forwarding_status = 'forwarding'`,
-      [event.eventId, reason.slice(0, 500), new Date(Date.now() + retryDelayMs(attempts))],
-    );
+    return current.rows[0] ? webhookEventFromRow(current.rows[0]) : event;
+  } finally {
+    try {
+      if (lockAcquired) {
+        await client.query("SELECT pg_advisory_unlock(hashtext($1))", [lockKey]);
+      }
+    } finally {
+      client.release();
+    }
   }
-  return getPagarWebhookEvent(event.eventId);
 }
 
 export async function getPagarWebhookEvent(eventId: string) {
@@ -463,23 +497,21 @@ export function startPagarWebhookRetryWorker(intervalMs = 30_000) {
     if (forwardingRetryRunning) return;
     forwardingRetryRunning = true;
     try {
-      await requirePool().query(
-        `UPDATE pagar_webhook_events
-            SET forwarding_status = 'failed',
-                forwarding_last_error = COALESCE(forwarding_last_error, 'Tentativa interrompida; será repetida.'),
-                forwarding_next_retry_at = now(),
-                forwarding_started_at = NULL,
-                forwarding_updated_at = now()
-          WHERE forwarding_status = 'forwarding'
-            AND forwarding_started_at < now() - interval '2 minutes'`,
-      );
       const due = await requirePool().query(
         `SELECT event_id, event_type, operation_id, reference, payment_status,
                 forwarding_status, forwarding_attempts, forwarding_last_error,
                 forwarding_next_retry_at, forwarding_updated_at
            FROM pagar_webhook_events
-          WHERE forwarding_status IN ('pending', 'failed')
-            AND (forwarding_next_retry_at IS NULL OR forwarding_next_retry_at <= now())
+          WHERE (
+            (
+              forwarding_status IN ('pending', 'failed')
+              AND (forwarding_next_retry_at IS NULL OR forwarding_next_retry_at <= now())
+            )
+            OR (
+              forwarding_status = 'forwarding'
+              AND forwarding_started_at < now() - interval '2 minutes'
+            )
+          )
           ORDER BY forwarding_next_retry_at NULLS FIRST, processed_at
           LIMIT 20`,
       );

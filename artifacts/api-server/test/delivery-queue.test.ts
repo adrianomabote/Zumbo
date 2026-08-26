@@ -16,6 +16,7 @@ const queueFile = path.join(queueDirectory, "deliveries.json");
 const bridgePort = await findFreePort();
 const recoveryTxId = `delivery-test-recovery-${testId}`;
 const restartRecoveryTxId = `delivery-test-restart-recovery-${testId}`;
+const concurrentTxId = `delivery-test-concurrent-${testId}`;
 
 process.env.DELIVERY_QUEUE_FILE = queueFile;
 process.env.PAGAR_BRIDGE_PORT = String(bridgePort);
@@ -27,7 +28,12 @@ const {
   listDeliveries,
   reportDelivery,
 } = await import("../src/services/delivery-queue.ts");
-const { ensurePagarTables, startPagarWebhookRetryWorker } = await import("../src/services/pagar.ts");
+const {
+  ensurePagarTables,
+  forwardPagarWebhook,
+  getPagarWebhookEvent,
+  startPagarWebhookRetryWorker,
+} = await import("../src/services/pagar.ts");
 const { default: app } = await import("../src/app.ts");
 
 let server: Server;
@@ -36,6 +42,10 @@ let bridgeProcess: ChildProcess;
 let apiProcess: ChildProcess | undefined;
 let apiProcessOutput = "";
 let hangingBridge: Server | undefined;
+let delayedBridge: Server | undefined;
+let delayedBridgeRequestCount = 0;
+let delayedBridgeRequestSeen: Promise<void>;
+let releaseDelayedBridgeRequest: () => void;
 let stopPagarWebhookRetryWorker: (() => void) | undefined;
 
 async function findFreePort() {
@@ -85,6 +95,69 @@ async function startHangingBridge() {
 async function stopHangingBridge() {
   const processToStop = hangingBridge;
   hangingBridge = undefined;
+  if (!processToStop) return;
+  await new Promise<void>((resolve, reject) => {
+    processToStop.close((error) => (error ? reject(error) : resolve()));
+  });
+}
+
+async function startDelayedBridge() {
+  let resolveRequestSeen!: () => void;
+  delayedBridgeRequestSeen = new Promise((resolve) => {
+    resolveRequestSeen = resolve;
+  });
+  let releaseRequest!: () => void;
+  const requestReleased = new Promise<void>((resolve) => {
+    releaseRequest = resolve;
+  });
+  releaseDelayedBridgeRequest = releaseRequest;
+  delayedBridgeRequestCount = 0;
+  delayedBridge = createServer(async (request, response) => {
+    if (request.url === "/ping") {
+      response.writeHead(200);
+      response.end("ok");
+      return;
+    }
+    if (request.url !== "/internal/pagar-event") {
+      response.writeHead(404);
+      response.end();
+      return;
+    }
+
+    request.resume();
+    delayedBridgeRequestCount += 1;
+    resolveRequestSeen();
+    await requestReleased;
+
+    const enqueueResponse = await fetch(`${baseUrl}/api/ussd-agent/internal/paid-deliveries`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-internal-delivery-key": process.env.SESSION_SECRET!,
+      },
+      body: JSON.stringify({
+        paymentId: concurrentTxId,
+        idempotencyKey: `order-${concurrentTxId}`,
+        beneficiaryPhone: "841112223",
+        packageLabel: "780 MB",
+        ussdSequence: ["*111#", "Enviar pacote 780 MB para 841112223"],
+      }),
+    });
+    const body = await enqueueResponse.text();
+    response.writeHead(enqueueResponse.ok ? 200 : 502, { "content-type": "application/json" });
+    response.end(body);
+  });
+  const port = await findFreePort();
+  await new Promise<void>((resolve, reject) => {
+    delayedBridge!.once("error", reject);
+    delayedBridge!.listen(port, "127.0.0.1", () => resolve());
+  });
+  process.env.PAGAR_BRIDGE_PORT = String(port);
+}
+
+async function stopDelayedBridge() {
+  const processToStop = delayedBridge;
+  delayedBridge = undefined;
   if (!processToStop) return;
   await new Promise<void>((resolve, reject) => {
     processToStop.close((error) => (error ? reject(error) : resolve()));
@@ -312,6 +385,7 @@ after(async () => {
   stopPagarWebhookRetryWorker?.();
   await stopApiProcess();
   await stopHangingBridge();
+  await stopDelayedBridge();
   await stopBridge();
   await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   await pool?.query("DELETE FROM pagar_webhook_events WHERE event_id LIKE $1", [`delivery-test-%`]);
@@ -492,4 +566,39 @@ test("worker recovers an interrupted forwarding after server restart without dup
   );
   assert.equal(deliveries.length, 1);
   assert.equal(deliveries[0].beneficiaryPhone, "841112223");
+});
+
+test("concurrent workers reclaim one stale forwarding with one bridge delivery", async () => {
+  const operationId = `pagar-concurrent-${testId}`;
+  const reference = `net-${concurrentTxId}`;
+  const eventId = `delivery-test-concurrent-event-${testId}`;
+
+  await insertPendingOperation(concurrentTxId, operationId, reference);
+  await stopBridge();
+  await startDelayedBridge();
+  await insertInterruptedForwarding(eventId, operationId, reference);
+
+  const event = await getPagarWebhookEvent(eventId);
+  assert.ok(event);
+  const firstForwarding = forwardPagarWebhook(event);
+  const secondForwarding = forwardPagarWebhook(event);
+  await delayedBridgeRequestSeen;
+
+  releaseDelayedBridgeRequest();
+  const [firstResult, secondResult] = await Promise.all([firstForwarding, secondForwarding]);
+
+  assert.equal(delayedBridgeRequestCount, 1);
+  assert.equal(firstResult?.forwardingStatus, "delivered");
+  assert.equal(secondResult?.forwardingStatus, "forwarding");
+  const finalEvent = await getPagarWebhookEvent(eventId);
+  assert.equal(finalEvent?.forwardingStatus, "delivered");
+  assert.equal(finalEvent?.forwardingAttempts, 2);
+
+  const deliveries = (await listDeliveries()).filter((delivery) => delivery.paymentId === concurrentTxId);
+  assert.equal(deliveries.length, 1);
+  assert.equal(deliveries[0].beneficiaryPhone, "841112223");
+
+  await stopDelayedBridge();
+  process.env.PAGAR_BRIDGE_PORT = String(bridgePort);
+  await startBridge(Number(new URL(baseUrl).port));
 });
