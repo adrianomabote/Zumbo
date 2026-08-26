@@ -83,8 +83,9 @@ export function startLegacyBridge() {
 }
 
 export function stopLegacyBridge() {
-  legacyProcess?.kill("SIGTERM");
+  const processToStop = legacyProcess;
   legacyProcess = undefined;
+  processToStop?.kill("SIGTERM");
 }
 
 export async function waitForLegacyBridge(timeoutMs = 10_000) {

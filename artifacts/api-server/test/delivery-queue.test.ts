@@ -541,7 +541,17 @@ test("worker recovers an interrupted forwarding after server restart without dup
   await startApiProcess();
   const forwardingWhileProcessRuns = await waitForForwardingStatus(eventId, "forwarding");
   assert.equal(forwardingWhileProcessRuns.forwardingStatus, "forwarding");
+  const shutdownStartedAt = Date.now();
   await stopApiProcess();
+  assert.ok(Date.now() - shutdownStartedAt < 2_000, "O shutdown não deve aguardar o timeout do bridge.");
+  const interruptedAfterShutdown = await pool!.query(
+    `SELECT forwarding_status, forwarding_last_error, forwarding_next_retry_at
+       FROM pagar_webhook_events WHERE event_id = $1`,
+    [eventId],
+  );
+  assert.equal(interruptedAfterShutdown.rows[0]?.forwarding_status, "failed");
+  assert.match(interruptedAfterShutdown.rows[0]?.forwarding_last_error || "", /abort|cancel/i);
+  assert.ok(interruptedAfterShutdown.rows[0]?.forwarding_next_retry_at);
   await stopHangingBridge();
 
   await pool!.query(

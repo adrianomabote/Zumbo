@@ -379,29 +379,35 @@ export async function forwardPagarWebhook(event: PagarWebhookEvent, options: { f
 
     try {
       const bridgePort = process.env.PAGAR_BRIDGE_PORT || "8099";
-      const response = await fetch(`http://127.0.0.1:${bridgePort}/internal/pagar-event`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-internal-payment-key": process.env.SESSION_SECRET || "" },
-        body: JSON.stringify({
-          eventId: event.eventId,
-          eventType: event.eventType,
-          operationId: event.operationId,
-          reference: event.reference,
-          status: event.status,
-        }),
-        signal: AbortSignal.timeout(5_000),
-      });
-      if (!response.ok) throw new Error(`Bridge recusou o encaminhamento (${response.status}).`);
-      await client.query(
-        `UPDATE pagar_webhook_events
-            SET forwarding_status = 'delivered',
-                forwarding_last_error = NULL,
-                forwarding_next_retry_at = NULL,
-                forwarding_started_at = NULL,
-                forwarding_updated_at = now()
-          WHERE event_id = $1 AND forwarding_status = 'forwarding'`,
-        [event.eventId],
-      );
+      const controller = new AbortController();
+      activeForwardingControllers.add(controller);
+      try {
+        const response = await fetch(`http://127.0.0.1:${bridgePort}/internal/pagar-event`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-internal-payment-key": process.env.SESSION_SECRET || "" },
+          body: JSON.stringify({
+            eventId: event.eventId,
+            eventType: event.eventType,
+            operationId: event.operationId,
+            reference: event.reference,
+            status: event.status,
+          }),
+          signal: AbortSignal.any([controller.signal, AbortSignal.timeout(5_000)]),
+        });
+        if (!response.ok) throw new Error(`Bridge recusou o encaminhamento (${response.status}).`);
+        await client.query(
+          `UPDATE pagar_webhook_events
+              SET forwarding_status = 'delivered',
+                  forwarding_last_error = NULL,
+                  forwarding_next_retry_at = NULL,
+                  forwarding_started_at = NULL,
+                  forwarding_updated_at = now()
+            WHERE event_id = $1 AND forwarding_status = 'forwarding'`,
+          [event.eventId],
+        );
+      } finally {
+        activeForwardingControllers.delete(controller);
+      }
     } catch (error) {
       const attempts = Number(claimed.rows[0]?.forwarding_attempts || 1);
       const reason = error instanceof Error ? error.message : "Não foi possível contactar o bridge.";
@@ -482,18 +488,43 @@ export async function retryPagarWebhookForwarding(eventId: string) {
   return pending ? forwardPagarWebhook(pending, { force: true }) : event;
 }
 
-let forwardingRetryTimer: NodeJS.Timeout | undefined;
+interface ForwardingWorker {
+  timer?: NodeJS.Timeout;
+  stopped: boolean;
+}
+
+let forwardingWorker: ForwardingWorker | undefined;
 let forwardingRetryRunning = false;
+const activeForwardingControllers = new Set<AbortController>();
+
+function stopForwardingWorker(worker: ForwardingWorker | undefined) {
+  const isCurrentWorker = !worker || forwardingWorker === worker;
+  if (worker) {
+    worker.stopped = true;
+    if (worker.timer) clearInterval(worker.timer);
+    if (forwardingWorker === worker) forwardingWorker = undefined;
+  }
+
+  if (!isCurrentWorker) return;
+  for (const controller of activeForwardingControllers) {
+    controller.abort();
+  }
+}
+
+export function stopPagarWebhookRetryWorker() {
+  stopForwardingWorker(forwardingWorker);
+}
 
 export function startPagarWebhookRetryWorker(intervalMs = 30_000) {
-  if (forwardingRetryTimer) {
-    const timer = forwardingRetryTimer;
-    return () => {
-      clearInterval(timer);
-      if (forwardingRetryTimer === timer) forwardingRetryTimer = undefined;
-    };
+  if (forwardingWorker) {
+    const worker = forwardingWorker;
+    return () => stopForwardingWorker(worker);
   }
+  const worker: ForwardingWorker = { stopped: false };
+  forwardingWorker = worker;
+
   const run = async () => {
+    if (worker.stopped) return;
     if (forwardingRetryRunning) return;
     forwardingRetryRunning = true;
     try {
@@ -515,7 +546,10 @@ export function startPagarWebhookRetryWorker(intervalMs = 30_000) {
           ORDER BY forwarding_next_retry_at NULLS FIRST, processed_at
           LIMIT 20`,
       );
-      for (const row of due.rows) await forwardPagarWebhook(webhookEventFromRow(row));
+      for (const row of due.rows) {
+        if (worker.stopped) break;
+        await forwardPagarWebhook(webhookEventFromRow(row));
+      }
     } catch {
       // A later tick will retry after a transient database failure.
     } finally {
@@ -525,10 +559,9 @@ export function startPagarWebhookRetryWorker(intervalMs = 30_000) {
   void run();
   const timer = setInterval(run, intervalMs);
   timer.unref?.();
-  forwardingRetryTimer = timer;
+  worker.timer = timer;
   return () => {
-    clearInterval(timer);
-    if (forwardingRetryTimer === timer) forwardingRetryTimer = undefined;
+    stopForwardingWorker(worker);
   };
 }
 
