@@ -2259,9 +2259,9 @@ function updateNavAuth() {
   }
 }
 function phoneMethod(phone) {
-  const digits = String(phone || '').replace(/\D/g,'')
-  if (/^(84|85)\d{7}$/.test(digits)) return 'mpesa'
-  if (/^(86|87)\d{7}$/.test(digits)) return 'emola'
+  const digits = String(phone || '').replace(/\\D/g,'')
+  if (/^(84|85)\\d{7}$/.test(digits)) return 'mpesa'
+  if (/^(86|87)\\d{7}$/.test(digits)) return 'emola'
   return null
 }
 function paymentMethodLabel(method) {
@@ -2283,7 +2283,7 @@ function authSetTab(t) {
 }
 async function registerUser() {
   const name=document.getElementById('reg-name').value.trim()
-  const phone=document.getElementById('reg-phone').value.trim().replace(/\D/g,'')
+  const phone=document.getElementById('reg-phone').value.trim().replace(/\\D/g,'')
   const pass=document.getElementById('reg-pass').value
   const pass2=document.getElementById('reg-pass2').value
   const err=document.getElementById('reg-err'); err.style.display='none'
@@ -2301,7 +2301,7 @@ async function registerUser() {
   } catch{err.textContent='Erro de ligação.';err.style.display='block';btn.disabled=false;btn.textContent='Criar Conta'}
 }
 async function loginUser() {
-  const phone=document.getElementById('login-phone').value.trim().replace(/\D/g,'')
+  const phone=document.getElementById('login-phone').value.trim().replace(/\\D/g,'')
   const pass=document.getElementById('login-pass').value
   const err=document.getElementById('login-err'); err.style.display='none'
   if(!phone){err.textContent='Introduza o número.';err.style.display='block';return}
@@ -2341,7 +2341,7 @@ function closeProfileDialog() {
 }
 async function saveProfile() {
   const name=document.getElementById('profile-name').value.trim()
-  const phone=document.getElementById('profile-phone').value.trim().replace(/\D/g,'')
+  const phone=document.getElementById('profile-phone').value.trim().replace(/\\D/g,'')
   const err=document.getElementById('profile-err'); err.style.display='none'
   if (!name) { err.textContent='Introduza o seu nome.'; err.style.display='block'; return }
   if (!phoneMethod(phone)) { err.textContent='Número inválido. Use M-Pesa 84/85 ou e-Mola 86/87.'; err.style.display='block'; return }
@@ -2503,11 +2503,11 @@ function shShow(s) {
 
 function getPhoneFromSheet() {
   if (shCurTab==='outro') {
-    const phone=document.getElementById('sh-phone-payer').value.trim().replace(/\D/g,'')
-    const bene=document.getElementById('sh-phone-bene').value.trim().replace(/\D/g,'')
+    const phone=document.getElementById('sh-phone-payer').value.trim().replace(/\\D/g,'')
+    const bene=document.getElementById('sh-phone-bene').value.trim().replace(/\\D/g,'')
     return { phone, beneficiaryPhone:bene, error: !phone?'Introduza o seu número de pagamento.':!phoneMethod(phone)?'Número de pagamento incompatível. M-Pesa: 84/85 · e-Mola: 86/87.':!bene?'Introduza o número do beneficiário.':phoneMethod(bene)!=='mpesa'?'Número do beneficiário inválido. Use apenas 84 ou 85.':null }
   }
-  const phone=authState.user?.phone || document.getElementById('sh-phone').value.trim().replace(/\D/g,'')
+  const phone=authState.user?.phone || document.getElementById('sh-phone').value.trim().replace(/\\D/g,'')
   return { phone, beneficiaryPhone:null, error: !authState.user?'Faça login para comprar para si.':!phoneMethod(phone)?'Número da conta inválido. Use M-Pesa 84/85 ou e-Mola 86/87.':null }
 }
 
@@ -3265,7 +3265,7 @@ function setBalDelta(sign){
 function closeUserEdit(){ document.getElementById('user-modal').style.display='none' }
 async function saveUserEdit(){
   const name=document.getElementById('uedit-name').value.trim()
-  const phone=document.getElementById('uedit-phone').value.trim().replace(/\D/g,'')
+  const phone=document.getElementById('uedit-phone').value.trim().replace(/\\D/g,'')
   const delta=parseFloat(document.getElementById('uedit-bal-delta').value)||0
   const newpass=document.getElementById('uedit-newpass').value
   const err=document.getElementById('uedit-err'); err.style.display='none'
@@ -3315,7 +3315,7 @@ async function gwDelete(id,name){
 }
 async function doManualCredit(){
   const ref=document.getElementById('mc-ref').value.trim()
-  const phone=document.getElementById('mc-phone').value.trim().replace(/\D/g,'')
+  const phone=document.getElementById('mc-phone').value.trim().replace(/\\D/g,'')
   const amount=parseInt(document.getElementById('mc-amount').value)
   const err=document.getElementById('mc-err'), ok=document.getElementById('mc-ok')
   err.style.display='none'; ok.style.display='none'
