@@ -259,13 +259,19 @@ pm2 logs net-servicos-api
 
 # Actualizar depois de mudanças no código
 cd /opt/net-servicos
-git pull                          # se usar Git
+git pull --ff-only origin main    # se usar Git
 bash deploy/build-prod.sh
 pm2 reload deploy/ecosystem.config.cjs --update-env
 
 # Reiniciar Nginx
 systemctl reload nginx
 ```
+
+> O `ecosystem.config.cjs` fixa `NET_SERVICOS_PAYMENT_MODE=live` para a VPS.
+> As chaves `PAGAR_*`, `DATABASE_URL`, `SESSION_SECRET` e `ADMIN_PASS` continuam
+> exclusivamente no `.env` do VPS. Depois do reload, confirme com
+> `curl -s https://megabyte.live/api/legacy/api/config` que
+> `paymentMode` aparece como `live`.
 
 ---
 
