@@ -1650,6 +1650,23 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .via-btn.active .via-btn-label{color:#cc0000;}
 .via-btn.active .via-btn-sub{color:#cc0000;}
 .profile-section-title{font-size:14px;font-weight:800;color:#1c1c1e;margin:4px 0 12px;}
+.profile-section-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.profile-section-heading .profile-section-title{margin:4px 0;}
+.profile-edit-btn{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border:1px solid #e5e5ea;border-radius:10px;background:#fff;color:#cc0000;cursor:pointer;transition:background .15s,border-color .15s;}
+.profile-edit-btn:hover,.profile-edit-btn:focus-visible{background:#fff0f0;border-color:#ffcdd2;outline:none;}
+.profile-edit-btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.profile-summary{display:flex;flex-direction:column;gap:12px;padding:14px 16px;background:#f8f8fa;border:1px solid #e5e5ea;border-radius:14px;}
+.profile-summary-row{display:flex;align-items:center;justify-content:space-between;gap:16px;}
+.profile-summary-row span{font-size:13px;color:#8e8e93;}
+.profile-summary-row strong{font-size:15px;color:#1c1c1e;text-align:right;overflow-wrap:anywhere;}
+.profile-edit-form{display:flex;flex-direction:column;gap:12px;}
+.profile-edit-form .auth-inp{margin:0;}
+.profile-edit-hint{font-size:12px;color:#8e8e93;margin-top:-4px;}
+.profile-edit-actions{display:flex;gap:10px;}
+.profile-edit-actions button{flex:1;}
+.profile-cancel-btn{padding:15px;border:1.5px solid #e5e5ea;border-radius:14px;background:#fff;color:#636366;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;}
+.profile-cancel-btn:active{background:#f2f2f7;}
+.profile-save-btn{margin:0;}
 .profile-divider{height:1px;background:#e5e5ea;margin:8px 0 18px;}
 .via-credit-bal{display:block;font-size:11px;font-weight:700;color:#065f46;margin-top:1px;}
 
@@ -2189,11 +2206,26 @@ ${allListHtml}
         <div class="auth-card-sub">Consulta e actualiza os teus dados</div>
       </div>
       <div class="auth-body">
-        <div class="profile-section-title">Dados pessoais</div>
-        <input class="auth-inp" id="profile-name" type="text" placeholder="Nome completo" autocomplete="name">
-        <input class="auth-inp" id="profile-phone" type="tel" placeholder="Número de telemóvel" maxlength="9" inputmode="numeric" autocomplete="tel">
-        <div class="auth-err" id="profile-err"></div>
-        <button class="auth-btn" id="profile-btn" onclick="saveProfile()">Guardar dados</button>
+        <div class="profile-section-heading">
+          <div class="profile-section-title">Dados pessoais</div>
+          <button class="profile-edit-btn" id="profile-edit-btn" type="button" onclick="startProfileEdit()" aria-label="Editar dados pessoais" title="Editar dados pessoais">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L8 18l-4 1 1-4Z"/></svg>
+          </button>
+        </div>
+        <div class="profile-summary" id="profile-summary">
+          <div class="profile-summary-row"><span>Nome</span><strong id="profile-name-value">—</strong></div>
+          <div class="profile-summary-row"><span>Número da conta</span><strong id="profile-phone-value">—</strong></div>
+        </div>
+        <div class="profile-edit-form" id="profile-edit-form" style="display:none">
+          <input class="auth-inp" id="profile-name" type="text" placeholder="Nome completo" autocomplete="name">
+          <input class="auth-inp" id="profile-phone" type="tel" placeholder="Número da conta (9 dígitos)" maxlength="9" inputmode="numeric" autocomplete="tel">
+          <span class="profile-edit-hint">O número da conta deve ter exactamente 9 dígitos.</span>
+          <div class="auth-err" id="profile-err"></div>
+          <div class="profile-edit-actions">
+            <button class="profile-cancel-btn" type="button" onclick="cancelProfileEdit()">Cancelar</button>
+            <button class="auth-btn profile-save-btn" id="profile-btn" onclick="saveProfile()">Guardar</button>
+          </div>
+        </div>
         <div class="profile-divider"></div>
         <div class="profile-section-title">Alterar senha</div>
         <input class="auth-inp" id="profile-current-pass" type="password" placeholder="Senha actual" autocomplete="current-password">
@@ -2330,10 +2362,34 @@ async function logoutUser() {
   authState.user=null; updateNavAuth(); closeDrawer()
 }
 
+function renderProfileSummary() {
+  const u = authState.user || {}
+  document.getElementById('profile-name-value').textContent = u.name || '—'
+  document.getElementById('profile-phone-value').textContent = u.phone || '—'
+}
+function setProfileEditMode(editing) {
+  document.getElementById('profile-summary').style.display = editing ? 'none' : 'flex'
+  document.getElementById('profile-edit-form').style.display = editing ? 'flex' : 'none'
+  document.getElementById('profile-edit-btn').style.display = editing ? 'none' : 'flex'
+}
+function startProfileEdit() {
+  if (!authState.user) return
+  document.getElementById('profile-name').value = authState.user.name || ''
+  document.getElementById('profile-phone').value = authState.user.phone || ''
+  document.getElementById('profile-err').style.display = 'none'
+  setProfileEditMode(true)
+  setTimeout(() => document.getElementById('profile-name').focus(), 0)
+}
+function cancelProfileEdit() {
+  document.getElementById('profile-err').style.display = 'none'
+  setProfileEditMode(false)
+}
 function openProfileDialog() {
   if (!authState.user) { openAuthDialog('login'); return }
   document.getElementById('profile-name').value = authState.user.name || ''
   document.getElementById('profile-phone').value = authState.user.phone || ''
+  renderProfileSummary()
+  setProfileEditMode(false)
   ;['profile-err','password-err'].forEach(id => {
     const el = document.getElementById(id)
     el.style.display='none'
@@ -2360,7 +2416,7 @@ async function saveProfile() {
     const r=await fetch('/api/auth/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,phone})})
     const d=await r.json()
     if (!r.ok) { err.textContent=d.error||'Não foi possível guardar os dados.'; err.style.display='block'; return }
-    authState.user=d.user; updateNavAuth(); closeProfileDialog()
+    authState.user=d.user; updateNavAuth(); renderProfileSummary(); syncSelfPurchaseRecipient(); setProfileEditMode(false); closeProfileDialog()
   } catch { err.textContent='Erro de ligação.'; err.style.display='block' }
   finally { btn.disabled=false; btn.textContent='Guardar dados' }
 }
@@ -2482,12 +2538,12 @@ function openBuyDirect(id) {
   document.getElementById('ico-dur').textContent  = p.dur
   document.getElementById('ico-calls').textContent = p.calls ? 'Ilim.' : '0 MT'
   document.getElementById('ico-sms').textContent   = p.calls ? '+ SMS' : '0 SMS'
-  const selfPhone = authState.user?.phone || ''
   const selfInput = document.getElementById('sh-phone')
-  selfInput.value = selfPhone
-  selfInput.readOnly = Boolean(selfPhone)
-  selfInput.title = selfPhone ? 'O número da conta autenticada é usado para esta compra.' : ''
-  document.getElementById('sh-recipient-phone').textContent = selfPhone || '—'
+  selfInput.value = ''
+  selfInput.readOnly = false
+  selfInput.title = ''
+  selfInput.placeholder = 'Número que vai pagar'
+  syncSelfPurchaseRecipient()
   document.getElementById('sh-err').style.display = 'none'
   payVia = 'mobile-money'
   document.querySelectorAll('.via-btn').forEach(b => b.classList.toggle('active', b.dataset.via===payVia))
@@ -2516,20 +2572,20 @@ function getPhoneFromSheet() {
   if (shCurTab==='outro') {
     const phone=document.getElementById('sh-phone-payer').value.trim().replace(/\\D/g,'')
     const bene=document.getElementById('sh-phone-bene').value.trim().replace(/\\D/g,'')
-    return { phone, beneficiaryPhone:bene, error: !phone?'Introduza o seu número de pagamento.':!phoneMethod(phone)?'Número de pagamento incompatível. M-Pesa: 84/85 · e-Mola: 86/87.':!bene?'Introduza o número do beneficiário.':phoneMethod(bene)!=='mpesa'?'Número do beneficiário inválido. Use apenas 84 ou 85.':null }
+    return { phone, beneficiaryPhone:bene, purchaseFor:'other', error: !phone?'Introduza o seu número de pagamento.':!phoneMethod(phone)?'Número de pagamento incompatível. M-Pesa: 84/85 · e-Mola: 86/87.':!bene?'Introduza o número do beneficiário.':phoneMethod(bene)!=='mpesa'?'Número do beneficiário inválido. Use apenas 84 ou 85.':null }
   }
-  const phone=authState.user?.phone || document.getElementById('sh-phone').value.trim().replace(/\\D/g,'')
-  return { phone, beneficiaryPhone:null, error: !authState.user?'Faça login para comprar para si.':!phoneMethod(phone)?'Número da conta inválido. Use M-Pesa 84/85 ou e-Mola 86/87.':null }
+  const phone=document.getElementById('sh-phone').value.trim().replace(/\\D/g,'')
+  return { phone, beneficiaryPhone:null, purchaseFor:'self', error: !authState.user?'Faça login para comprar para si.':!phoneMethod(phone)?'Número de pagamento incompatível. M-Pesa: 84/85 · e-Mola: 86/87.':null }
 }
 
 async function pay() {
   if (payVia === 'credit') { await payWithCredit(); return }
   const ee = document.getElementById('sh-err'); ee.style.display='none'
-  const {phone, beneficiaryPhone, error} = getPhoneFromSheet()
+  const {phone, beneficiaryPhone, purchaseFor, error} = getPhoneFromSheet()
   if (error) { ee.textContent=error; ee.style.display='block'; return }
   const btn = document.getElementById('sh-btn'); btn.disabled=true; btn.textContent='A processar…'
   try {
-    const payload={phone,bundleId:curPkg.id,paymentMethod:phoneMethod(phone)}; if(beneficiaryPhone) payload.beneficiaryPhone=beneficiaryPhone
+    const payload={phone,bundleId:curPkg.id,paymentMethod:phoneMethod(phone),purchaseFor}; if(beneficiaryPhone) payload.beneficiaryPhone=beneficiaryPhone
     const r = await fetch('/api/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
     const d = await r.json()
     if (!r.ok) { ee.textContent=d.error||'Erro ao processar.'; ee.style.display='block'; btn.disabled=false; btn.textContent='Próximo'; return }
@@ -2540,11 +2596,11 @@ async function pay() {
 }
 async function payWithCredit() {
   const ee = document.getElementById('sh-err'); ee.style.display='none'
-  const {phone, beneficiaryPhone, error} = getPhoneFromSheet()
+  const {phone, beneficiaryPhone, purchaseFor, error} = getPhoneFromSheet()
   if (shCurTab !== 'req' && error) { ee.textContent=error; ee.style.display='block'; return }
   const btn=document.getElementById('sh-btn'); btn.disabled=true; btn.textContent='A debitar crédito…'
   try {
-    const payload={bundleId:curPkg.id}
+    const payload={bundleId:curPkg.id,purchaseFor}
     if(beneficiaryPhone) payload.beneficiaryPhone=beneficiaryPhone
     const r=await fetch('/api/buy-credit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
     const d=await r.json()
