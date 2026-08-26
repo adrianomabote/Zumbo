@@ -770,7 +770,7 @@ Headers:
   X-API-Key: gw_live_...
 Corpo JSON:
   {
-    "phone": "84xxxxxxx",             // obrigatório, número M-Pesa (84 ou 85, 9 dígitos)
+    "phone": "84xxxxxxx",             // obrigatório, número M-Pesa (84/85) ou e-Mola (86/87)
     "amount": 100,                    // obrigatório, valor inteiro em MT (meticais)
     "reference": "pedido-123",        // opcional, a sua referência interna (máx 64 chars)
     "description": "Compra na loja",  // opcional, guardada apenas nos registos internos (máx 120 chars)
@@ -837,7 +837,7 @@ curl ${SITE_URL}/gateway/api/status/TXID_RECEBIDO \\
 
 NOTAS
 -----
-- Moeda: meticais (MT). Apenas M-Pesa Moçambique (números 84/85).
+- Moeda: meticais (MT). M-Pesa Moçambique (números 84/85) ou e-Mola (86/87).
 - Guarde o txId associado ao seu pedido para conferir o estado.
 - Use "reference" para reconciliar os pagamentos com os seus pedidos.
 - Estados finais: "succeeded" (pago) ou "failed" (falhou/expirou). Não há reversão automática.
@@ -1469,7 +1469,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 
 /* ── Auth modal ── */
 .auth-modal{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px);}
-.auth-card{background:#fff;border-radius:24px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.2);transform:translateY(30px) scale(.97);opacity:0;transition:transform .28s cubic-bezier(.32,.72,0,1),opacity .2s;overflow:hidden;}
+.auth-card{background:#fff;border-radius:24px;width:100%;max-width:380px;max-height:calc(100dvh - 40px);box-shadow:0 20px 60px rgba(0,0,0,.2);transform:translateY(30px) scale(.97);opacity:0;transition:transform .28s cubic-bezier(.32,.72,0,1),opacity .2s;overflow-y:auto;}
 .auth-card.open{transform:translateY(0) scale(1);opacity:1;}
 .auth-card-head{padding:24px 24px 0;text-align:center;}
 .auth-card-logo{width:48px;height:48px;object-fit:contain;margin:0 auto 8px;}
@@ -2115,7 +2115,7 @@ async function registerUser() {
   const pass2=document.getElementById('reg-pass2').value
   const err=document.getElementById('reg-err'); err.style.display='none'
   if (!name){err.textContent='Introduza o seu nome.';err.style.display='block';return}
-  if (phone.length!==9){err.textContent='Número deve ter 9 dígitos.';err.style.display='block';return}
+   if (!phoneMethod(phone)){err.textContent='Número inválido. Use M-Pesa 84/85 ou e-Mola 86/87.';err.style.display='block';return}
   if (pass.length<6){err.textContent='Senha deve ter pelo menos 6 caracteres.';err.style.display='block';return}
   if (pass!==pass2){err.textContent='As senhas não coincidem.';err.style.display='block';return}
   const btn=document.getElementById('reg-btn'); btn.disabled=true; btn.textContent='A criar conta…'
@@ -2332,10 +2332,10 @@ function getPhoneFromSheet() {
   if (shCurTab==='outro') {
     const phone=document.getElementById('sh-phone-payer').value.trim().replace(/\D/g,'')
     const bene=document.getElementById('sh-phone-bene').value.trim().replace(/\D/g,'')
-    return { phone, beneficiaryPhone:bene, error: !phone?'Introduza o seu número de pagamento.':!phoneMethod(phone)?'Número de pagamento incompatível. M-Pesa: 84/85 · e-Mola: 86/87.':!bene?'Introduza o número do beneficiário.':!phoneMethod(bene)?'Número do beneficiário inválido. Use 84, 85, 86 ou 87.':phoneMethod(phone)!==payVia?'Escolha o método correspondente ao número de pagamento.':null }
+    return { phone, beneficiaryPhone:bene, error: !phone?'Introduza o seu número de pagamento.':!phoneMethod(phone)?'Número de pagamento incompatível. M-Pesa: 84/85 · e-Mola: 86/87.':!bene?'Introduza o número do beneficiário.':!phoneMethod(bene)?'Número do beneficiário inválido. Use 84, 85, 86 ou 87.':payVia!=='credit'&&phoneMethod(phone)!==payVia?'Escolha o método correspondente ao número de pagamento.':null }
   }
   const phone=authState.user?.phone || document.getElementById('sh-phone').value.trim().replace(/\D/g,'')
-  return { phone, beneficiaryPhone:null, error: !authState.user?'Faça login para comprar para si.':!phoneMethod(phone)?'Número da conta inválido. Use M-Pesa 84/85 ou e-Mola 86/87.':phoneMethod(phone)!==payVia?'Escolha o método correspondente ao seu número.':null }
+  return { phone, beneficiaryPhone:null, error: !authState.user?'Faça login para comprar para si.':!phoneMethod(phone)?'Número da conta inválido. Use M-Pesa 84/85 ou e-Mola 86/87.':payVia!=='credit'&&phoneMethod(phone)!==payVia?'Escolha o método correspondente ao seu número.':null }
 }
 
 async function pay() {
@@ -2559,7 +2559,7 @@ function adminDashboard(filter = 'all') {
   const SL = { pending:'A aguardar pagamento', succeeded:'Pagamento confirmado', activated:'Activado', failed:'Falhado' }
   const SC = { pending:'#92400e', succeeded:'#065f46', activated:'#1e3a8a', failed:'#991b1b' }
   const SBG= { pending:'#fef3c7', succeeded:'#d1fae5', activated:'#dbeafe', failed:'#fee2e2' }
-  const ML = { mpesa:'M-Pesa', emola:'M-Pesa' }
+  const ML = { mpesa:'M-Pesa', emola:'e-Mola' }
 
   const navSections = [
     { label: 'ZumboPay', items: [
