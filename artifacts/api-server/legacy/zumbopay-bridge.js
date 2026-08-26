@@ -460,6 +460,47 @@ function json(res, data, status = 200, extraHeaders = {}) {
   res.writeHead(status, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body), ...extraHeaders })
   res.end(body)
 }
+function csvCell(value) {
+  const text = value === null || value === undefined ? '' : String(value)
+  return `"${text.replace(/"/g, '""')}"`
+}
+function csvDate(value) {
+  return value ? new Date(value).toISOString() : ''
+}
+function historyCsv(type) {
+  const isGateway = type === 'gateway'
+  const records = orders.filter(o => isGateway ? o.type === 'gateway' : o.type !== 'gateway')
+  const headers = isGateway
+    ? ['ID', 'Data / Hora', 'Referência interna', 'Canal', 'Pagador', 'Valor (MT)', 'Método', 'Estado', 'Referência externa']
+    : ['ID', 'Data / Hora', 'Pagador', 'Beneficiário', 'Oferta', 'Valor (MT)', 'Método', 'Estado', 'Activado em', 'Referência ZumboPay', 'Entrega USSD', 'Encaminhamento Pagar']
+  const rows = records.map(o => isGateway
+    ? [
+        o.txId,
+        csvDate(o.ts),
+        `GW-${o.txId}`,
+        o.gwKeyId === 'principal' ? 'Canal principal' : `Canal privado · ${o.gwKeyId || 'privado'}`,
+        o.phone,
+        o.amount,
+        ({ mpesa: 'M-Pesa', emola: 'e-Mola' }[o.method] || o.method),
+        o.status,
+        o.extRef || '',
+      ]
+    : [
+        o.txId,
+        csvDate(o.ts),
+        o.phone,
+        o.beneficiaryPhone || o.phone,
+        o.bundleLabel || '',
+        o.amount,
+        ({ mpesa: 'M-Pesa', emola: 'e-Mola' }[o.method] || o.method),
+        o.status,
+        csvDate(o.activatedAt),
+        o.zumboRef || '',
+        o.deliveryStatus || '',
+        o.pagarForwardingStatus || '',
+      ])
+  return [headers, ...rows].map(row => row.map(csvCell).join(',')).join('\r\n') + '\r\n'
+}
 function html(res, body, extraHeaders = {}) {
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', ...extraHeaders })
   res.end(body)
@@ -1182,6 +1223,24 @@ NOTAS
   if (method === 'GET' && path === '/admin/orders.json') {
     if (!checkAdminCookie(req)) return json(res, { error:'Não autorizado.' }, 401)
     return json(res, orders)
+  }
+
+  if (method === 'GET' && (path === '/admin/history/export' || path === '/admin/export')) {
+    if (!checkAdminCookie(req)) return json(res, { error:'Não autorizado.' }, 401)
+    const q = parseQuery(req)
+    const type = String(q.type || q.scope || '').toLowerCase()
+    if (type !== 'megabyte' && type !== 'gateway') {
+      return json(res, { error:'Tipo de histórico inválido.' }, 400)
+    }
+    const filename = `historico-${type}.csv`
+    const body = `\uFEFF${historyCsv(type)}`
+    res.writeHead(200, {
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': Buffer.byteLength(body),
+      'Cache-Control': 'no-store',
+    })
+    return res.end(body)
   }
 
   // ── API pública de transações (Bearer token = ADMIN_PASS ou cookie admin) ────
@@ -3161,6 +3220,11 @@ function adminDashboard(filter = 'all', requestedPage = 1) {
     : '<span class="history-page-btn disabled" aria-disabled="true">Próxima</span>'}
 </nav>`
     : ''
+  const historyExport = filter === 'gateway-transactions'
+    ? '<a class="history-export-btn" href="/admin/history/export?type=gateway" download="historico-gateway.csv">Exportar histórico</a>'
+    : isHistoryView
+      ? '<a class="history-export-btn" href="/admin/history/export?type=megabyte" download="historico-megabyte.csv">Exportar histórico</a>'
+      : ''
 
   return `<!DOCTYPE html><html lang="pt"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -3236,6 +3300,8 @@ body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:1
 .history-page-btn:hover{border-color:#cc0000;color:#cc0000;background:#fffafa;}
 .history-page-btn.disabled{color:#c7c7cc;background:#f9f9fb;cursor:not-allowed;}
 .history-page-status{font-size:13px;font-weight:700;color:#636366;white-space:nowrap;}
+.history-export-btn{display:inline-flex;align-items:center;justify-content:center;padding:9px 14px;border:1.5px solid #cc0000;border-radius:10px;background:#fff;color:#cc0000;font-size:13px;font-weight:700;text-decoration:none;transition:background .12s,color .12s;}
+.history-export-btn:hover{background:#cc0000;color:#fff;}
 
 /* ── Order card ── */
 .order-card{background:#fff;border-radius:16px;margin-bottom:12px;box-shadow:0 1px 5px rgba(0,0,0,.07);overflow:hidden;}
@@ -3362,7 +3428,10 @@ body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:1
 
       <!-- Orders -->
       <div class="section-hd">
-        <span class="section-title">${pageTitle}</span>
+        <div style="display:flex;align-items:center;gap:12px;min-width:0">
+          <span class="section-title">${pageTitle}</span>
+          ${historyExport}
+        </div>
         <span class="section-count">${filtered.length} registos${isHistoryView && totalPages > 1 ? ` · Página ${page} de ${totalPages}` : ''}</span>
       </div>
       ${cards}

@@ -98,6 +98,12 @@ async function technicalRequest(page?: number, limit?: number, authorization = `
   });
 }
 
+async function exportRequest(type: string, cookie = adminCookie) {
+  return fetch(`${baseUrl}/admin/history/export?type=${encodeURIComponent(type)}`, {
+    headers: cookie ? { cookie } : undefined,
+  });
+}
+
 async function stopBridge() {
   const processToStop = bridgeProcess;
   bridgeProcess = undefined;
@@ -248,6 +254,36 @@ test("consulta técnica pagina mais de 1.000 vendas sem incluir operações gate
   assert.equal(lastPage.data.length, 1);
   assert.equal(lastPage.data[0].id, "MEGA-LAST-PAGE-SENTINEL");
   assert.equal(lastPage.data.some((transaction: { id?: string }) => transaction.id === gatewayTransactionId), false);
+});
+
+test("exporta o histórico Megabyte completo, sem depender da página aberta", async () => {
+  const unauthorized = await exportRequest("megabyte", "");
+  assert.equal(unauthorized.status, 401);
+
+  const response = await exportRequest("megabyte");
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("content-type"), "text/csv; charset=utf-8");
+  assert.match(response.headers.get("content-disposition") || "", /historico-megabyte\.csv/);
+
+  const csv = await response.text();
+  assert.match(csv, /MEGA-FIRST-PAGE-SENTINEL/);
+  assert.match(csv, /MEGA-LAST-PAGE-SENTINEL/);
+  assert.doesNotMatch(csv, new RegExp(gatewayTransactionId));
+  assert.equal((csv.match(/MEGA-/g) || []).length, 2);
+});
+
+test("exporta o histórico Gateway completo e separado do Megabyte", async () => {
+  const invalid = await exportRequest("users");
+  assert.equal(invalid.status, 400);
+
+  const response = await exportRequest("gateway");
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-disposition") || "", /historico-gateway\.csv/);
+
+  const csv = await response.text();
+  assert.match(csv, new RegExp(gatewayTransactionId));
+  assert.doesNotMatch(csv, /MEGA-FIRST-PAGE-SENTINEL/);
+  assert.match(csv, new RegExp(externalReference));
 });
 
 test("preserva o contrato público de criação e consulta do gateway", async () => {
