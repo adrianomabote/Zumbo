@@ -1454,6 +1454,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .via-section-lbl{font-size:11px;font-weight:700;color:#8e8e93;text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;padding:0 2px;}
 .via-btns{display:flex;gap:8px;width:100%;}
 .via-btn{flex:1;display:flex;align-items:center;gap:8px;padding:12px 10px;border-radius:10px;border:1.5px solid #e5e5ea;background:#fff;cursor:pointer;font-family:inherit;text-align:left;transition:border-color .15s,background .15s;}
+.via-btn.mobile-money{flex:2;}
 .via-btn.active{border-color:#cc0000;background:#fff0f0;}
 .via-btn:disabled{opacity:.45;cursor:not-allowed;}
 .via-btn-icon{flex-shrink:0;display:flex;align-items:center;justify-content:center;}
@@ -1815,21 +1816,13 @@ ${allListHtml}
     <div class="via-section" id="via-section">
       <div class="via-section-lbl">Método de pagamento</div>
       <div class="via-btns">
-        <button class="via-btn active" data-via="mpesa" onclick="selectPayVia('mpesa')">
+        <button class="via-btn mobile-money active" data-via="mobile-money" onclick="selectPayVia('mobile-money')">
           <span class="via-btn-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
           </span>
           <div>
-            <div class="via-btn-label">M-Pesa</div>
-          </div>
-        </button>
-        <button class="via-btn" data-via="emola" onclick="selectPayVia('emola')">
-          <span class="via-btn-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><path d="M9 7h6M9 11h6M9 15h3"/></svg>
-          </span>
-          <div>
-            <div class="via-btn-label">e-Mola</div>
-            <div class="via-btn-sub">86/87</div>
+             <div class="via-btn-label">e-Mola / M-Pesa</div>
+             <div class="via-btn-sub">86/87 · 84/85</div>
           </div>
         </button>
         <button class="via-btn" id="via-credit" data-via="credit" onclick="selectPayVia('credit')">
@@ -2247,7 +2240,7 @@ function listenRecharge(txId, amount) {
 
 // ── Sheet ──────────────────────────────────────────────────────────────────
 let shCurTab = 'mim'
-let payVia = 'mpesa'
+let payVia = 'mobile-money'
 
 function shSetTab(t) {
   shCurTab = t
@@ -2305,7 +2298,7 @@ function openBuyDirect(id) {
   selfInput.readOnly = Boolean(selfPhone)
   selfInput.title = selfPhone ? 'O número da conta autenticada é usado para esta compra.' : ''
   document.getElementById('sh-err').style.display = 'none'
-  payVia = phoneMethod(selfPhone) || 'mpesa'
+  payVia = 'mobile-money'
   document.querySelectorAll('.via-btn').forEach(b => b.classList.toggle('active', b.dataset.via===payVia))
   updateCreditBtn()
   const btn = document.getElementById('sh-btn'); btn.disabled=false; btn.textContent='Próximo'; btn.style.display='block'
@@ -2332,10 +2325,10 @@ function getPhoneFromSheet() {
   if (shCurTab==='outro') {
     const phone=document.getElementById('sh-phone-payer').value.trim().replace(/\D/g,'')
     const bene=document.getElementById('sh-phone-bene').value.trim().replace(/\D/g,'')
-    return { phone, beneficiaryPhone:bene, error: !phone?'Introduza o seu número de pagamento.':!phoneMethod(phone)?'Número de pagamento incompatível. M-Pesa: 84/85 · e-Mola: 86/87.':!bene?'Introduza o número do beneficiário.':!phoneMethod(bene)?'Número do beneficiário inválido. Use 84, 85, 86 ou 87.':payVia!=='credit'&&phoneMethod(phone)!==payVia?'Escolha o método correspondente ao número de pagamento.':null }
+    return { phone, beneficiaryPhone:bene, error: !phone?'Introduza o seu número de pagamento.':!phoneMethod(phone)?'Número de pagamento incompatível. M-Pesa: 84/85 · e-Mola: 86/87.':!bene?'Introduza o número do beneficiário.':!phoneMethod(bene)?'Número do beneficiário inválido. Use 84, 85, 86 ou 87.':null }
   }
   const phone=authState.user?.phone || document.getElementById('sh-phone').value.trim().replace(/\D/g,'')
-  return { phone, beneficiaryPhone:null, error: !authState.user?'Faça login para comprar para si.':!phoneMethod(phone)?'Número da conta inválido. Use M-Pesa 84/85 ou e-Mola 86/87.':payVia!=='credit'&&phoneMethod(phone)!==payVia?'Escolha o método correspondente ao seu número.':null }
+  return { phone, beneficiaryPhone:null, error: !authState.user?'Faça login para comprar para si.':!phoneMethod(phone)?'Número da conta inválido. Use M-Pesa 84/85 ou e-Mola 86/87.':null }
 }
 
 async function pay() {
@@ -2345,11 +2338,11 @@ async function pay() {
   if (error) { ee.textContent=error; ee.style.display='block'; return }
   const btn = document.getElementById('sh-btn'); btn.disabled=true; btn.textContent='A processar…'
   try {
-    const payload={phone,bundleId:curPkg.id,paymentMethod:payVia}; if(beneficiaryPhone) payload.beneficiaryPhone=beneficiaryPhone
+    const payload={phone,bundleId:curPkg.id,paymentMethod:phoneMethod(phone)}; if(beneficiaryPhone) payload.beneficiaryPhone=beneficiaryPhone
     const r = await fetch('/api/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
     const d = await r.json()
     if (!r.ok) { ee.textContent=d.error||'Erro ao processar.'; ee.style.display='block'; btn.disabled=false; btn.textContent='Próximo'; return }
-    document.getElementById('sh-method-lbl').textContent = paymentMethodLabel(d.method || payVia)
+    document.getElementById('sh-method-lbl').textContent = paymentMethodLabel(d.method || phoneMethod(phone))
     document.getElementById('sh-ok-pkg').textContent = curPkg.name+' — '+curPkg.price+' MT'
     shShow('pending'); listenOrder(d.txId)
   } catch { ee.textContent='Erro de ligação. Tente novamente.'; ee.style.display='block'; btn.disabled=false; btn.textContent='Próximo' }
