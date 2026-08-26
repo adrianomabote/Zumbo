@@ -2528,6 +2528,10 @@ function openBuy(id) {
   if (!authState.user) { authState.pendingPkg = id; openAuthDialog('register'); return }
   openBuyDirect(id)
 }
+function syncSelfPurchaseRecipient() {
+  const recipient = document.getElementById('sh-recipient-phone')
+  if (recipient) recipient.textContent = authState.user?.phone || '—'
+}
 function openBuyDirect(id) {
   const all = Object.values(PKGS_ALL).flat()
   const p = all.find(x=>x.id===id); if(!p) return
