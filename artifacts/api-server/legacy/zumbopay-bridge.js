@@ -1997,7 +1997,7 @@ ${allListHtml}
     <!-- Tab: Para Mim -->
     <div class="sh-panel" id="sh-tab-mim">
        <label class="sh-lbl">O seu número de pagamento</label>
-      <input class="sh-inp" id="sh-phone" type="tel" placeholder="Número de telemóvel" maxlength="9" inputmode="numeric" autocomplete="off">
+       <input class="sh-inp" id="sh-phone" type="tel" placeholder="Número que vai pagar" maxlength="9" inputmode="numeric" autocomplete="off">
        <span class="sh-hint">M-Pesa: 84/85 · e-Mola: 86/87</span>
       <div class="sh-recipient">
         <span class="sh-recipient-label">Os megas serão enviados para</span>
