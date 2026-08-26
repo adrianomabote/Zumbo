@@ -570,7 +570,8 @@ self.addEventListener('fetch',e=>{
     if (!isSupportedLocalPhone(payerPhone)) return json(res, { error:'Número de pagamento inválido. Use M-Pesa 84/85 ou e-Mola 86/87.' }, 400)
     if (!isSelfPurchase && !beneficiaryPhone) return json(res, { error:'Introduza o número do beneficiário.' }, 400)
     const beneficiary = beneficiaryPhone ? normalizeLocalPhone(beneficiaryPhone) : null
-    if (beneficiary && !isSupportedLocalPhone(beneficiary)) return json(res, { error:'Número do beneficiário inválido. Use uma faixa 84, 85, 86 ou 87.' }, 400)
+    if (beneficiary && detectMethod(normalizeMsisdn(beneficiary)) !== 'mpesa')
+      return json(res, { error:'Número do beneficiário inválido. Use apenas uma faixa 84 ou 85.' }, 400)
     const msisdn = normalizeMsisdn(payerPhone), detectedMethod = detectMethod(msisdn)
     const meth = selectedMethod || detectedMethod
     if (!['mpesa','emola'].includes(meth) || meth !== detectedMethod)
@@ -736,11 +737,14 @@ self.addEventListener('fetch',e=>{
     const { bundleId, beneficiaryPhone } = body
     const bundle = BUNDLES.get(bundleId)
     if (!bundle) return json(res, { error:'Pacote inválido.' }, 400)
+    const beneficiary = beneficiaryPhone ? normalizeLocalPhone(beneficiaryPhone) : null
+    if (beneficiary && detectMethod(normalizeMsisdn(beneficiary)) !== 'mpesa')
+      return json(res, { error:'Número do beneficiário inválido. Use apenas uma faixa 84 ou 85.' }, 400)
     if ((user.balance||0) < bundle.price) return json(res, { error:`Saldo insuficiente. Tens ${user.balance||0} MT, precisas de ${bundle.price} MT.` }, 402)
     user.balance = (user.balance||0) - bundle.price
     await saveUsers()
     const txId = randomBytes(6).toString('hex')
-    const tx = { id:txId, type:'bundle', bundleId, bundleLabel:bundle.label, phone:user.phone, beneficiaryPhone:beneficiaryPhone||null, msisdn:normalizeMsisdn(user.phone), amount:bundle.price, method:'credit', status:'succeeded', ref:'credit-'+txId, error:null, ts:new Date().toISOString(), userId:user.id }
+    const tx = { id:txId, type:'bundle', bundleId, bundleLabel:bundle.label, phone:user.phone, beneficiaryPhone:beneficiary, msisdn:normalizeMsisdn(user.phone), amount:bundle.price, method:'credit', status:'succeeded', ref:'credit-'+txId, error:null, ts:new Date().toISOString(), userId:user.id }
     transactions.set(txId, tx)
     trackOrder(tx)
     updateOrderStatus(txId, 'succeeded')
@@ -1452,10 +1456,9 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 /* ── Método de pagamento (via-btns) ── */
 .via-section{padding:4px 16px 12px;}
 .via-section-lbl{font-size:11px;font-weight:700;color:#8e8e93;text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;padding:0 2px;}
-.via-btns{display:flex;gap:8px;width:100%;}
-.via-btn{flex:1;display:flex;align-items:center;gap:8px;padding:12px 10px;border-radius:10px;border:1.5px solid #e5e5ea;background:#fff;cursor:pointer;font-family:inherit;text-align:left;transition:border-color .15s,background .15s;}
-.via-btn.mobile-money{flex:2;}
-.via-btn.active{border-color:#cc0000;background:#fff0f0;}
+ .via-btns{display:flex;gap:8px;width:100%;}
+ .via-btn{flex:1;display:flex;align-items:center;gap:8px;padding:12px 10px;border-radius:10px;border:1.5px solid #e5e5ea;background:#fff;cursor:pointer;font-family:inherit;text-align:left;transition:border-color .15s,background .15s;}
+ .via-btn.active{border-color:#cc0000;background:#fff0f0;}
 .via-btn:disabled{opacity:.45;cursor:not-allowed;}
 .via-btn-icon{flex-shrink:0;display:flex;align-items:center;justify-content:center;}
 .via-btn-icon svg{width:16px;height:16px;}
@@ -1789,19 +1792,17 @@ ${allListHtml}
 
     <!-- Tab: Para Mim -->
     <div class="sh-panel" id="sh-tab-mim">
-      <label class="sh-lbl">Introduza o seu número</label>
+       <label class="sh-lbl">O seu número de pagamento</label>
       <input class="sh-inp" id="sh-phone" type="tel" placeholder="Número de telemóvel" maxlength="9" inputmode="numeric" autocomplete="off">
        <span class="sh-hint">M-Pesa: 84/85 · e-Mola: 86/87</span>
     </div>
 
     <!-- Tab: Para Outro -->
     <div class="sh-panel" id="sh-tab-outro" style="display:none">
-      <label class="sh-lbl">Introduza o seu número</label>
+       <label class="sh-lbl">Número de pagamento</label>
       <input class="sh-inp" id="sh-phone-payer" type="tel" placeholder="Número de telemóvel" maxlength="9" inputmode="numeric" autocomplete="off">
-       <span class="sh-hint">M-Pesa: 84/85 · e-Mola: 86/87</span>
       <label class="sh-lbl">Introduza o número do beneficiário</label>
       <input class="sh-inp" id="sh-phone-bene" type="tel" placeholder="Número de telemóvel" maxlength="9" inputmode="numeric" autocomplete="off">
-       <span class="sh-hint">M-Pesa: 84/85 · e-Mola: 86/87</span>
     </div>
 
     <!-- Tab: Requisitar -->
@@ -2324,7 +2325,7 @@ function getPhoneFromSheet() {
   if (shCurTab==='outro') {
     const phone=document.getElementById('sh-phone-payer').value.trim().replace(/\D/g,'')
     const bene=document.getElementById('sh-phone-bene').value.trim().replace(/\D/g,'')
-    return { phone, beneficiaryPhone:bene, error: !phone?'Introduza o seu número de pagamento.':!phoneMethod(phone)?'Número de pagamento incompatível. M-Pesa: 84/85 · e-Mola: 86/87.':!bene?'Introduza o número do beneficiário.':!phoneMethod(bene)?'Número do beneficiário inválido. Use 84, 85, 86 ou 87.':null }
+    return { phone, beneficiaryPhone:bene, error: !phone?'Introduza o seu número de pagamento.':!phoneMethod(phone)?'Número de pagamento incompatível. M-Pesa: 84/85 · e-Mola: 86/87.':!bene?'Introduza o número do beneficiário.':phoneMethod(bene)!=='mpesa'?'Número do beneficiário inválido. Use apenas 84 ou 85.':null }
   }
   const phone=authState.user?.phone || document.getElementById('sh-phone').value.trim().replace(/\D/g,'')
   return { phone, beneficiaryPhone:null, error: !authState.user?'Faça login para comprar para si.':!phoneMethod(phone)?'Número da conta inválido. Use M-Pesa 84/85 ou e-Mola 86/87.':null }
