@@ -26,12 +26,13 @@ const {
   listDeliveries,
   reportDelivery,
 } = await import("../src/services/delivery-queue.ts");
-const { ensurePagarTables } = await import("../src/services/pagar.ts");
+const { ensurePagarTables, startPagarWebhookRetryWorker } = await import("../src/services/pagar.ts");
 const { default: app } = await import("../src/app.ts");
 
 let server: Server;
 let baseUrl: string;
 let bridgeProcess: ChildProcess;
+let stopPagarWebhookRetryWorker: (() => void) | undefined;
 
 async function findFreePort() {
   const probe = createServer();
@@ -125,6 +126,18 @@ async function pagarAdminRequest(method: string, endpoint: string) {
   return { response, data: await response.json() };
 }
 
+async function waitForForwarding(eventId: string) {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    const event = (await pagarAdminRequest("GET", "/api/pagar/admin/webhook-deliveries")).data.events.find(
+      (candidate: { eventId: string }) => candidate.eventId === eventId,
+    );
+    if (event?.forwardingStatus === "delivered") return event;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`O encaminhamento ${eventId} não foi entregue pelo worker.`);
+}
+
 async function startBridge(mainApiPort: number) {
   bridgeProcess = spawn(process.execPath, ["zumbopay-bridge.js"], {
     cwd: bridgeDirectory,
@@ -176,9 +189,11 @@ before(async () => {
   baseUrl = `http://127.0.0.1:${address.port}`;
 
   await startBridge(address.port);
+  stopPagarWebhookRetryWorker = startPagarWebhookRetryWorker(25);
 });
 
 after(async () => {
+  stopPagarWebhookRetryWorker?.();
   await stopBridge();
   await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   await pool?.query("DELETE FROM pagar_webhook_events WHERE event_id LIKE $1", [`delivery-test-%`]);
@@ -259,7 +274,7 @@ test("PAID Para Outro keeps the informed beneficiary and failed delivery can be 
   assert.match(leasedAgain.ussdSequence.at(-1), /852223334/);
 });
 
-test("retries a confirmed webhook after the bridge becomes unavailable without duplicating delivery", async () => {
+test("worker retries a confirmed webhook after the bridge becomes unavailable without duplicating delivery", async () => {
   const operationId = `pagar-recovery-${testId}`;
   const reference = `net-${recoveryTxId}`;
   const eventId = `delivery-test-recovery-event-${testId}`;
@@ -277,13 +292,19 @@ test("retries a confirmed webhook after the bridge becomes unavailable without d
   assert.match(failedForwarding.forwardingLastError, /fetch failed|ECONNREFUSED|connect/i);
   assert.ok(failedForwarding.forwardingNextRetryAt);
   assert.ok(new Date(failedForwarding.forwardingNextRetryAt).getTime() > Date.now());
+  const confirmedOperation = await pool!.query(
+    "SELECT status FROM pagar_operations WHERE internal_id = $1",
+    [recoveryTxId],
+  );
+  assert.equal(confirmedOperation.rows[0]?.status, "PAID");
 
   await startBridge(Number(new URL(baseUrl).port));
-  assert.equal((await webhookRequest(eventId, operationId, reference)).status, 204);
-
-  const deliveredForwarding = (await pagarAdminRequest("GET", "/api/pagar/admin/webhook-deliveries")).data.events.find(
-    (event: { eventId: string }) => event.eventId === eventId,
+  await pool!.query(
+    "UPDATE pagar_webhook_events SET forwarding_next_retry_at = now() - interval '1 second' WHERE event_id = $1",
+    [eventId],
   );
+
+  const deliveredForwarding = await waitForForwarding(eventId);
   assert.ok(deliveredForwarding);
   assert.equal(deliveredForwarding.forwardingStatus, "delivered");
   assert.equal(deliveredForwarding.forwardingAttempts, 2);
