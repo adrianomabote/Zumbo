@@ -625,12 +625,12 @@ async function router(req, res) {
     const manifest = JSON.stringify({
       name:'Megabyte',short_name:'Megabyte',
       description:'Pacotes de internet Vodacom com pagamento M-Pesa',
-      start_url:'/megas',scope:'/',display:'standalone',
+       start_url:'/',scope:'/',display:'standalone',
       background_color:'#f2f2f7',theme_color:'#cc0000',orientation:'portrait-primary',
       icons:[
-        {src:'/static/icon-192.png?v=4',sizes:'192x192',type:'image/png',purpose:'any'},
-        {src:'/static/icon-512.png?v=4',sizes:'512x512',type:'image/png',purpose:'any'},
-        {src:'/static/icon-maskable-512.png?v=4',sizes:'512x512',type:'image/png',purpose:'maskable'}
+         {src:'/api/legacy/static/icon-192.png?v=4',sizes:'192x192',type:'image/png',purpose:'any'},
+         {src:'/api/legacy/static/icon-512.png?v=4',sizes:'512x512',type:'image/png',purpose:'any'},
+         {src:'/api/legacy/static/icon-maskable-512.png?v=4',sizes:'512x512',type:'image/png',purpose:'maskable'}
       ]
     })
     res.writeHead(200,{'Content-Type':'application/manifest+json','Cache-Control':'max-age=3600'}); return res.end(manifest)
@@ -638,7 +638,7 @@ async function router(req, res) {
   if (method === 'GET' && path === '/sw.js') {
     const sw = `
 const CACHE='ns-v6';
-const PRECACHE=['/manifest.json','/static/icon-192.png?v=4','/static/icon-512.png?v=4','/static/icon-maskable-512.png?v=4','/static/vodafone-logo.jpg','/static/coins.png'];
+const PRECACHE=['/api/legacy/manifest.json','/api/legacy/static/icon-192.png?v=4','/api/legacy/static/icon-512.png?v=4','/api/legacy/static/icon-maskable-512.png?v=4','/api/legacy/static/vodafone-logo.jpg','/api/legacy/static/coins.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(PRECACHE)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
 self.addEventListener('fetch',e=>{
