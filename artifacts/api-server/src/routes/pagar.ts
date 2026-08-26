@@ -1,5 +1,14 @@
 import { Router, type IRouter } from "express";
-import { createPagarPayment, getPagarPayment, listPagarPayments, processPagarWebhook, verifyPagarWebhook } from "../services/pagar";
+import {
+  createPagarPayment,
+  forwardPagarWebhook,
+  getPagarPayment,
+  listPagarPayments,
+  listPagarWebhookEvents,
+  processPagarWebhook,
+  retryPagarWebhookForwarding,
+  verifyPagarWebhook,
+} from "../services/pagar";
 
 const router: IRouter = Router();
 
@@ -13,14 +22,8 @@ router.post("/pagar/webhook", async (req, res) => {
   }
   try {
     const result = await processPagarWebhook(eventId, eventType, rawBody);
-    if (!result.duplicate && result.reference && (eventType === "payment.succeeded" || eventType === "payment.failed")) {
-      const bridgePort = process.env.PAGAR_BRIDGE_PORT || "8099";
-      await fetch(`http://127.0.0.1:${bridgePort}/internal/pagar-event`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-internal-payment-key": process.env.SESSION_SECRET || "" },
-        body: JSON.stringify({ eventId, eventType, operationId: result.operationId, reference: result.reference, status: result.status }),
-        signal: AbortSignal.timeout(5_000),
-      }).catch(() => undefined);
+    if (result.forwardingStatus === "pending" || result.forwardingStatus === "failed") {
+      await forwardPagarWebhook(result, { force: result.duplicate });
     }
     return res.sendStatus(204);
   } catch {
@@ -46,6 +49,28 @@ router.get("/pagar/payments/:id", async (req, res) => {
 
 router.get("/pagar/payments", async (req, res) => {
   try { return res.json(await listPagarPayments({ status: String(req.query.status || ""), cursor: String(req.query.cursor || ""), limit: String(req.query.limit || "") })); } catch { return res.status(502).json({ error: "Não foi possível consultar os pagamentos." }); }
+});
+
+router.get("/pagar/admin/webhook-deliveries", async (req, res) => {
+  if (!process.env.SESSION_SECRET || req.header("x-internal-payment-key") !== process.env.SESSION_SECRET) {
+    return res.status(401).json({ error: "Acção administrativa não autorizada." });
+  }
+  try {
+    return res.json({ events: await listPagarWebhookEvents() });
+  } catch {
+    return res.status(502).json({ error: "Não foi possível consultar os encaminhamentos." });
+  }
+});
+
+router.post("/pagar/admin/webhook-deliveries/:eventId/retry", async (req, res) => {
+  if (!process.env.SESSION_SECRET || req.header("x-internal-payment-key") !== process.env.SESSION_SECRET) {
+    return res.status(401).json({ error: "Acção administrativa não autorizada." });
+  }
+  try {
+    return res.json({ event: await retryPagarWebhookForwarding(req.params.eventId) });
+  } catch (error) {
+    return res.status(400).json({ error: error instanceof Error ? error.message : "Nova tentativa recusada." });
+  }
 });
 
 export default router;

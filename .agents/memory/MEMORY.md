@@ -4,3 +4,4 @@
 - [Storefront legado](legacy-storefront.md) — a loja pública é HTML gerado pelo bridge e passa por reescrita de caminhos no proxy da API
 - [Métodos no checkout](payment-method-ui.md) — M-Pesa / e-Mola aparecem juntos numa única casa, sem prefixos visíveis
 - [Perfil do utilizador](profile-ui.md) — o perfil deve abrir como ecrã inteiro, não como diálogo, sem texto de prefixos
+- [Encaminhamento de webhooks Pagar](pagar-webhook-forwarding.md) — deduplicar o evento não substitui persistir e repetir a entrega ao bridge

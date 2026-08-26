@@ -421,7 +421,41 @@ async function refreshDeliveryStates() {
   }
 }
 
-// ── HTTP helpers ──────────────────────────────────────────────────────────────
+async function refreshPagarForwardingStates() {
+  const mainPort = process.env.MAIN_API_PORT
+  const secret = process.env.SESSION_SECRET
+  if (!mainPort || !secret) return
+  try {
+    const res = await fetch(`http://localhost:${mainPort}/api/pagar/admin/webhook-deliveries`, {
+      headers: { 'x-internal-payment-key': secret },
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!res.ok) return
+    const data = await res.json().catch(() => ({}))
+    if (!Array.isArray(data.events)) return
+    let changed = false
+    for (const event of data.events) {
+      const identifiers = [event.reference, event.operationId].filter(Boolean).map(String)
+      const rec = orders.find(order => identifiers.includes(String(order.sourceId)) ||
+        identifiers.includes(String(order.pagarRef)) || identifiers.includes(String(order.txId)))
+      if (!rec) continue
+      const next = {
+        pagarForwardingEventId: event.eventId,
+        pagarForwardingStatus: event.forwardingStatus,
+        pagarForwardingAttempts: Number(event.forwardingAttempts || 0),
+        pagarForwardingFailureReason: event.forwardingLastError || null,
+        pagarForwardingNextRetryAt: event.forwardingNextRetryAt || null,
+      }
+      if (Object.entries(next).some(([field, value]) => rec[field] !== value)) {
+        Object.assign(rec, next)
+        changed = true
+      }
+    }
+    if (changed) await saveOrders()
+  } catch (e) {
+    console.error('[Pagar] Falha ao actualizar estados de encaminhamento:', e.message)
+  }
+}
 function json(res, data, status = 200, extraHeaders = {}) {
   const body = JSON.stringify(data)
   res.writeHead(status, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body), ...extraHeaders })
@@ -1029,6 +1063,7 @@ NOTAS
   if (path === '/admin/office') {
     if (method === 'GET') {
       if (!checkAdminCookie(req)) return html(res, adminLoginPage())
+      await refreshPagarForwardingStates()
       await refreshDeliveryStates()
       const q = parseQuery(req)
       return html(res, adminDashboard(q.filter || 'all'))
@@ -1085,6 +1120,27 @@ NOTAS
       rec.deliveryFailureReason = e.message || 'Não foi possível repetir a entrega USSD.'
       await saveOrders()
       return json(res, { error:rec.deliveryFailureReason }, 502)
+    }
+  }
+
+  if (method === 'POST' && path === '/admin/retry-pagar-forwarding') {
+    if (!checkAdminCookie(req)) return json(res, { error:'Não autorizado.' }, 401)
+    let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
+    const eventId = String(body.eventId || '')
+    const mainPort = process.env.MAIN_API_PORT
+    const secret = process.env.SESSION_SECRET
+    if (!eventId || !mainPort || !secret) return json(res, { error:'Encaminhamento Pagar não configurado.' }, 400)
+    try {
+      const upstream = await fetch(`http://localhost:${mainPort}/api/pagar/admin/webhook-deliveries/${encodeURIComponent(eventId)}/retry`, {
+        method: 'POST',
+        headers: { 'x-internal-payment-key': secret },
+        signal: AbortSignal.timeout(5000),
+      })
+      const data = await upstream.json().catch(() => ({}))
+      if (!upstream.ok) return json(res, { error: data.error || 'Não foi possível repetir o encaminhamento.' }, 502)
+      return json(res, { ok:true, event:data.event })
+    } catch (e) {
+      return json(res, { error: e.message || 'Não foi possível contactar o servidor de pagamentos.' }, 502)
     }
   }
 
@@ -2670,6 +2726,7 @@ function adminDashboard(filter = 'all') {
     succeeded: orders.filter(o=>o.status==='succeeded'),
     activated: orders.filter(o=>o.status==='activated'),
     'delivery-failed': orders.filter(o=>['failed','manual_intervention'].includes(o.deliveryStatus)),
+    'payment-forwarding': orders.filter(o=>['pending','forwarding','failed'].includes(o.pagarForwardingStatus)),
     failed:    orders.filter(o=>o.status==='failed'),
   }
   const filtered = filterMap[filter] ?? orders
@@ -2697,6 +2754,7 @@ function adminDashboard(filter = 'all') {
       { f:'succeeded', label:'Pendentes de Activação', icon:'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
       { f:'activated', label:'Activações Confirmadas', icon:'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
       { f:'delivery-failed', label:'Falhas de Entrega USSD', icon:'M12 9v4m0 4h.01M10.29 3.86l-8.18 14a2 2 0 001.74 3h16.3a2 2 0 001.74-3l-8.18-14a2 2 0 00-3.48 0z' },
+      { f:'payment-forwarding', label:'Encaminhamentos Pagar', icon:'M13 2L3 14h9l-1 8 10-12h-9l1-8z' },
       { f:'pending',   label:'A aguardar Pagamento',   icon:'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
       { f:'failed',    label:'Pagamentos Falhados',    icon:'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z' },
     ]},
@@ -2890,7 +2948,9 @@ function adminDashboard(filter = 'all') {
         const benef = o.beneficiaryPhone || o.phone
         const isForOther = o.beneficiaryPhone && o.beneficiaryPhone !== o.phone
         const deliveryAttention = ['failed','manual_intervention'].includes(o.deliveryStatus)
-        const canActivate = o.status === 'succeeded' && !o.deliveryStatus
+        const forwardingAttention = ['pending','forwarding','failed'].includes(o.pagarForwardingStatus)
+        const canActivate = o.status === 'succeeded' && !o.deliveryStatus && !forwardingAttention
+        const forwardingRetryAt = o.pagarForwardingNextRetryAt ? new Date(o.pagarForwardingNextRetryAt).toLocaleString('pt-MZ',{dateStyle:'short',timeStyle:'short'}) : null
         return `<div class="order-card" id="card-${o.txId}">
   <div class="card-header">
     <div class="card-left">
@@ -2934,7 +2994,12 @@ function adminDashboard(filter = 'all') {
     </div>
     ${o.deliveryStatus && !deliveryAttention ? `<div class="delivery-state">Entrega USSD: ${o.deliveryStatus === 'queued' ? 'na fila' : o.deliveryStatus === 'leased' ? 'reservada pelo agente' : o.deliveryStatus}</div>` : ''}
   </div>
-  ${deliveryAttention ? `<div class="delivery-alert">
+  ${forwardingAttention ? `<div class="delivery-alert pagar-forwarding-alert">
+    <strong>${o.pagarForwardingStatus === 'failed' ? 'Encaminhamento Pagar falhou' : o.pagarForwardingStatus === 'forwarding' ? 'A encaminhar confirmação Pagar' : 'A aguardar encaminhamento Pagar'}</strong>
+    <span>${o.pagarForwardingFailureReason ? escapeHtml(o.pagarForwardingFailureReason) : o.pagarForwardingStatus === 'failed' ? 'O bridge legado está indisponível.' : 'A confirmação de pagamento ficará na fila até o bridge estar disponível.'}</span>
+    ${forwardingRetryAt && o.pagarForwardingStatus !== 'forwarding' ? `<span>Nova tentativa automática: ${forwardingRetryAt}</span>` : ''}
+    ${o.pagarForwardingStatus !== 'forwarding' ? `<button class="retry-btn" onclick="retryPagarForwarding('${escapeHtml(o.pagarForwardingEventId)}',this)">Reprocessar encaminhamento</button>` : ''}
+  </div>` : ''}${deliveryAttention ? `<div class="delivery-alert">
     <strong>Falha na entrega USSD</strong>
     <span>${o.deliveryFailureReason || 'A entrega precisa de intervenção.'}</span>
     <button class="retry-btn" onclick="retryDelivery('${o.txId}',this)">Reprocessar entrega</button>
@@ -3311,6 +3376,24 @@ async function retryDelivery(txId,btn){
   } catch {
     showToast('Erro de ligação.',false)
     btn.disabled=false; btn.textContent='Reprocessar entrega'
+  }
+}
+async function retryPagarForwarding(eventId,btn){
+  if(!eventId||!confirm('Confirma que quer repetir o encaminhamento desta confirmação de pagamento?')) return
+  btn.disabled=true; btn.textContent='A reenviar…'
+  try {
+    const r=await fetch('/admin/retry-pagar-forwarding',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eventId})})
+    const d=await r.json()
+    if(r.ok){
+      showToast('Encaminhamento colocado novamente na fila!')
+      setTimeout(()=>location.reload(),700)
+    } else {
+      showToast(d.error||'Não foi possível repetir o encaminhamento.',false)
+      btn.disabled=false; btn.textContent='Reprocessar encaminhamento'
+    }
+  } catch {
+    showToast('Erro de ligação.',false)
+    btn.disabled=false; btn.textContent='Reprocessar encaminhamento'
   }
 }
 </script>

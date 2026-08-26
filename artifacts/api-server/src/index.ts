@@ -5,7 +5,7 @@ import {
   waitForLegacyBridge,
 } from "./legacy-bridge";
 import { logger } from "./lib/logger";
-import { ensurePagarTables } from "./services/pagar";
+import { ensurePagarTables, startPagarWebhookRetryWorker } from "./services/pagar";
 import { hasDatabase } from "@workspace/db";
 
 const rawPort = process.env["PORT"];
@@ -29,6 +29,7 @@ if (hasDatabase) {
 } else {
   logger.warn("PostgreSQL não configurado; pagamentos desactivados.");
 }
+const stopPagarWebhookRetryWorker = hasDatabase ? startPagarWebhookRetryWorker() : undefined;
 
 app.listen(port, (err) => {
   if (err) {
@@ -39,5 +40,9 @@ app.listen(port, (err) => {
   logger.info({ port }, "Server listening");
 });
 
-process.on("SIGTERM", stopLegacyBridge);
-process.on("SIGINT", stopLegacyBridge);
+const shutdown = () => {
+  stopPagarWebhookRetryWorker?.();
+  stopLegacyBridge();
+};
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);

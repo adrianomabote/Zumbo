@@ -23,4 +23,13 @@ export const pagarWebhookEvents = pgTable("pagar_webhook_events", {
   eventId: text("event_id").primaryKey(),
   eventType: text("event_type").notNull(),
   processedAt: timestamp("processed_at", { withTimezone: true }).notNull().defaultNow(),
+  operationId: text("operation_id"),
+  reference: text("reference"),
+  paymentStatus: text("payment_status"),
+  forwardingStatus: text("forwarding_status").notNull().default("not_required"),
+  forwardingAttempts: integer("forwarding_attempts").notNull().default(0),
+  forwardingLastError: text("forwarding_last_error"),
+  forwardingNextRetryAt: timestamp("forwarding_next_retry_at", { withTimezone: true }),
+  forwardingStartedAt: timestamp("forwarding_started_at", { withTimezone: true }),
+  forwardingUpdatedAt: timestamp("forwarding_updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
