@@ -15,6 +15,7 @@ const bridgeDirectory = await mkdtemp(path.join(os.tmpdir(), "net-servicos-bridg
 const queueFile = path.join(queueDirectory, "deliveries.json");
 const bridgePort = await findFreePort();
 const recoveryTxId = `delivery-test-recovery-${testId}`;
+const restartRecoveryTxId = `delivery-test-restart-recovery-${testId}`;
 
 process.env.DELIVERY_QUEUE_FILE = queueFile;
 process.env.PAGAR_BRIDGE_PORT = String(bridgePort);
@@ -82,6 +83,19 @@ async function insertPendingOperation(txId: string, operationId: string, referen
        idempotency_key, source_id, local_transaction_id, title, method, payer_phone)
      VALUES ($1,$2,$3,'payment',20,'PENDING',$4,$5,$1,'Teste PAID','MPESA','841112223')`,
     [txId, operationId, reference, `delivery-test-${txId}`, `delivery-source-${txId}`],
+  );
+}
+
+async function insertInterruptedForwarding(eventId: string, operationId: string, reference: string) {
+  await pool!.query(
+    `INSERT INTO pagar_webhook_events
+      (event_id, event_type, operation_id, reference, payment_status,
+       forwarding_status, forwarding_attempts, forwarding_last_error,
+       forwarding_next_retry_at, forwarding_started_at, forwarding_updated_at)
+     VALUES ($1,'payment.succeeded',$2,$3,'PAID','forwarding',1,
+             'Tentativa interrompida pelo reinício do servidor.',
+             NULL, now() - interval '3 minutes', now() - interval '3 minutes')`,
+    [eventId, operationId, reference],
   );
 }
 
@@ -175,6 +189,7 @@ before(async () => {
       orderRecord(selfTxId, `net-${selfTxId}`, "841112223"),
       orderRecord(otherTxId, `net-${otherTxId}`, "841112223", "852223334"),
       orderRecord(recoveryTxId, `net-${recoveryTxId}`, "841112223"),
+      orderRecord(restartRecoveryTxId, `net-${restartRecoveryTxId}`, "841112223"),
     ]),
   );
   await copyFile(
@@ -312,6 +327,47 @@ test("worker retries a confirmed webhook after the bridge becomes unavailable wi
   assert.equal(deliveredForwarding.forwardingNextRetryAt, undefined);
 
   const deliveries = (await listDeliveries()).filter((delivery) => delivery.paymentId === recoveryTxId);
+  assert.equal(deliveries.length, 1);
+  assert.equal(deliveries[0].beneficiaryPhone, "841112223");
+});
+
+test("worker recovers an interrupted forwarding after server restart without duplicating delivery", async () => {
+  const operationId = `pagar-restart-recovery-${testId}`;
+  const reference = `net-${restartRecoveryTxId}`;
+  const eventId = `delivery-test-restart-recovery-event-${testId}`;
+
+  await insertPendingOperation(restartRecoveryTxId, operationId, reference);
+  await pool!.query(
+    "UPDATE pagar_operations SET status = 'PAID', confirmed_at = now() WHERE internal_id = $1",
+    [restartRecoveryTxId],
+  );
+
+  stopPagarWebhookRetryWorker?.();
+  stopPagarWebhookRetryWorker = undefined;
+  await insertInterruptedForwarding(eventId, operationId, reference);
+
+  const interrupted = await pool!.query(
+    `SELECT forwarding_status, forwarding_attempts, forwarding_started_at
+       FROM pagar_webhook_events WHERE event_id = $1`,
+    [eventId],
+  );
+  assert.equal(interrupted.rows[0]?.forwarding_status, "forwarding");
+  assert.equal(interrupted.rows[0]?.forwarding_attempts, 1);
+  assert.ok(interrupted.rows[0]?.forwarding_started_at);
+
+  // A new worker instance represents the server coming back after the old
+  // forwarding process was interrupted.
+  stopPagarWebhookRetryWorker = startPagarWebhookRetryWorker(25);
+
+  const deliveredForwarding = await waitForForwarding(eventId);
+  assert.equal(deliveredForwarding.forwardingStatus, "delivered");
+  assert.equal(deliveredForwarding.forwardingAttempts, 2);
+  assert.equal(deliveredForwarding.forwardingLastError, undefined);
+  assert.equal(deliveredForwarding.forwardingNextRetryAt, undefined);
+
+  const deliveries = (await listDeliveries()).filter(
+    (delivery) => delivery.paymentId === restartRecoveryTxId,
+  );
   assert.equal(deliveries.length, 1);
   assert.equal(deliveries[0].beneficiaryPhone, "841112223");
 });

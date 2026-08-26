@@ -452,7 +452,13 @@ let forwardingRetryTimer: NodeJS.Timeout | undefined;
 let forwardingRetryRunning = false;
 
 export function startPagarWebhookRetryWorker(intervalMs = 30_000) {
-  if (forwardingRetryTimer) return () => clearInterval(forwardingRetryTimer);
+  if (forwardingRetryTimer) {
+    const timer = forwardingRetryTimer;
+    return () => {
+      clearInterval(timer);
+      if (forwardingRetryTimer === timer) forwardingRetryTimer = undefined;
+    };
+  }
   const run = async () => {
     if (forwardingRetryRunning) return;
     forwardingRetryRunning = true;
@@ -485,11 +491,12 @@ export function startPagarWebhookRetryWorker(intervalMs = 30_000) {
     }
   };
   void run();
-  forwardingRetryTimer = setInterval(run, intervalMs);
-  forwardingRetryTimer.unref?.();
+  const timer = setInterval(run, intervalMs);
+  timer.unref?.();
+  forwardingRetryTimer = timer;
   return () => {
-    if (forwardingRetryTimer) clearInterval(forwardingRetryTimer);
-    forwardingRetryTimer = undefined;
+    clearInterval(timer);
+    if (forwardingRetryTimer === timer) forwardingRetryTimer = undefined;
   };
 }
 
