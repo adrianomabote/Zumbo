@@ -1068,7 +1068,7 @@ NOTAS
       await refreshPagarForwardingStates()
       await refreshDeliveryStates()
       const q = parseQuery(req)
-      return html(res, adminDashboard(q.filter || 'all'))
+      return html(res, adminDashboard(q.filter || 'all', q.page))
     }
     if (method === 'POST') {
       const ip = (req.headers['x-forwarded-for']||'').split(',')[0].trim() || req.socket?.remoteAddress || 'unknown'
@@ -2778,7 +2778,9 @@ function handleLogin(e){
 }
 
 // ── Admin: Dashboard ──────────────────────────────────────────────────────────
-function adminDashboard(filter = 'all') {
+const ADMIN_HISTORY_PAGE_SIZE = 50
+
+function adminDashboard(filter = 'all', requestedPage = 1) {
   const megabyteTransactions = orders.filter(o => o.type !== 'gateway')
   const gatewayTransactions = orders.filter(o => o.type === 'gateway')
   const counts = { all:0, pending:0, succeeded:0, activated:0, failed:0 }
@@ -2809,6 +2811,13 @@ function adminDashboard(filter = 'all') {
   }
   const filtered = filterMap[filter] ?? megabyteTransactions
   const isGatewayView = filter === 'gateway' || filter === 'gateway-transactions'
+  const isHistoryView = filter !== 'users' && filter !== 'gateway' && filter !== 'manual-credit'
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ADMIN_HISTORY_PAGE_SIZE))
+  const parsedPage = Number.parseInt(requestedPage, 10)
+  const page = Math.min(totalPages, Math.max(1, Number.isFinite(parsedPage) ? parsedPage : 1))
+  const visible = isHistoryView
+    ? filtered.slice((page - 1) * ADMIN_HISTORY_PAGE_SIZE, page * ADMIN_HISTORY_PAGE_SIZE)
+    : filtered
   const activeTotal = isGatewayView ? gatewayTotalReceived : totalReceived
   const statsCards = isGatewayView
     ? `<div class="stat-card s-all"><div class="stat-num">${gatewayCounts.all}</div><div class="stat-lbl">Total do Gateway</div></div>
@@ -2950,7 +2959,7 @@ function adminDashboard(filter = 'all') {
 
   // ── Vista: histórico operacional do gateway privado ───────────────────────
   const gatewayTransactionsView = filter === 'gateway-transactions'
-    ? (gatewayTransactions.length === 0
+    ? (filtered.length === 0
         ? `<div class="gateway-panel"><div class="gateway-intro"><div class="gateway-mark">◎</div><div><strong>Nenhum pagamento do gateway</strong><p>As operações iniciadas por canais autorizados aparecerão aqui.</p></div></div><div class="empty"><div class="empty-icon">⌁</div><p>Ainda não há transacções para acompanhar.</p></div></div>`
         : `<div class="gateway-panel">
   <div class="gateway-intro">
@@ -2963,7 +2972,7 @@ function adminDashboard(filter = 'all') {
       <th>Data / Hora</th><th>Referência interna</th><th>Canal</th><th>Pagador</th><th>Valor</th><th>Método</th><th>Estado</th>
     </tr></thead>
     <tbody>
-    ${gatewayTransactions.map(o=>{
+    ${visible.map(o=>{
       const dt = new Date(o.ts)
       const ds = dt.toLocaleDateString('pt-MZ',{day:'2-digit',month:'short',year:'numeric'})
         + ' ' + dt.toLocaleTimeString('pt-MZ',{hour:'2-digit',minute:'2-digit'})
@@ -3070,7 +3079,7 @@ function adminDashboard(filter = 'all') {
     : zumboTable !== null ? zumboTable
     : filtered.length === 0
     ? `<div class="empty"><div class="empty-icon">📭</div><p>Nenhuma transacção encontrada.</p></div>`
-    : filtered.map(o => {
+    : visible.map(o => {
         const dt = new Date(o.ts)
         const ds = dt.toLocaleDateString('pt-MZ',{day:'2-digit',month:'short',year:'numeric'})
           + ' ' + dt.toLocaleTimeString('pt-MZ',{hour:'2-digit',minute:'2-digit'})
@@ -3141,6 +3150,18 @@ function adminDashboard(filter = 'all') {
 </div>`
       }).join('')
 
+  const historyPagination = isHistoryView && totalPages > 1
+    ? `<nav class="history-pagination" aria-label="Paginação do histórico">
+  ${page > 1
+    ? `<a class="history-page-btn" href="/admin/office?filter=${encodeURIComponent(filter)}&page=${page - 1}" rel="prev">Anterior</a>`
+    : '<span class="history-page-btn disabled" aria-disabled="true">Anterior</span>'}
+  <span class="history-page-status">Página ${page} de ${totalPages}</span>
+  ${page < totalPages
+    ? `<a class="history-page-btn" href="/admin/office?filter=${encodeURIComponent(filter)}&page=${page + 1}" rel="next">Próxima</a>`
+    : '<span class="history-page-btn disabled" aria-disabled="true">Próxima</span>'}
+</nav>`
+    : ''
+
   return `<!DOCTYPE html><html lang="pt"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Painel Admin — Megabyte</title>
@@ -3210,6 +3231,11 @@ body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:1
 .section-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
 .section-title{font-size:13px;font-weight:700;color:#636366;text-transform:uppercase;letter-spacing:.07em;}
 .section-count{font-size:13px;font-weight:700;color:#cc0000;background:#fff0f0;border-radius:20px;padding:2px 10px;}
+.history-pagination{display:flex;align-items:center;justify-content:center;gap:12px;margin:20px 0 8px;}
+.history-page-btn{display:inline-flex;align-items:center;justify-content:center;min-width:92px;padding:9px 14px;border:1.5px solid #e5e5ea;border-radius:10px;background:#fff;color:#3a3a3c;font-size:13px;font-weight:700;text-decoration:none;transition:border-color .12s,color .12s,background .12s;}
+.history-page-btn:hover{border-color:#cc0000;color:#cc0000;background:#fffafa;}
+.history-page-btn.disabled{color:#c7c7cc;background:#f9f9fb;cursor:not-allowed;}
+.history-page-status{font-size:13px;font-weight:700;color:#636366;white-space:nowrap;}
 
 /* ── Order card ── */
 .order-card{background:#fff;border-radius:16px;margin-bottom:12px;box-shadow:0 1px 5px rgba(0,0,0,.07);overflow:hidden;}
@@ -3337,9 +3363,10 @@ body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:1
       <!-- Orders -->
       <div class="section-hd">
         <span class="section-title">${pageTitle}</span>
-        <span class="section-count">${filtered.length} registos</span>
+        <span class="section-count">${filtered.length} registos${isHistoryView && totalPages > 1 ? ` · Página ${page} de ${totalPages}` : ''}</span>
       </div>
       ${cards}
+      ${historyPagination}
     </div>
   </main>
 </div>
