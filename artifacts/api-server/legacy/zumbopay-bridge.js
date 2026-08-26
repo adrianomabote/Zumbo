@@ -2861,7 +2861,9 @@ function adminDashboard(filter = 'all') {
   const pageTitle = allNavItems.find(n=>n.f===filter)?.label || 'Pagamentos Megabyte'
 
   // ── Vista especial: tabela ZumboPay ─────────────────────────────────────────
-  const zumboTable = false && filter === 'zumbo'
+  const zumboTable = null
+  /*
+  const legacyZumboTable = false && filter === 'zumbo'
     ? (filtered.length === 0
         ? `<div class="empty"><div class="empty-icon">📭</div><p>Nenhuma transacção encontrada.</p></div>`
         : `<div class="zumbo-panel">
@@ -2900,7 +2902,7 @@ function adminDashboard(filter = 'all') {
   </table>
   </div>
 </div>`)
-    : null
+    : null */
 
   // ── Vista: Gateway (chaves de API) ─────────────────────────────────────────
   const gatewayView = filter === 'gateway'
