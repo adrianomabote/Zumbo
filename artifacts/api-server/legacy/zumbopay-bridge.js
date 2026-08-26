@@ -618,7 +618,7 @@ async function router(req, res) {
     } catch { res.writeHead(404); return res.end() }
   }
   if (method === 'GET' && path === '/static/icon.svg') {
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="100" fill="#cc0000"/><text x="256" y="340" text-anchor="middle" font-family="Arial,sans-serif" font-weight="bold" font-size="300" fill="#fff">N</text></svg>`
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><image href="/api/legacy/static/icon-512.png?v=4" width="512" height="512"/></svg>`
     res.writeHead(200,{'Content-Type':'image/svg+xml','Cache-Control':'max-age=86400'}); return res.end(svg)
   }
   if (method === 'GET' && path === '/manifest.json') {
@@ -628,17 +628,17 @@ async function router(req, res) {
       start_url:'/megas',scope:'/',display:'standalone',
       background_color:'#f2f2f7',theme_color:'#cc0000',orientation:'portrait-primary',
       icons:[
-        {src:'/static/icon-192.png?v=3',sizes:'192x192',type:'image/png',purpose:'any'},
-        {src:'/static/icon-512.png?v=3',sizes:'512x512',type:'image/png',purpose:'any'},
-        {src:'/static/icon-maskable-512.png?v=3',sizes:'512x512',type:'image/png',purpose:'maskable'}
+        {src:'/static/icon-192.png?v=4',sizes:'192x192',type:'image/png',purpose:'any'},
+        {src:'/static/icon-512.png?v=4',sizes:'512x512',type:'image/png',purpose:'any'},
+        {src:'/static/icon-maskable-512.png?v=4',sizes:'512x512',type:'image/png',purpose:'maskable'}
       ]
     })
     res.writeHead(200,{'Content-Type':'application/manifest+json','Cache-Control':'max-age=3600'}); return res.end(manifest)
   }
   if (method === 'GET' && path === '/sw.js') {
     const sw = `
-const CACHE='ns-v5';
-const PRECACHE=['/manifest.json','/static/icon-192.png','/static/icon-512.png','/static/vodafone-logo.jpg','/static/coins.png'];
+const CACHE='ns-v6';
+const PRECACHE=['/manifest.json','/static/icon-192.png?v=4','/static/icon-512.png?v=4','/static/icon-maskable-512.png?v=4','/static/vodafone-logo.jpg','/static/coins.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(PRECACHE)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
 self.addEventListener('fetch',e=>{
@@ -843,7 +843,7 @@ self.addEventListener('fetch',e=>{
     if (!user) return json(res, { error:'Faça login para recarregar.' }, 401)
     let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
     const amount = parseInt(body.amount)
-    if (!amount || amount < 1) return json(res, { error:'Valor inválido.' }, 400)
+    if (!amount || amount < 20) return json(res, { error:'O valor mínimo para recarregar é 20 MT.' }, 400)
     const msisdn = normalizeMsisdn(user.phone), meth = detectMethod(msisdn)
     if (!meth) return json(res, { error:'Número de conta inválido para STK Push.' }, 400)
     const txId = randomBytes(6).toString('hex')
@@ -1349,14 +1349,14 @@ function megasPage() {
 <meta property="og:url" content="${SITE_URL}/megas">
 <meta property="og:image" content="${SITE_URL}/static/icon-512.png">
 <meta property="og:type" content="website">
-<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<link rel="icon" href="/static/icon-192.png?v=4" type="image/png" sizes="192x192">
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#cc0000">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Megabyte">
-<link rel="apple-touch-icon" href="/static/icon-192.png?v=3">
+<link rel="apple-touch-icon" href="/static/icon-192.png?v=4">
 <script>(function(){document.addEventListener('contextmenu',e=>e.preventDefault());document.addEventListener('keydown',function(e){const c=e.ctrlKey||e.metaKey;if(e.key==='F12'){e.preventDefault();return false}if(c&&e.shiftKey&&['I','J','C','K'].includes(e.key.toUpperCase())){e.preventDefault();return false}if(c&&['u','U','s','S','a','A','c','C','x','X'].includes(e.key)){e.preventDefault();return false}},true);['copy','cut','selectstart','dragstart'].forEach(ev=>document.addEventListener(ev,e=>e.preventDefault(),true))})()
 </script>
 <style>
@@ -2184,7 +2184,7 @@ ${allListHtml}
       <div class="auth-body">
         <div class="rech-amount-wrap">
           <span class="rech-amount-prefix">MT</span>
-          <input class="auth-inp rech-inp" id="rech-amount" type="number" min="1" placeholder="Valor a recarregar" inputmode="numeric">
+           <input class="auth-inp rech-inp" id="rech-amount" type="number" min="20" placeholder="Mínimo 20 MT" inputmode="numeric">
         </div>
         <div class="auth-err" id="rech-err"></div>
          <button class="auth-btn" id="rech-btn" onclick="submitRecharge()">Continuar</button>
@@ -2455,7 +2455,7 @@ function closeRechargeDialog() {
 async function submitRecharge() {
   const amount=parseInt(document.getElementById('rech-amount').value)
   const err=document.getElementById('rech-err'); err.style.display='none'
-  if(!amount||amount<1){err.textContent='Introduza um valor válido.';err.style.display='block';return}
+  if(!amount||amount<20){err.textContent='O valor mínimo para recarregar é 20 MT.';err.style.display='block';return}
   const btn=document.getElementById('rech-btn'); btn.disabled=true; btn.textContent='A processar…'
   try {
     const r=await fetch('/api/recharge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount})})
