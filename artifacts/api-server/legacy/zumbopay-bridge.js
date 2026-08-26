@@ -1587,7 +1587,6 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .via-btn-sub{font-size:11px;color:#8e8e93;margin-top:1px;}
 .via-btn.active .via-btn-label{color:#cc0000;}
 .via-btn.active .via-btn-sub{color:#cc0000;}
-.profile-note{font-size:12px;color:#636366;line-height:1.45;margin:-4px 0 14px;}
 .profile-section-title{font-size:14px;font-weight:800;color:#1c1c1e;margin:4px 0 12px;}
 .profile-divider{height:1px;background:#e5e5ea;margin:8px 0 18px;}
 .via-credit-bal{display:block;font-size:11px;font-weight:700;color:#065f46;margin-top:1px;}
@@ -1616,6 +1615,11 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .auth-close{position:absolute;top:16px;right:16px;background:none;border:none;cursor:pointer;color:#8e8e93;padding:6px;border-radius:8px;}
 .auth-close:active{background:#f2f2f7;}
 .auth-card-wrap{position:relative;}
+ .profile-modal{padding:0;align-items:stretch;justify-content:stretch;background:#fff;backdrop-filter:none;}
+ .profile-modal .auth-card-wrap{width:100%;height:100%;}
+ .profile-modal .auth-card{width:100%;max-width:none;height:100%;max-height:none;border-radius:0;box-shadow:none;overflow-y:auto;}
+ .profile-modal .auth-card-head{text-align:left;padding:28px 24px 0;}
+ .profile-modal .auth-card-head>div:first-child{justify-content:flex-start!important;}
 
 /* ── Recharge modal (reutiliza .auth-modal + .auth-card) ── */
 .rech-amount-wrap{position:relative;}
@@ -2107,7 +2111,7 @@ ${allListHtml}
 </div>
 
 <!-- ── Modal: Meu Perfil ── -->
-<div class="auth-modal" id="profile-modal" onclick="if(event.target===this)closeProfileDialog()">
+<div class="auth-modal profile-modal" id="profile-modal" onclick="if(event.target===this)closeProfileDialog()">
   <div class="auth-card-wrap">
     <div class="auth-card" id="profile-card">
       <button class="auth-close" onclick="closeProfileDialog()">
@@ -2122,7 +2126,6 @@ ${allListHtml}
         <div class="profile-section-title">Dados pessoais</div>
         <input class="auth-inp" id="profile-name" type="text" placeholder="Nome completo" autocomplete="name">
         <input class="auth-inp" id="profile-phone" type="tel" placeholder="Número de telemóvel" maxlength="9" inputmode="numeric" autocomplete="tel">
-        <div class="profile-note">M-Pesa: 84/85 · e-Mola: 86/87</div>
         <div class="auth-err" id="profile-err"></div>
         <button class="auth-btn" id="profile-btn" onclick="saveProfile()">Guardar dados</button>
         <div class="profile-divider"></div>
