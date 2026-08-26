@@ -20,6 +20,9 @@ let bridgeProcess: ChildProcess | undefined;
 let bridgeOutput = "";
 let baseUrl: string;
 let adminCookie: string;
+let apiProxyProcess: ChildProcess | undefined;
+let apiProxyOutput = "";
+let apiProxyBaseUrl: string;
 
 async function findFreePort() {
   const probe = createServer();
@@ -98,6 +101,19 @@ async function technicalRequest(page?: number, limit?: number, authorization = `
   });
 }
 
+async function proxiedTechnicalRequest(
+  page?: number,
+  limit?: number,
+  authorization = `Bearer ${adminPassword}`,
+) {
+  const query = new URLSearchParams();
+  if (page !== undefined) query.set("page", String(page));
+  if (limit !== undefined) query.set("limit", String(limit));
+  return fetch(`${apiProxyBaseUrl}/api/legacy/api/transactions?${query}`, {
+    headers: { authorization },
+  });
+}
+
 async function exportRequest(type: string, cookie = adminCookie) {
   return fetch(`${baseUrl}/admin/history/export?type=${encodeURIComponent(type)}`, {
     headers: cookie ? { cookie } : undefined,
@@ -172,9 +188,68 @@ before(async () => {
   const setCookie = login.headers.get("set-cookie");
   assert.ok(setCookie);
   adminCookie = setCookie.split(";", 1)[0];
+
+  const apiProxyPort = await findFreePort();
+  const tsxEntry = fileURLToPath(new URL("../../../scripts/node_modules/tsx/dist/cli.mjs", import.meta.url));
+  const proxyRunner = path.join(bridgeDirectory, "api-proxy-runner.ts");
+  await writeFile(
+    proxyRunner,
+    [
+      `import app from ${JSON.stringify(fileURLToPath(new URL("../src/app.ts", import.meta.url)))};`,
+      `const server = app.listen(Number(process.env.PORT), "127.0.0.1", () => console.log("proxy-ready"));`,
+      `const shutdown = () => server.close(() => process.exit(0));`,
+      `process.on("SIGTERM", shutdown);`,
+      `process.on("SIGINT", shutdown);`,
+    ].join("\n"),
+  );
+
+  apiProxyBaseUrl = `http://127.0.0.1:${apiProxyPort}`;
+  apiProxyOutput = "";
+  apiProxyProcess = spawn(process.execPath, [tsxEntry, proxyRunner], {
+    cwd: fileURLToPath(new URL("..", import.meta.url)),
+    env: {
+      ...process.env,
+      PORT: String(apiProxyPort),
+      LEGACY_BRIDGE_PORT: String(bridgePort),
+      NODE_ENV: "test",
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  apiProxyProcess.stdout?.on("data", (chunk: Buffer) => {
+    apiProxyOutput += chunk.toString();
+  });
+  apiProxyProcess.stderr?.on("data", (chunk: Buffer) => {
+    apiProxyOutput += chunk.toString();
+  });
+
+  const proxyProcess = apiProxyProcess;
+  const proxyDeadline = Date.now() + 10_000;
+  while (Date.now() < proxyDeadline) {
+    if (proxyProcess.exitCode !== null || proxyProcess.signalCode !== null) {
+      throw new Error(`O proxy principal terminou antes de ficar pronto: ${apiProxyOutput}`);
+    }
+    try {
+      const response = await fetch(`${apiProxyBaseUrl}/api/legacy/ping`);
+      if (response.ok) break;
+    } catch {
+      // The proxy needs a moment to start listening.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  if (proxyProcess.exitCode !== null || proxyProcess.signalCode !== null) {
+    throw new Error(`O proxy principal terminou antes de ficar pronto: ${apiProxyOutput}`);
+  }
 });
 
 after(async () => {
+  const processToStop = apiProxyProcess;
+  apiProxyProcess = undefined;
+  if (processToStop && processToStop.exitCode === null && processToStop.signalCode === null) {
+    await new Promise<void>((resolve) => {
+      processToStop.once("exit", () => resolve());
+      processToStop.kill("SIGTERM");
+    });
+  }
   await stopBridge();
   await rm(bridgeDirectory, { recursive: true, force: true });
 });
@@ -254,6 +329,30 @@ test("consulta técnica pagina mais de 1.000 vendas sem incluir operações gate
   assert.equal(lastPage.data.length, 1);
   assert.equal(lastPage.data[0].id, "MEGA-LAST-PAGE-SENTINEL");
   assert.equal(lastPage.data.some((transaction: { id?: string }) => transaction.id === gatewayTransactionId), false);
+});
+
+test("mantém o filtro técnico através do proxy principal", async () => {
+  const unauthorized = await proxiedTechnicalRequest(undefined, undefined, "");
+  assert.equal(unauthorized.status, 401);
+
+  const directResponse = await technicalRequest(1, 100);
+  assert.equal(directResponse.status, 200);
+  const directPayload = await directResponse.json();
+
+  const proxiedResponse = await proxiedTechnicalRequest(1, 100);
+  assert.equal(proxiedResponse.status, 200);
+  const proxiedPayload = await proxiedResponse.json();
+
+  assert.deepEqual(proxiedPayload, directPayload);
+  assert.equal(proxiedPayload.total, 1001);
+  assert.equal(
+    proxiedPayload.data.some((transaction: { type?: string }) => transaction.type === "gateway"),
+    false,
+  );
+  assert.equal(
+    proxiedPayload.data.some((transaction: { id?: string }) => transaction.id === gatewayTransactionId),
+    false,
+  );
 });
 
 test("exporta o histórico Megabyte completo, sem depender da página aberta", async () => {
