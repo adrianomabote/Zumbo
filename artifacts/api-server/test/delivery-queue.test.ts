@@ -14,6 +14,7 @@ const queueDirectory = await mkdtemp(path.join(os.tmpdir(), "net-servicos-delive
 const bridgeDirectory = await mkdtemp(path.join(os.tmpdir(), "net-servicos-bridge-"));
 const queueFile = path.join(queueDirectory, "deliveries.json");
 const bridgePort = await findFreePort();
+const recoveryTxId = `delivery-test-recovery-${testId}`;
 
 process.env.DELIVERY_QUEUE_FILE = queueFile;
 process.env.PAGAR_BRIDGE_PORT = String(bridgePort);
@@ -116,6 +117,41 @@ async function adminRequest(method: string, endpoint: string) {
   return { response, data: await response.json() };
 }
 
+async function pagarAdminRequest(method: string, endpoint: string) {
+  const response = await fetch(`${baseUrl}${endpoint}`, {
+    method,
+    headers: { "x-internal-payment-key": process.env.SESSION_SECRET! },
+  });
+  return { response, data: await response.json() };
+}
+
+async function startBridge(mainApiPort: number) {
+  bridgeProcess = spawn(process.execPath, ["zumbopay-bridge.js"], {
+    cwd: bridgeDirectory,
+    env: {
+      ...process.env,
+      PORT: String(bridgePort),
+      MAIN_API_PORT: String(mainApiPort),
+      NODE_ENV: "production",
+      NET_SERVICOS_PAYMENT_MODE: "mock",
+      PAGAR_API_KEY: "test-api-key",
+      PAGAR_SIGNING_SECRET: "test-signing-secret",
+      ADMIN_PASS: "test-admin-pass",
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  await waitForBridge();
+}
+
+async function stopBridge() {
+  const processToStop = bridgeProcess;
+  if (!processToStop || processToStop.exitCode !== null || processToStop.signalCode !== null) return;
+  await new Promise<void>((resolve) => {
+    processToStop.once("exit", () => resolve());
+    processToStop.kill("SIGTERM");
+  });
+}
+
 before(async () => {
   await ensurePagarTables();
   const selfTxId = `delivery-test-self-${testId}`;
@@ -125,6 +161,7 @@ before(async () => {
     JSON.stringify([
       orderRecord(selfTxId, `net-${selfTxId}`, "841112223"),
       orderRecord(otherTxId, `net-${otherTxId}`, "841112223", "852223334"),
+      orderRecord(recoveryTxId, `net-${recoveryTxId}`, "841112223"),
     ]),
   );
   await copyFile(
@@ -138,26 +175,11 @@ before(async () => {
   assert.ok(address && typeof address !== "string");
   baseUrl = `http://127.0.0.1:${address.port}`;
 
-  bridgeProcess = spawn(process.execPath, ["zumbopay-bridge.js"], {
-    cwd: bridgeDirectory,
-    env: {
-      ...process.env,
-      PORT: String(bridgePort),
-      MAIN_API_PORT: String(address.port),
-      NODE_ENV: "production",
-      NET_SERVICOS_PAYMENT_MODE: "mock",
-      PAGAR_API_KEY: "test-api-key",
-      PAGAR_SIGNING_SECRET: "test-signing-secret",
-      ADMIN_PASS: "test-admin-pass",
-    },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  await waitForBridge();
+  await startBridge(address.port);
 });
 
 after(async () => {
-  bridgeProcess.kill("SIGTERM");
-  await new Promise<void>((resolve) => bridgeProcess.once("exit", () => resolve()));
+  await stopBridge();
   await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   await pool?.query("DELETE FROM pagar_webhook_events WHERE event_id LIKE $1", [`delivery-test-%`]);
   await pool?.query("DELETE FROM pagar_operations WHERE internal_id LIKE $1", [`delivery-test-%`]);
@@ -235,4 +257,40 @@ test("PAID Para Outro keeps the informed beneficiary and failed delivery can be 
   assert.equal(leasedAgain.id, leased.id);
   assert.equal(leasedAgain.beneficiaryPhone, "852223334");
   assert.match(leasedAgain.ussdSequence.at(-1), /852223334/);
+});
+
+test("retries a confirmed webhook after the bridge becomes unavailable without duplicating delivery", async () => {
+  const operationId = `pagar-recovery-${testId}`;
+  const reference = `net-${recoveryTxId}`;
+  const eventId = `delivery-test-recovery-event-${testId}`;
+  await insertPendingOperation(recoveryTxId, operationId, reference);
+
+  await stopBridge();
+  assert.equal((await webhookRequest(eventId, operationId, reference)).status, 204);
+
+  const failedForwarding = (await pagarAdminRequest("GET", "/api/pagar/admin/webhook-deliveries")).data.events.find(
+    (event: { eventId: string }) => event.eventId === eventId,
+  );
+  assert.ok(failedForwarding);
+  assert.equal(failedForwarding.forwardingStatus, "failed");
+  assert.equal(failedForwarding.forwardingAttempts, 1);
+  assert.match(failedForwarding.forwardingLastError, /fetch failed|ECONNREFUSED|connect/i);
+  assert.ok(failedForwarding.forwardingNextRetryAt);
+  assert.ok(new Date(failedForwarding.forwardingNextRetryAt).getTime() > Date.now());
+
+  await startBridge(Number(new URL(baseUrl).port));
+  assert.equal((await webhookRequest(eventId, operationId, reference)).status, 204);
+
+  const deliveredForwarding = (await pagarAdminRequest("GET", "/api/pagar/admin/webhook-deliveries")).data.events.find(
+    (event: { eventId: string }) => event.eventId === eventId,
+  );
+  assert.ok(deliveredForwarding);
+  assert.equal(deliveredForwarding.forwardingStatus, "delivered");
+  assert.equal(deliveredForwarding.forwardingAttempts, 2);
+  assert.equal(deliveredForwarding.forwardingLastError, undefined);
+  assert.equal(deliveredForwarding.forwardingNextRetryAt, undefined);
+
+  const deliveries = (await listDeliveries()).filter((delivery) => delivery.paymentId === recoveryTxId);
+  assert.equal(deliveries.length, 1);
+  assert.equal(deliveries[0].beneficiaryPhone, "841112223");
 });
