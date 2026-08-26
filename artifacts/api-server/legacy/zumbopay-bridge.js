@@ -1591,6 +1591,9 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .sh-next:disabled{opacity:.45;cursor:not-allowed;}
 .sh-next:active{opacity:.85;}
 .sh-hint{display:block;font-size:12px;color:#8e8e93;margin-top:-10px;margin-bottom:14px;padding:0 2px;}
+.sh-recipient{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 2px 4px;padding:12px 14px;border:1px solid #e5e5ea;border-radius:12px;background:#f8f8fa;}
+.sh-recipient-label{font-size:12px;color:#636366;}
+.sh-recipient-phone{font-size:14px;font-weight:700;color:#1c1c1e;white-space:nowrap;}
 /* states: pending / success / failed */
 .sh-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 20px 44px;text-align:center;}
 .sheet.pending-full{bottom:auto!important;top:50%!important;left:50%!important;right:auto!important;width:88%!important;max-width:380px!important;border-radius:22px!important;max-height:90vh!important;transform:translate(-50%,-50%)!important;}
@@ -1976,6 +1979,10 @@ ${allListHtml}
        <label class="sh-lbl">O seu número de pagamento</label>
       <input class="sh-inp" id="sh-phone" type="tel" placeholder="Número de telemóvel" maxlength="9" inputmode="numeric" autocomplete="off">
        <span class="sh-hint">M-Pesa: 84/85 · e-Mola: 86/87</span>
+      <div class="sh-recipient">
+        <span class="sh-recipient-label">Os megas serão enviados para</span>
+        <strong class="sh-recipient-phone" id="sh-recipient-phone">—</strong>
+      </div>
     </div>
 
     <!-- Tab: Para Outro -->
@@ -2477,6 +2484,7 @@ function openBuyDirect(id) {
   selfInput.value = selfPhone
   selfInput.readOnly = Boolean(selfPhone)
   selfInput.title = selfPhone ? 'O número da conta autenticada é usado para esta compra.' : ''
+  document.getElementById('sh-recipient-phone').textContent = selfPhone || '—'
   document.getElementById('sh-err').style.display = 'none'
   payVia = 'mobile-money'
   document.querySelectorAll('.via-btn').forEach(b => b.classList.toggle('active', b.dataset.via===payVia))
