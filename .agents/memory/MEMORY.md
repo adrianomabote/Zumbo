@@ -2,4 +2,4 @@
 - [Logs do bridge legado](legacy-bridge-logging.md) — o proxy deve preservar stdout/stderr do processo legado para diagnosticar respostas do provedor
 - [Contrato ZumboPay](zumbopay-uuid-contract.md) — charges exigem Wallet IDs UUID e source_id UUID; IDs numéricos do painel causam Invalid uuid
 - [Storefront legado](legacy-storefront.md) — a loja pública é HTML gerado pelo bridge e passa por reescrita de caminhos no proxy da API
-- [Métodos no checkout](payment-method-ui.md) — M-Pesa e e-Mola devem aparecer juntos numa única casa e ser escolhidos automaticamente pelo prefixo
+- [Métodos no checkout](payment-method-ui.md) — M-Pesa / e-Mola aparecem juntos numa única casa, sem prefixos visíveis
