@@ -1446,6 +1446,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .drawer-auth-btn--secondary:active{background:#e5e5ea;}
 .drawer-user-row{padding:14px 20px;display:flex;flex-direction:column;gap:4px;background:#f9f9fb;}
 .drawer-user-name{font-size:14px;font-weight:700;color:#1c1c1e;}
+.drawer-user-phone{font-size:12px;color:#636366;}
 .drawer-user-bal{font-size:13px;color:#cc0000;font-weight:700;}
 
 /* ── Método de pagamento (via-btns) ── */
@@ -1461,6 +1462,9 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .via-btn-sub{font-size:11px;color:#8e8e93;margin-top:1px;}
 .via-btn.active .via-btn-label{color:#cc0000;}
 .via-btn.active .via-btn-sub{color:#cc0000;}
+.profile-note{font-size:12px;color:#636366;line-height:1.45;margin:-4px 0 14px;}
+.profile-section-title{font-size:14px;font-weight:800;color:#1c1c1e;margin:4px 0 12px;}
+.profile-divider{height:1px;background:#e5e5ea;margin:8px 0 18px;}
 .via-credit-bal{display:block;font-size:11px;font-weight:700;color:#065f46;margin-top:1px;}
 
 /* ── Auth modal ── */
@@ -1563,8 +1567,13 @@ ${isTestMode ? '<div style="background:#fff3cd;color:#664d03;border-bottom:1px s
     <div id="drawer-logged-in" style="display:none">
       <li class="drawer-user-row">
         <span class="drawer-user-name" id="drawer-user-name">—</span>
+        <span class="drawer-user-phone" id="drawer-user-phone">—</span>
         <span class="drawer-user-bal" id="drawer-user-bal">0 MT</span>
       </li>
+      <li><a href="#" onclick="closeDrawer();openProfileDialog()">
+        <span class="dm-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0116 0"/></svg></span>
+        Meu Perfil
+      </a></li>
       <li><a href="#" onclick="closeDrawer();openRechargeDialog()">
         <span class="dm-icon"><img src="/static/coins.png" style="width:20px;height:20px;vertical-align:middle" alt="saldo"></span>
         Recarregar Saldo
@@ -1781,17 +1790,17 @@ ${allListHtml}
     <div class="sh-panel" id="sh-tab-mim">
       <label class="sh-lbl">Introduza o seu número</label>
       <input class="sh-inp" id="sh-phone" type="tel" placeholder="Número de telemóvel" maxlength="9" inputmode="numeric" autocomplete="off">
-      <span class="sh-hint">84 ou 85</span>
+       <span class="sh-hint">M-Pesa: 84/85 · e-Mola: 86/87</span>
     </div>
 
     <!-- Tab: Para Outro -->
     <div class="sh-panel" id="sh-tab-outro" style="display:none">
       <label class="sh-lbl">Introduza o seu número</label>
       <input class="sh-inp" id="sh-phone-payer" type="tel" placeholder="Número de telemóvel" maxlength="9" inputmode="numeric" autocomplete="off">
-      <span class="sh-hint">84 ou 85</span>
+       <span class="sh-hint">M-Pesa: 84/85 · e-Mola: 86/87</span>
       <label class="sh-lbl">Introduza o número do beneficiário</label>
       <input class="sh-inp" id="sh-phone-bene" type="tel" placeholder="Número de telemóvel" maxlength="9" inputmode="numeric" autocomplete="off">
-      <span class="sh-hint">84 ou 85</span>
+       <span class="sh-hint">M-Pesa: 84/85 · e-Mola: 86/87</span>
     </div>
 
     <!-- Tab: Requisitar -->
@@ -1812,6 +1821,15 @@ ${allListHtml}
           </span>
           <div>
             <div class="via-btn-label">M-Pesa</div>
+          </div>
+        </button>
+        <button class="via-btn" data-via="emola" onclick="selectPayVia('emola')">
+          <span class="via-btn-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><path d="M9 7h6M9 11h6M9 15h3"/></svg>
+          </span>
+          <div>
+            <div class="via-btn-label">e-Mola</div>
+            <div class="via-btn-sub">86/87</div>
           </div>
         </button>
         <button class="via-btn" id="via-credit" data-via="credit" onclick="selectPayVia('credit')">
@@ -1960,7 +1978,7 @@ ${allListHtml}
       <div class="auth-card-head">
         <div style="margin-bottom:12px;display:flex;justify-content:center"><img src="/static/coins.png" style="width:56px;height:56px" alt="saldo"></div>
         <div class="auth-card-title">Recarregar Saldo</div>
-        <div class="auth-card-sub">O pagamento é processado via M-Pesa</div>
+         <div class="auth-card-sub">M-Pesa ou e-Mola, conforme o seu número</div>
       </div>
       <div class="auth-body">
         <div class="rech-amount-wrap">
@@ -1968,7 +1986,38 @@ ${allListHtml}
           <input class="auth-inp rech-inp" id="rech-amount" type="number" min="1" placeholder="Valor a recarregar" inputmode="numeric">
         </div>
         <div class="auth-err" id="rech-err"></div>
-        <button class="auth-btn" id="rech-btn" onclick="submitRecharge()">Pagar com M-Pesa</button>
+         <button class="auth-btn" id="rech-btn" onclick="submitRecharge()">Continuar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal: Meu Perfil ── -->
+<div class="auth-modal" id="profile-modal" onclick="if(event.target===this)closeProfileDialog()">
+  <div class="auth-card-wrap">
+    <div class="auth-card" id="profile-card">
+      <button class="auth-close" onclick="closeProfileDialog()">
+        <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2.5;stroke-linecap:round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <div class="auth-card-head">
+        <div style="margin-bottom:12px;display:flex;justify-content:center"><span style="width:56px;height:56px;border-radius:50%;background:#fff0f0;color:#cc0000;display:flex;align-items:center;justify-content:center;font-size:26px">👤</span></div>
+        <div class="auth-card-title">Meu Perfil</div>
+        <div class="auth-card-sub">Consulta e actualiza os teus dados</div>
+      </div>
+      <div class="auth-body">
+        <div class="profile-section-title">Dados pessoais</div>
+        <input class="auth-inp" id="profile-name" type="text" placeholder="Nome completo" autocomplete="name">
+        <input class="auth-inp" id="profile-phone" type="tel" placeholder="Número de telemóvel" maxlength="9" inputmode="numeric" autocomplete="tel">
+        <div class="profile-note">M-Pesa: 84/85 · e-Mola: 86/87</div>
+        <div class="auth-err" id="profile-err"></div>
+        <button class="auth-btn" id="profile-btn" onclick="saveProfile()">Guardar dados</button>
+        <div class="profile-divider"></div>
+        <div class="profile-section-title">Alterar senha</div>
+        <input class="auth-inp" id="profile-current-pass" type="password" placeholder="Senha actual" autocomplete="current-password">
+        <input class="auth-inp" id="profile-new-pass" type="password" placeholder="Nova senha (mín. 6 caracteres)" autocomplete="new-password">
+        <input class="auth-inp" id="profile-new-pass2" type="password" placeholder="Confirmar nova senha" autocomplete="new-password">
+        <div class="auth-err" id="password-err"></div>
+        <button class="auth-btn" id="password-btn" onclick="changePassword()">Alterar senha</button>
       </div>
     </div>
   </div>
