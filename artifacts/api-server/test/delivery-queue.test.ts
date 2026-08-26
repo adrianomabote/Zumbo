@@ -33,6 +33,9 @@ const { default: app } = await import("../src/app.ts");
 let server: Server;
 let baseUrl: string;
 let bridgeProcess: ChildProcess;
+let apiProcess: ChildProcess | undefined;
+let apiProcessOutput = "";
+let hangingBridge: Server | undefined;
 let stopPagarWebhookRetryWorker: (() => void) | undefined;
 
 async function findFreePort() {
@@ -57,6 +60,92 @@ async function waitForBridge() {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   throw new Error("The test bridge did not become ready.");
+}
+
+async function startHangingBridge() {
+  hangingBridge = createServer((request, response) => {
+    if (request.url === "/ping") {
+      response.writeHead(200);
+      response.end("ok");
+      return;
+    }
+    if (request.url === "/internal/pagar-event") {
+      request.resume();
+      return;
+    }
+    response.writeHead(404);
+    response.end();
+  });
+  await new Promise<void>((resolve, reject) => {
+    hangingBridge!.once("error", reject);
+    hangingBridge!.listen(bridgePort, "127.0.0.1", () => resolve());
+  });
+}
+
+async function stopHangingBridge() {
+  const processToStop = hangingBridge;
+  hangingBridge = undefined;
+  if (!processToStop) return;
+  await new Promise<void>((resolve, reject) => {
+    processToStop.close((error) => (error ? reject(error) : resolve()));
+  });
+}
+
+async function startApiProcess() {
+  const apiPort = await findFreePort();
+  const tsxEntry = fileURLToPath(new URL("../../../scripts/node_modules/tsx/dist/cli.mjs", import.meta.url));
+  const apiEntry = fileURLToPath(new URL("../src/index.ts", import.meta.url));
+  apiProcessOutput = "";
+  apiProcess = spawn(process.execPath, [tsxEntry, apiEntry], {
+    cwd: fileURLToPath(new URL("..", import.meta.url)),
+    env: {
+      ...process.env,
+      PORT: String(apiPort),
+      NODE_ENV: "test",
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  apiProcess.stdout?.on("data", (chunk: Buffer) => {
+    apiProcessOutput += chunk.toString();
+  });
+  apiProcess.stderr?.on("data", (chunk: Buffer) => {
+    apiProcessOutput += chunk.toString();
+  });
+
+  const child = apiProcess;
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      throw new Error(`O processo da API terminou antes de ficar pronto: ${apiProcessOutput}`);
+    }
+    try {
+      const response = await fetch(`http://127.0.0.1:${apiPort}/api/pagar/admin/webhook-deliveries`, {
+        headers: { "x-internal-payment-key": process.env.SESSION_SECRET! },
+      });
+      if (response.ok) return apiPort;
+    } catch {
+      // The API needs a moment to start its bridge and database worker.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`O processo da API não ficou pronto: ${apiProcessOutput}`);
+}
+
+async function stopApiProcess() {
+  const processToStop = apiProcess;
+  apiProcess = undefined;
+  if (!processToStop || processToStop.exitCode !== null || processToStop.signalCode !== null) return;
+  await new Promise<void>((resolve) => {
+    const finish = () => resolve();
+    processToStop.once("exit", finish);
+    processToStop.kill("SIGTERM");
+    const forceStop = setTimeout(() => {
+      if (processToStop.exitCode === null && processToStop.signalCode === null) {
+        processToStop.kill("SIGKILL");
+      }
+    }, 10_000);
+    forceStop.unref();
+  });
 }
 
 function orderRecord(txId: string, reference: string, phone: string, beneficiaryPhone?: string) {
@@ -152,6 +241,18 @@ async function waitForForwarding(eventId: string) {
   throw new Error(`O encaminhamento ${eventId} não foi entregue pelo worker.`);
 }
 
+async function waitForForwardingStatus(eventId: string, status: string) {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    const event = (await pagarAdminRequest("GET", "/api/pagar/admin/webhook-deliveries")).data.events.find(
+      (candidate: { eventId: string }) => candidate.eventId === eventId,
+    );
+    if (event?.forwardingStatus === status) return event;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`O encaminhamento ${eventId} não chegou ao estado ${status}.`);
+}
+
 async function startBridge(mainApiPort: number) {
   bridgeProcess = spawn(process.execPath, ["zumbopay-bridge.js"], {
     cwd: bridgeDirectory,
@@ -209,6 +310,8 @@ before(async () => {
 
 after(async () => {
   stopPagarWebhookRetryWorker?.();
+  await stopApiProcess();
+  await stopHangingBridge();
   await stopBridge();
   await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   await pool?.query("DELETE FROM pagar_webhook_events WHERE event_id LIKE $1", [`delivery-test-%`]);
@@ -344,6 +447,8 @@ test("worker recovers an interrupted forwarding after server restart without dup
 
   stopPagarWebhookRetryWorker?.();
   stopPagarWebhookRetryWorker = undefined;
+  await stopBridge();
+  await startHangingBridge();
   await insertInterruptedForwarding(eventId, operationId, reference);
 
   const interrupted = await pool!.query(
@@ -355,13 +460,30 @@ test("worker recovers an interrupted forwarding after server restart without dup
   assert.equal(interrupted.rows[0]?.forwarding_attempts, 1);
   assert.ok(interrupted.rows[0]?.forwarding_started_at);
 
-  // A new worker instance represents the server coming back after the old
-  // forwarding process was interrupted.
-  stopPagarWebhookRetryWorker = startPagarWebhookRetryWorker(25);
+  // The first API process claims the stale event and is stopped while its
+  // forwarding request is still in flight.
+  await startApiProcess();
+  const forwardingWhileProcessRuns = await waitForForwardingStatus(eventId, "forwarding");
+  assert.equal(forwardingWhileProcessRuns.forwardingStatus, "forwarding");
+  await stopApiProcess();
+  await stopHangingBridge();
+
+  await pool!.query(
+    `UPDATE pagar_webhook_events
+        SET forwarding_started_at = now() - interval '3 minutes',
+            forwarding_next_retry_at = NULL
+      WHERE event_id = $1`,
+    [eventId],
+  );
+  await startBridge(Number(new URL(baseUrl).port));
+
+  // A distinct API process initializes a fresh worker and recovers the stale
+  // forwarding from PostgreSQL.
+  await startApiProcess();
 
   const deliveredForwarding = await waitForForwarding(eventId);
   assert.equal(deliveredForwarding.forwardingStatus, "delivered");
-  assert.equal(deliveredForwarding.forwardingAttempts, 2);
+  assert.equal(deliveredForwarding.forwardingAttempts, 3);
   assert.equal(deliveredForwarding.forwardingLastError, undefined);
   assert.equal(deliveredForwarding.forwardingNextRetryAt, undefined);
 

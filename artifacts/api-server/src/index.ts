@@ -6,7 +6,7 @@ import {
 } from "./legacy-bridge";
 import { logger } from "./lib/logger";
 import { ensurePagarTables, startPagarWebhookRetryWorker } from "./services/pagar";
-import { hasDatabase } from "@workspace/db";
+import { hasDatabase, pool } from "@workspace/db";
 
 const rawPort = process.env["PORT"];
 
@@ -31,18 +31,24 @@ if (hasDatabase) {
 }
 const stopPagarWebhookRetryWorker = hasDatabase ? startPagarWebhookRetryWorker() : undefined;
 
-app.listen(port, (err) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
-    process.exit(1);
-  }
-
+const server = app.listen(port, () => {
   logger.info({ port }, "Server listening");
 });
 
+let shuttingDown = false;
 const shutdown = () => {
+  if (shuttingDown) return;
+  shuttingDown = true;
   stopPagarWebhookRetryWorker?.();
   stopLegacyBridge();
+  server.close((error) => {
+    if (error) {
+      logger.error({ err: error }, "Error closing server");
+    }
+    void pool?.end().catch((poolError) => {
+      logger.error({ err: poolError }, "Error closing database pool");
+    });
+  });
 };
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
