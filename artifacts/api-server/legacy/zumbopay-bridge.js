@@ -2936,6 +2936,45 @@ function adminDashboard(filter = 'all') {
 </div>`
     : null
 
+  // ── Vista: histórico operacional do gateway privado ───────────────────────
+  const gatewayTransactionsView = filter === 'gateway-transactions'
+    ? (gatewayTransactions.length === 0
+        ? `<div class="gateway-panel"><div class="gateway-intro"><div class="gateway-mark">◎</div><div><strong>Nenhum pagamento do gateway</strong><p>As operações iniciadas por canais autorizados aparecerão aqui.</p></div></div><div class="empty"><div class="empty-icon">⌁</div><p>Ainda não há transacções para acompanhar.</p></div></div>`
+        : `<div class="gateway-panel">
+  <div class="gateway-intro">
+    <div class="gateway-mark">◎</div>
+    <div><strong>Histórico do Gateway privado</strong><p>Visão operacional Megabyte. Referências e descrições fornecidas por sistemas externos não são exibidas neste painel.</p></div>
+  </div>
+  <div class="ztable-wrap gateway-table-wrap">
+  <table class="ztable gateway-table">
+    <thead><tr>
+      <th>Data / Hora</th><th>Referência interna</th><th>Canal</th><th>Pagador</th><th>Valor</th><th>Método</th><th>Estado</th>
+    </tr></thead>
+    <tbody>
+    ${gatewayTransactions.map(o=>{
+      const dt = new Date(o.ts)
+      const ds = dt.toLocaleDateString('pt-MZ',{day:'2-digit',month:'short',year:'numeric'})
+        + ' ' + dt.toLocaleTimeString('pt-MZ',{hour:'2-digit',minute:'2-digit'})
+      const channelId = String(o.gwKeyId || 'privado')
+      const channel = channelId === 'principal' ? 'Canal principal' : `Canal privado · ${escapeHtml(channelId.slice(0,8))}`
+      const statusColor = SC[o.status] || '#636366'
+      const statusBg = SBG[o.status] || '#f2f2f7'
+      return `<tr>
+        <td class="zt-date">${ds}</td>
+        <td><span class="internal-reference"><span class="reference-dot"></span>Pagamento Megabyte <small>GW-${escapeHtml(o.txId)}</small></span></td>
+        <td><span class="channel-tag">${channel}</span></td>
+        <td class="zt-phone">${escapeHtml(o.phone)}</td>
+        <td class="zt-amount">${Number(o.amount||0).toLocaleString('pt-MZ')} MT</td>
+        <td><span class="method-tag">${ML[o.method]||escapeHtml(o.method||'—')}</span></td>
+        <td><span class="badge" style="color:${statusColor};background:${statusBg}">${SL[o.status]||escapeHtml(o.status||'—')}</span></td>
+      </tr>`
+    }).join('')}
+    </tbody>
+  </table>
+  </div>
+</div>`)
+    : null
+
   // ── Vista: Utilizadores ────────────────────────────────────────────────────
   const usersTable = filter === 'users'
     ? (users.length === 0
