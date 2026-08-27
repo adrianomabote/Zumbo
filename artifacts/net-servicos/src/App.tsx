@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import "./seo-page.css";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
