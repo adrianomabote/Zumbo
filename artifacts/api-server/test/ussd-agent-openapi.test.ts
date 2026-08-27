@@ -31,7 +31,7 @@ test("publica a documentação OpenAPI do agente sem segredos internos", async (
 
   assert.equal(document.info.title, "Megabyte USSD Agent API");
   assert.equal(document.servers[0]?.url, "https://megabyte.live/api");
-  assert.ok(document.paths["/ussd-agent/pair"]);
+  assert.equal(document.paths["/ussd-agent/pair"], undefined);
   assert.ok(document.paths["/ussd-agent/deliveries/lease"]);
   assert.ok(document.paths["/ussd-agent/deliveries/{id}/report"]);
   assert.equal(document.paths["/ussd-agent/internal/paid-deliveries"], undefined);
@@ -44,7 +44,9 @@ test("o endpoint de informação aponta para a documentação", async () => {
   assert.deepEqual(await response.json(), {
     ok: true,
     service: "Net Serviços USSD Agent",
-    pairing: "POST /api/ussd-agent/pair",
     docs: "/api/ussd-agent/openapi.json",
+    authentication: "none",
+    lease: "POST /api/ussd-agent/deliveries/lease",
+    report: "POST /api/ussd-agent/deliveries/{id}/report",
   });
 });
