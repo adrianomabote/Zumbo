@@ -12,6 +12,7 @@ import {
 import { ussdAgentOpenApi } from "./ussd-agent-openapi";
 
 const router: IRouter = Router();
+const PUBLIC_AGENT_DEVICE_ID = "public-agent";
 
 function bearerToken(request: Request) {
   const value = request.header("authorization");
@@ -22,8 +23,10 @@ router.get("/ussd-agent", (_req, res) => {
   return res.json({
     ok: true,
     service: "Net Serviços USSD Agent",
-    pairing: "POST /api/ussd-agent/pair",
     docs: "/api/ussd-agent/openapi.json",
+    authentication: "none",
+    lease: "POST /api/ussd-agent/deliveries/lease",
+    report: "POST /api/ussd-agent/deliveries/{id}/report",
   });
 });
 
@@ -34,8 +37,9 @@ router.get("/ussd-agent/openapi.json", (_req, res) => {
     .json(ussdAgentOpenApi);
 });
 
-async function requireDevice(request: Request) {
-  return authenticateDevice(bearerToken(request));
+async function resolveDeviceId(request: Request) {
+  const device = await authenticateDevice(bearerToken(request));
+  return device?.id ?? PUBLIC_AGENT_DEVICE_ID;
 }
 
 router.post("/ussd-agent/pair", async (req, res) => {
@@ -48,22 +52,16 @@ router.post("/ussd-agent/pair", async (req, res) => {
 });
 
 router.post("/ussd-agent/deliveries/lease", async (req, res) => {
-  const device = await requireDevice(req);
-  if (!device) return res.status(401).json({ error: "Dispositivo não autorizado." });
-  return res.json({ delivery: await leaseNextDelivery(device.id) });
+  return res.json({ delivery: await leaseNextDelivery(await resolveDeviceId(req)) });
 });
 
 router.get("/ussd-agent/deliveries", async (req, res) => {
-  const device = await requireDevice(req);
-  if (!device) return res.status(401).json({ error: "Dispositivo não autorizado." });
-  return res.json({ deliveries: await listDeviceDeliveries(device.id) });
+  return res.json({ deliveries: await listDeviceDeliveries(await resolveDeviceId(req)) });
 });
 
 router.post("/ussd-agent/deliveries/:id/report", async (req, res) => {
-  const device = await requireDevice(req);
-  if (!device) return res.status(401).json({ error: "Dispositivo não autorizado." });
   try {
-    const delivery = await reportDelivery(device.id, req.params.id, {
+    const delivery = await reportDelivery(await resolveDeviceId(req), req.params.id, {
       status: req.body?.status,
       confirmationReference: req.body?.confirmationReference,
       reason: req.body?.reason,

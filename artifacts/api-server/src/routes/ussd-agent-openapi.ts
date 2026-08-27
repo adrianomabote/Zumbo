@@ -2,9 +2,9 @@ export const ussdAgentOpenApi = {
   openapi: "3.1.0",
   info: {
     title: "Megabyte USSD Agent API",
-    version: "1.0.0",
+    version: "1.1.0",
     description:
-      "API pública para um telefone Android autorizado receber pedidos de activação pagos, executar USSD no SIM Vodacom e devolver o resultado confirmado ao servidor Megabyte. O APK deve usar apenas os endpoints documentados aqui. Nunca inclua PAGAR_API_KEY, PAGAR_SIGNING_SECRET, PAGAR_WEBHOOK_SECRET ou SESSION_SECRET no APK.",
+      "API pública para um APK Android receber pedidos de activação pagos, executar USSD no SIM Vodacom e devolver o resultado ao servidor Megabyte. Este fluxo não exige token, código de emparelhamento ou cabeçalho Authorization. O APK deve usar apenas os endpoints descritos neste documento. As chaves Pagar e SESSION_SECRET nunca devem ser colocadas no APK.",
   },
   servers: [
     {
@@ -13,20 +13,28 @@ export const ussdAgentOpenApi = {
         "Produção na VPS Megabyte. Não use o preview da Replit nem um domínio .replit.dev.",
     },
   ],
+  "x-authentication": "none",
+  "x-client-flow": [
+    "Repetir POST /ussd-agent/deliveries/lease até receber um pedido.",
+    "Executar localmente a ussdSequence no telefone Vodacom.",
+    "Enviar POST /ussd-agent/deliveries/{id}/report com o resultado confirmado.",
+  ],
+  "x-security-warning":
+    "Este modo público foi escolhido pelo proprietário do projecto. Qualquer pessoa que conheça o endereço pode consultar a fila, reservar pedidos e enviar reportes. Não coloque este endereço em aplicações não autorizadas.",
   tags: [
     {
-      name: "Dispositivo",
-      description: "Emparelhamento e consulta dos pedidos atribuídos ao telefone.",
+      name: "Informação",
+      description: "Verificação e documentação da API.",
     },
     {
       name: "Entrega",
-      description: "Reserva, execução local do USSD e confirmação da entrega.",
+      description: "Reserva, execução local do USSD e confirmação.",
     },
   ],
   paths: {
     "/ussd-agent": {
       get: {
-        tags: ["Dispositivo"],
+        tags: ["Informação"],
         summary: "Verificar a API do agente",
         operationId: "getAgentInfo",
         responses: {
@@ -43,7 +51,7 @@ export const ussdAgentOpenApi = {
     },
     "/ussd-agent/openapi.json": {
       get: {
-        tags: ["Dispositivo"],
+        tags: ["Informação"],
         summary: "Obter esta documentação",
         operationId: "getOpenApiDocument",
         responses: {
@@ -58,56 +66,16 @@ export const ussdAgentOpenApi = {
         },
       },
     },
-    "/ussd-agent/pair": {
-      post: {
-        tags: ["Dispositivo"],
-        summary: "Emparelhar o APK com um telefone autorizado",
-        description:
-          "O código de emparelhamento deve ser obtido no painel Megabyte por um administrador autorizado. O token devolvido é apresentado uma única vez e deve ser guardado no armazenamento seguro do Android.",
-        operationId: "pairDevice",
-        requestBody: {
-          required: true,
-          content: {
-            "application/json": {
-              schema: { $ref: "#/components/schemas/PairRequest" },
-              example: {
-                name: "Telefone Vodacom 1",
-                pairingCode: "codigo-gerado-no-painel",
-              },
-            },
-          },
-        },
-        responses: {
-          "201": {
-            description: "Telefone emparelhado.",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/PairResponse" },
-              },
-            },
-          },
-          "401": {
-            description: "Código de emparelhamento inválido.",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/Error" },
-              },
-            },
-          },
-        },
-      },
-    },
     "/ussd-agent/deliveries": {
       get: {
         tags: ["Entrega"],
-        summary: "Listar pedidos atribuídos a este dispositivo",
+        summary: "Listar pedidos deste agente público",
         description:
-          "Devolve os pedidos que já foram atribuídos ao dispositivo autenticado. Para descobrir se existe um pedido novo, use também o endpoint lease.",
-        operationId: "listDeviceDeliveries",
-        security: [{ DeviceBearer: [] }],
+          "Devolve os pedidos que já foram reservados pelo agente público. Não é necessário enviar Authorization.",
+        operationId: "listPublicAgentDeliveries",
         responses: {
           "200": {
-            description: "Pedidos do dispositivo.",
+            description: "Pedidos reservados.",
             content: {
               "application/json": {
                 schema: {
@@ -123,25 +91,16 @@ export const ussdAgentOpenApi = {
               },
             },
           },
-          "401": {
-            description: "Token ausente ou inválido.",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/Error" },
-              },
-            },
-          },
         },
       },
     },
     "/ussd-agent/deliveries/lease": {
       post: {
         tags: ["Entrega"],
-        summary: "Reservar o próximo pedido para execução",
+        summary: "Reservar o próximo pedido",
         description:
-          "Reserva exclusivamente um pedido queued para este dispositivo. A reserva dura 3 minutos; se não houver confirmação, o pedido pode voltar à fila. Cada pedido permite no máximo duas tentativas.",
-        operationId: "leaseNextDelivery",
-        security: [{ DeviceBearer: [] }],
+          "Reserva exclusivamente o próximo pedido queued para este agente público. A reserva dura 3 minutos. Se não houver confirmação, pode voltar à fila; cada pedido permite no máximo duas tentativas.",
+        operationId: "leaseNextPublicDelivery",
         responses: {
           "200": {
             description: "Pedido reservado ou fila vazia.",
@@ -188,31 +147,22 @@ export const ussdAgentOpenApi = {
               },
             },
           },
-          "401": {
-            description: "Token ausente ou inválido.",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/Error" },
-              },
-            },
-          },
         },
       },
     },
     "/ussd-agent/deliveries/{id}/report": {
       post: {
         tags: ["Entrega"],
-        summary: "Reportar o resultado da execução USSD",
+        summary: "Reportar o resultado do envio USSD",
         description:
-          "Só o dispositivo que reservou a entrega pode reportá-la. O estado completed exige uma referência devolvida pela operadora. Se o APK não conseguir confirmar com segurança, use manual_intervention; não reporte sucesso sem confirmação.",
-        operationId: "reportDelivery",
-        security: [{ DeviceBearer: [] }],
+          "Confirma o resultado de uma entrega reservada. Só envie completed depois de a operadora confirmar o envio e devolva a referência recebida. Se a confirmação não for segura, use manual_intervention.",
+        operationId: "reportPublicDelivery",
         parameters: [
           {
             name: "id",
             in: "path",
             required: true,
-            description: "ID da entrega devolvido pelo endpoint lease.",
+            description: "ID devolvido pelo endpoint lease.",
             schema: { type: "string" },
           },
         ],
@@ -267,79 +217,31 @@ export const ussdAgentOpenApi = {
               },
             },
           },
-          "401": {
-            description: "Token ausente ou inválido.",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/Error" },
-              },
-            },
-          },
         },
       },
     },
   },
   components: {
-    securitySchemes: {
-      DeviceBearer: {
-        type: "http",
-        scheme: "bearer",
-        bearerFormat: "device-token",
-        description:
-          "Token devolvido pelo endpoint pair. Guardar no Android Keystore/SecureStore e enviar como Authorization: Bearer <token>.",
-      },
-    },
     schemas: {
       AgentInfo: {
         type: "object",
-        required: ["ok", "service", "pairing", "docs"],
+        required: ["ok", "service", "docs", "authentication"],
         properties: {
           ok: { type: "boolean", example: true },
           service: { type: "string", example: "Net Serviços USSD Agent" },
-          pairing: { type: "string", example: "POST /api/ussd-agent/pair" },
           docs: {
             type: "string",
             example: "/api/ussd-agent/openapi.json",
           },
-        },
-      },
-      PairRequest: {
-        type: "object",
-        required: ["name", "pairingCode"],
-        additionalProperties: false,
-        properties: {
-          name: {
+          authentication: { type: "string", enum: ["none"], example: "none" },
+          lease: {
             type: "string",
-            minLength: 1,
-            maxLength: 64,
-            example: "Telefone Vodacom 1",
+            example: "POST /api/ussd-agent/deliveries/lease",
           },
-          pairingCode: {
+          report: {
             type: "string",
-            minLength: 1,
-            example: "codigo-gerado-no-painel",
+            example: "POST /api/ussd-agent/deliveries/{id}/report",
           },
-        },
-      },
-      PairResponse: {
-        type: "object",
-        required: ["device", "token"],
-        properties: {
-          device: { $ref: "#/components/schemas/Device" },
-          token: {
-            type: "string",
-            description:
-              "Token secreto do dispositivo. Guardar apenas no armazenamento seguro; nunca enviar ao painel ou ao cliente.",
-          },
-        },
-      },
-      Device: {
-        type: "object",
-        required: ["id", "name", "pairedAt"],
-        properties: {
-          id: { type: "string", example: "device_abc123" },
-          name: { type: "string", example: "Telefone Vodacom 1" },
-          pairedAt: { type: "string", format: "date-time" },
         },
       },
       Delivery: {
@@ -370,7 +272,7 @@ export const ussdAgentOpenApi = {
             minItems: 1,
             items: { type: "string" },
             description:
-              "Passos ordenados para o módulo Android executar. O primeiro passo é o código de discagem USSD; os restantes representam respostas/opções do menu. A sequência real da Vodacom deve ser validada antes de produção.",
+              "Passos ordenados para o módulo Android executar. O primeiro passo é o código USSD; os restantes são opções/respostas do menu. A sequência real da Vodacom deve ser validada antes de produção.",
             example: [
               "*111#",
               "Escolher Internet",
@@ -384,7 +286,7 @@ export const ussdAgentOpenApi = {
           },
           attempts: { type: "integer", minimum: 0, example: 1 },
           maxAttempts: { type: "integer", minimum: 1, example: 2 },
-          deviceId: { type: "string", example: "device_abc123" },
+          deviceId: { type: "string", example: "public-agent" },
           leaseExpiresAt: { type: "string", format: "date-time" },
           confirmationReference: { type: "string", example: "CONF-20260827-12345" },
           failureReason: { type: "string" },
@@ -395,7 +297,7 @@ export const ussdAgentOpenApi = {
         type: "string",
         enum: ["queued", "leased", "manual_intervention", "completed", "failed"],
         description:
-          "queued aguarda um telefone; leased foi reservado; manual_intervention precisa de intervenção; completed foi confirmado; failed falhou.",
+          "queued aguarda execução; leased foi reservado; manual_intervention precisa de intervenção; completed foi confirmado; failed falhou.",
       },
       DeliveryReport: {
         oneOf: [
@@ -430,7 +332,7 @@ export const ussdAgentOpenApi = {
         type: "object",
         required: ["error"],
         properties: {
-          error: { type: "string", example: "Dispositivo não autorizado." },
+          error: { type: "string", example: "Entrega não encontrada." },
         },
       },
     },
