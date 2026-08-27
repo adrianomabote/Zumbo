@@ -1,0 +1,153 @@
+:root {
+  color: #1c1c1e;
+  background: #f7f7f9;
+  font-family: Inter, Arial, sans-serif;
+  line-height: 1.6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.seo-header {
+  align-items: center;
+  background: #fff;
+  border-bottom: 1px solid #e5e5ea;
+  display: flex;
+  justify-content: space-between;
+  padding: 16px max(20px, calc((100% - 1040px) / 2));
+}
+
+.seo-brand {
+  align-items: center;
+  color: #1c1c1e;
+  display: inline-flex;
+  font-size: 20px;
+  font-weight: 800;
+  gap: 10px;
+  text-decoration: none;
+}
+
+.seo-brand-mark {
+  align-items: center;
+  background: #cc0000;
+  border-radius: 50%;
+  color: #fff;
+  display: inline-flex;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+
+.seo-header-link {
+  color: #cc0000;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.seo-main {
+  margin: 0 auto;
+  max-width: 1040px;
+  padding: 56px 20px 72px;
+}
+
+.seo-eyebrow {
+  color: #cc0000;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  margin: 0 0 12px;
+  text-transform: uppercase;
+}
+
+h1 {
+  font-size: clamp(32px, 5vw, 52px);
+  line-height: 1.08;
+  margin: 0;
+  max-width: 760px;
+}
+
+h2 {
+  font-size: 26px;
+  line-height: 1.2;
+  margin: 40px 0 12px;
+}
+
+p,
+li {
+  color: #5b5b61;
+  font-size: 17px;
+}
+
+.seo-lead {
+  font-size: 20px;
+  margin: 20px 0 28px;
+  max-width: 760px;
+}
+
+.seo-cta {
+  background: #cc0000;
+  border-radius: 8px;
+  color: #fff;
+  display: inline-block;
+  font-weight: 800;
+  padding: 13px 22px;
+  text-decoration: none;
+}
+
+.seo-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0;
+}
+
+.seo-card {
+  background: #fff;
+  border: 1px solid #e5e5ea;
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.seo-card strong {
+  color: #1c1c1e;
+  display: block;
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+
+.seo-card span {
+  color: #5b5b61;
+}
+
+.seo-footer {
+  border-top: 1px solid #e5e5ea;
+  color: #76767c;
+  font-size: 14px;
+  padding: 22px 20px;
+  text-align: center;
+}
+
+@media (max-width: 560px) {
+  .seo-header {
+    padding: 13px 16px;
+  }
+
+  .seo-brand {
+    font-size: 18px;
+  }
+
+  .seo-header-link {
+    font-size: 14px;
+  }
+
+  .seo-main {
+    padding: 40px 16px 56px;
+  }
+}
