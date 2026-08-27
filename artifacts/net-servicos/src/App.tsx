@@ -17,6 +17,9 @@ function App() {
     }
 
     let deferredPrompt: BeforeInstallPromptEvent | null = null;
+    const isStandalone = () =>
+      window.matchMedia?.("(display-mode: standalone)").matches ||
+      (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
     const postToStorefront = (message: Record<string, string>) => {
       storefrontRef.current?.contentWindow?.postMessage(message, window.location.origin);
     };
@@ -59,7 +62,12 @@ function App() {
     };
 
     const storefrontLoaded = () => {
-      if (deferredPrompt) postToStorefront({ type: "pwa-install-available" });
+      // Some Chrome versions do not emit beforeinstallprompt on every visit,
+      // even when the site is installable. The storefront has a manual-help
+      // fallback, so always advertise the in-page install banner here.
+      if (!isStandalone()) {
+        postToStorefront({ type: "pwa-install-available" });
+      }
     };
 
     const serviceWorkerUrl = new URL(

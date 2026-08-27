@@ -2712,7 +2712,13 @@ function closeDrawer() { document.getElementById('drawer').classList.remove('ope
 const _pwaBanner = document.getElementById('pwa-banner')
 const _pwaKey = 'pwa-dismissed'
 function showPwaInstallBanner() {
-  if (_pwaBanner && !sessionStorage.getItem(_pwaKey)) _pwaBanner.classList.add('show')
+  const standalone = window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true
+  if (_pwaBanner && !standalone && !sessionStorage.getItem(_pwaKey)) _pwaBanner.classList.add('show')
+}
+function showPwaInstallHelp() {
+  const hint = _pwaBanner?.querySelector('.pwa-banner-text span')
+  if (hint) hint.textContent = 'Abre o menu ⋮ e escolhe “Instalar app”'
+  showPwaInstallBanner()
 }
 function hidePwaInstallBanner() {
   _pwaBanner?.classList.remove('show')
@@ -2722,6 +2728,7 @@ window.addEventListener('message', event => {
   const type = event.data?.type
   if (type === 'pwa-install-available') showPwaInstallBanner()
   if (type === 'pwa-installed') hidePwaInstallBanner()
+  if (type === 'pwa-install-unavailable') showPwaInstallHelp()
   if (type === 'pwa-install-result') {
     hidePwaInstallBanner()
     if (event.data.outcome === 'dismissed') sessionStorage.removeItem(_pwaKey)
