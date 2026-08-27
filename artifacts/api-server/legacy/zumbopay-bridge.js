@@ -2129,7 +2129,7 @@ ${allListHtml}
     <div class="sh-state">
       <div class="res-icon ok">✓</div>
       <div class="res-t">Pedido recebido!</div>
-      <p class="res-s">Pagamento confirmado. O seu pacote será activado em <strong style="color:#cc0000">5–15 minutos</strong>.</p>
+      <p class="res-s">Pagamento confirmado. O seu pacote será activado em <strong style="color:#cc0000">1–5 minutos</strong>.</p>
       <div class="res-box"><div class="res-box-l">Pacote encomendado</div><div class="res-box-v" id="sh-ok-pkg"></div></div>
       <button class="res-btn" onclick="closeSheet()">Comprar outro pacote</button>
     </div>
@@ -2154,7 +2154,7 @@ ${allListHtml}
       <div class="res-icon ok">✓</div>
       <span class="credit-badge"><img src="/static/coins.png" style="width:14px;height:14px;vertical-align:middle;margin-right:4px" alt="">Pago com Crédito</span>
       <div class="res-t">Pedido recebido!</div>
-      <p class="res-s">Crédito debitado. O seu pacote será activado em <strong style="color:#cc0000">5–15 minutos</strong>.</p>
+      <p class="res-s">Crédito debitado. O seu pacote será activado em <strong style="color:#cc0000">1–5 minutos</strong>.</p>
       <div class="res-box"><div class="res-box-l">Pacote encomendado</div><div class="res-box-v" id="sh-ok-pkg-credit"></div></div>
       <button class="res-btn" onclick="closeSheet()">Comprar outro pacote</button>
     </div>
