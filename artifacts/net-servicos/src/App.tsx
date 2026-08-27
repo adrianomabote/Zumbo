@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -7,6 +7,10 @@ type BeforeInstallPromptEvent = Event & {
 
 function App() {
   const storefrontRef = useRef<HTMLIFrameElement>(null);
+  const deferredPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
+  const [installVisible, setInstallVisible] = useState(false);
+  const [installHelp, setInstallHelp] = useState(false);
+  const installDismissKey = "pwa-install-notice-dismissed-v2";
 
   useEffect(() => {
     // The legacy admin panel is served by the API bridge. Redirect friendly
@@ -16,58 +20,29 @@ function App() {
       window.location.replace(target);
     }
 
-    let deferredPrompt: BeforeInstallPromptEvent | null = null;
-    const isStandalone = () =>
-      window.matchMedia?.("(display-mode: standalone)").matches ||
-      (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
-    const postToStorefront = (message: Record<string, string>) => {
-      storefrontRef.current?.contentWindow?.postMessage(message, window.location.origin);
+    const isStandalone = () => {
+      const displayMode = window.matchMedia?.("(display-mode: standalone)");
+      return (
+        displayMode?.matches === true ||
+        (window.navigator as Navigator & { standalone?: boolean }).standalone === true
+      );
+    };
+    const showInstallNotice = () => {
+      if (!isStandalone() && !sessionStorage.getItem(installDismissKey)) {
+        setInstallVisible(true);
+      }
     };
 
     const onBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
-      deferredPrompt = event as BeforeInstallPromptEvent;
-      postToStorefront({ type: "pwa-install-available" });
-    };
-
-    const onStorefrontMessage = async (event: MessageEvent) => {
-      const storefrontWindow = storefrontRef.current?.contentWindow;
-      if (
-        event.origin !== window.location.origin ||
-        (storefrontWindow && event.source !== storefrontWindow)
-      ) {
-        return;
-      }
-
-      if (event.data?.type !== "pwa-install-request") return;
-      if (!deferredPrompt) {
-        postToStorefront({ type: "pwa-install-unavailable" });
-        return;
-      }
-
-      const prompt = deferredPrompt;
-      deferredPrompt = null;
-      try {
-        await prompt.prompt();
-        const choice = await prompt.userChoice;
-        postToStorefront({ type: "pwa-install-result", outcome: choice.outcome });
-      } catch {
-        postToStorefront({ type: "pwa-install-result", outcome: "dismissed" });
-      }
+      deferredPromptRef.current = event as BeforeInstallPromptEvent;
+      setInstallHelp(false);
+      showInstallNotice();
     };
 
     const onAppInstalled = () => {
-      deferredPrompt = null;
-      postToStorefront({ type: "pwa-installed" });
-    };
-
-    const storefrontLoaded = () => {
-      // Some Chrome versions do not emit beforeinstallprompt on every visit,
-      // even when the site is installable. The storefront has a manual-help
-      // fallback, so always advertise the in-page install banner here.
-      if (!isStandalone()) {
-        postToStorefront({ type: "pwa-install-available" });
-      }
+      deferredPromptRef.current = null;
+      setInstallVisible(false);
     };
 
     const serviceWorkerUrl = new URL(
@@ -77,9 +52,8 @@ function App() {
     const serviceWorkerScope = new URL(import.meta.env.BASE_URL, window.location.href);
 
     window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
-    window.addEventListener("message", onStorefrontMessage);
     window.addEventListener("appinstalled", onAppInstalled);
-    storefrontRef.current?.addEventListener("load", storefrontLoaded);
+    const noticeTimer = window.setTimeout(showInstallNotice, 700);
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker
         .register(serviceWorkerUrl, { scope: serviceWorkerScope.pathname })
@@ -88,28 +62,81 @@ function App() {
 
     return () => {
       window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
-      window.removeEventListener("message", onStorefrontMessage);
       window.removeEventListener("appinstalled", onAppInstalled);
-      storefrontRef.current?.removeEventListener("load", storefrontLoaded);
+      window.clearTimeout(noticeTimer);
     };
   }, []);
+
+  const installApp = async () => {
+    const prompt = deferredPromptRef.current;
+    if (!prompt) {
+      setInstallHelp(true);
+      setInstallVisible(true);
+      return;
+    }
+
+    deferredPromptRef.current = null;
+    try {
+      await prompt.prompt();
+      const choice = await prompt.userChoice;
+      if (choice.outcome === "accepted") {
+        setInstallVisible(false);
+      } else {
+        setInstallVisible(false);
+      }
+    } catch {
+      setInstallHelp(true);
+      setInstallVisible(true);
+    }
+  };
+
+  const dismissInstallNotice = () => {
+    sessionStorage.setItem(installDismissKey, "1");
+    setInstallVisible(false);
+  };
 
   if (window.location.pathname.startsWith("/admin")) {
     return null;
   }
 
   return (
-    <iframe
-      title="Megabyte"
-      ref={storefrontRef}
-      src={`${import.meta.env.BASE_URL}api/legacy/megas`}
-      style={{
-        border: 0,
-        display: "block",
-        height: "100vh",
-        width: "100vw",
-      }}
-    />
+    <>
+      <iframe
+        title="Megabyte"
+        ref={storefrontRef}
+        src={`${import.meta.env.BASE_URL}api/legacy/megas`}
+        style={{
+          border: 0,
+          display: "block",
+          height: "100vh",
+          width: "100vw",
+        }}
+      />
+      {installVisible && (
+        <div className="pwa-install-notice" role="region" aria-label="Instalar aplicação Megabyte">
+          <div className="pwa-install-notice-icon" aria-hidden="true">M</div>
+          <div className="pwa-install-notice-copy">
+            <strong>Instala a app Megabyte</strong>
+            <span>
+              {installHelp
+                ? "Abre o menu ⋮ e escolhe “Instalar app”"
+                : "Compra megas e paga com facilidade no teu telemóvel"}
+            </span>
+          </div>
+          <button type="button" className="pwa-install-notice-button" onClick={() => void installApp()}>
+            Instalar
+          </button>
+          <button
+            type="button"
+            className="pwa-install-notice-close"
+            onClick={dismissInstallNotice}
+            aria-label="Fechar aviso de instalação"
+          >
+            ×
+          </button>
+        </div>
+      )}
+    </>
   );
 }
 

@@ -1402,11 +1402,19 @@ function megasPage() {
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <title>Megas — Megabyte</title>
 <link rel="canonical" href="${SITE_URL}/megas">
-<meta property="og:title" content="Megabyte — Pacotes de Internet">
-<meta property="og:description" content="Ofertas de internet Vodacom com pagamento M-Pesa. Activa o teu pacote em segundos.">
+<meta property="og:site_name" content="Megabyte">
+<meta property="og:title" content="Megabyte — Internet móvel simples em Moçambique">
+<meta property="og:description" content="Compra pacotes de internet Vodacom em segundos. Paga com M-Pesa ou e-Mola e recebe a activação no teu número.">
 <meta property="og:url" content="${SITE_URL}/megas">
-<meta property="og:image" content="${SITE_URL}/static/icon-512.png">
+<meta property="og:locale" content="pt_MZ">
+<meta property="og:image" content="${SITE_URL}/api/legacy/static/icon-512.png?v=5">
+<meta property="og:image:alt" content="Logótipo Megabyte">
 <meta property="og:type" content="website">
+<meta name="description" content="Compra pacotes de internet Vodacom em segundos. Paga com M-Pesa ou e-Mola e recebe a activação no teu número.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Megabyte — Internet móvel simples em Moçambique">
+<meta name="twitter:description" content="Compra pacotes de internet Vodacom em segundos. Paga com M-Pesa ou e-Mola e recebe a activação no teu número.">
+<meta name="twitter:image" content="${SITE_URL}/api/legacy/static/icon-512.png?v=5">
 <link rel="icon" href="/static/icon-192.png?v=4" type="image/png" sizes="192x192">
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#cc0000">
