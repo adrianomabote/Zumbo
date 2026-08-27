@@ -1403,17 +1403,17 @@ function megasPage() {
 <title>Megas — Megabyte</title>
 <link rel="canonical" href="${SITE_URL}/megas">
 <meta property="og:site_name" content="Megabyte">
-<meta property="og:title" content="Megabyte">
-<meta property="og:description" content="Internet móvel acessível em Moçambique. Consulta pacotes desde 20 MT, incluindo 1 GB por 25 MT, e paga com M-Pesa ou e-Mola.">
+<meta property="og:title" content="Megabyte — Internet móvel simples e acessível">
+<meta property="og:description" content="Aproveite os nossos pacotes de megas a partir de 20 MT, incluindo 1 GB por apenas 25 MT. Compre facilmente e receba os megas diretamente no seu número.">
 <meta property="og:url" content="${SITE_URL}/megas">
 <meta property="og:locale" content="pt_MZ">
 <meta property="og:image" content="${SITE_URL}/api/legacy/static/icon-512.png?v=5">
 <meta property="og:image:alt" content="Logótipo Megabyte">
 <meta property="og:type" content="website">
-<meta name="description" content="Internet móvel acessível em Moçambique. Consulta pacotes desde 20 MT, incluindo 1 GB por 25 MT, e paga com M-Pesa ou e-Mola.">
+<meta name="description" content="Aproveite os nossos pacotes de megas a partir de 20 MT, incluindo 1 GB por apenas 25 MT. Compre facilmente e receba os megas diretamente no seu número.">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Megabyte">
-<meta name="twitter:description" content="Internet móvel acessível em Moçambique. Consulta pacotes desde 20 MT, incluindo 1 GB por 25 MT, e paga com M-Pesa ou e-Mola.">
+<meta name="twitter:title" content="Megabyte — Internet móvel simples e acessível">
+<meta name="twitter:description" content="Aproveite os nossos pacotes de megas a partir de 20 MT, incluindo 1 GB por apenas 25 MT. Compre facilmente e receba os megas diretamente no seu número.">
 <meta name="twitter:image" content="${SITE_URL}/api/legacy/static/icon-512.png?v=5">
 <link rel="icon" href="/static/icon-192.png?v=4" type="image/png" sizes="192x192">
 <link rel="manifest" href="/manifest.json">
