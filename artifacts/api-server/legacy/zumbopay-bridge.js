@@ -1400,10 +1400,10 @@ function megasPage() {
   return `<!DOCTYPE html>
 <html lang="pt"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
-<title>Megas — Megabyte</title>
+<title>Megabyte — Compre Megas de Forma Rápida e Fácil</title>
 <link rel="canonical" href="${SITE_URL}/megas">
 <meta property="og:site_name" content="Megabyte">
-<meta property="og:title" content="Megabyte — Internet móvel simples e acessível">
+<meta property="og:title" content="Megabyte — Compre Megas de Forma Rápida e Fácil">
 <meta property="og:description" content="Aproveite os nossos pacotes de megas a partir de 20 MT, incluindo 1 GB por apenas 25 MT. Compre facilmente para o seu próprio número ou para outro número à sua escolha.">
 <meta property="og:url" content="${SITE_URL}/megas">
 <meta property="og:locale" content="pt_MZ">
@@ -1412,7 +1412,7 @@ function megasPage() {
 <meta property="og:type" content="website">
 <meta name="description" content="Aproveite os nossos pacotes de megas a partir de 20 MT, incluindo 1 GB por apenas 25 MT. Compre facilmente para o seu próprio número ou para outro número à sua escolha.">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Megabyte — Internet móvel simples e acessível">
+<meta name="twitter:title" content="Megabyte — Compre Megas de Forma Rápida e Fácil">
 <meta name="twitter:description" content="Aproveite os nossos pacotes de megas a partir de 20 MT, incluindo 1 GB por apenas 25 MT. Compre facilmente para o seu próprio número ou para outro número à sua escolha.">
 <meta name="twitter:image" content="${SITE_URL}/api/legacy/static/icon-512.png?v=5">
 <link rel="icon" href="/static/icon-192.png?v=4" type="image/png" sizes="192x192">
