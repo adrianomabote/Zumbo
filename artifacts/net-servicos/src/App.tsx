@@ -102,7 +102,7 @@ function App() {
   return (
     <>
       <iframe
-        title="Megabyte"
+        title="Loja Megabyte — comprar pacotes de internet Vodacom"
         ref={storefrontRef}
         src={`${import.meta.env.BASE_URL}api/legacy/megas`}
         style={{

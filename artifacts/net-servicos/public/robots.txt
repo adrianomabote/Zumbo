@@ -1,2 +1,7 @@
 User-agent: *
 Allow: /
+Disallow: /admin
+Disallow: /api/pagar
+Disallow: /api/ussd-agent
+
+Sitemap: https://megabyte.live/sitemap.xml
