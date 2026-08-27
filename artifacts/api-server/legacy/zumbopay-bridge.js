@@ -1403,17 +1403,17 @@ function megasPage() {
 <title>Megas — Megabyte</title>
 <link rel="canonical" href="${SITE_URL}/megas">
 <meta property="og:site_name" content="Megabyte">
-<meta property="og:title" content="Megabyte — Internet móvel simples em Moçambique">
-<meta property="og:description" content="Compra pacotes de internet Vodacom em segundos. Paga com M-Pesa ou e-Mola e recebe a activação no teu número.">
+<meta property="og:title" content="Megabyte — 1 GB por apenas 25 MT">
+<meta property="og:description" content="Internet barata em Moçambique: compra 1 GB por apenas 25 MT. Paga com M-Pesa ou e-Mola e activa os teus megas em poucos segundos.">
 <meta property="og:url" content="${SITE_URL}/megas">
 <meta property="og:locale" content="pt_MZ">
 <meta property="og:image" content="${SITE_URL}/api/legacy/static/icon-512.png?v=5">
 <meta property="og:image:alt" content="Logótipo Megabyte">
 <meta property="og:type" content="website">
-<meta name="description" content="Compra pacotes de internet Vodacom em segundos. Paga com M-Pesa ou e-Mola e recebe a activação no teu número.">
+<meta name="description" content="Internet barata em Moçambique: compra 1 GB por apenas 25 MT. Paga com M-Pesa ou e-Mola e activa os teus megas em poucos segundos.">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Megabyte — Internet móvel simples em Moçambique">
-<meta name="twitter:description" content="Compra pacotes de internet Vodacom em segundos. Paga com M-Pesa ou e-Mola e recebe a activação no teu número.">
+<meta name="twitter:title" content="Megabyte — 1 GB por apenas 25 MT">
+<meta name="twitter:description" content="Internet barata em Moçambique: compra 1 GB por apenas 25 MT. Paga com M-Pesa ou e-Mola e activa os teus megas em poucos segundos.">
 <meta name="twitter:image" content="${SITE_URL}/api/legacy/static/icon-512.png?v=5">
 <link rel="icon" href="/static/icon-192.png?v=4" type="image/png" sizes="192x192">
 <link rel="manifest" href="/manifest.json">
