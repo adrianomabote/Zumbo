@@ -9,6 +9,7 @@ import {
   reportDelivery,
   retryDelivery,
 } from "../services/delivery-queue";
+import { ussdAgentOpenApi } from "./ussd-agent-openapi";
 
 const router: IRouter = Router();
 
@@ -22,7 +23,15 @@ router.get("/ussd-agent", (_req, res) => {
     ok: true,
     service: "Net Serviços USSD Agent",
     pairing: "POST /api/ussd-agent/pair",
+    docs: "/api/ussd-agent/openapi.json",
   });
+});
+
+router.get("/ussd-agent/openapi.json", (_req, res) => {
+  return res
+    .type("application/json")
+    .set("Cache-Control", "public, max-age=300")
+    .json(ussdAgentOpenApi);
 });
 
 async function requireDevice(request: Request) {
