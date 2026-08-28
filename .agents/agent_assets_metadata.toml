@@ -22,3 +22,17 @@ mtime_ms = 1787903820192
 storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:eb234228-0113-4818-9eeb-8f9a84e672de/c16ab44f-be11-4d51-a3f3-f71762896a2d/1619beaa-8d9c-4f0d-b83e-26593808d2a3"
 storage_version_token = "1787903835828822"
 content_type = "image/png"
+
+[[outputs]]
+id = "LuwGcoxEHrgHCZvbItiXE"
+uri = "file://attached_assets/generated_images/megabyte-facebook-profile-black.png"
+type = "image"
+title = "Foto de perfil Megabyte — fundo preto"
+description = "Imagem quadrada em PNG com fundo preto, ícone vermelho da Vodacom e apenas o nome Megabyte nas cores da marca."
+logical_id = "b59aaf97-6b04-420a-8243-d4c13c9977af"
+content_hash = "sha256:2c4be6f0cf9d35711082f73fed49a9d0dca53efa4c6a05bb0de4852613cfd3f0"
+size = 129531
+mtime_ms = 1787903954947
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:eb234228-0113-4818-9eeb-8f9a84e672de/b59aaf97-6b04-420a-8243-d4c13c9977af/29259f0a-7b0a-40c8-a3cd-43f84b8d2d15"
+storage_version_token = "1787903966245043"
+content_type = "image/png"
