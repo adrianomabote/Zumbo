@@ -130,6 +130,69 @@ const SEO_PAGES: Record<string, SeoPage> = {
     ],
     cta: "Começar uma compra",
   },
+  "/comprar-megas-online": {
+    title: "Comprar Megas Online em Moçambique | Megabyte",
+    description:
+      "Compre megas online em Moçambique na Megabyte. Escolha um pacote de internet Vodacom, indique o número e pague com M-Pesa ou e-Mola.",
+    canonical: "https://megabyte.live/comprar-megas-online/",
+    eyebrow: "Megabyte Moçambique",
+    heading: "Comprar megas online em Moçambique",
+    lead:
+      "Encontre uma forma simples de comprar pacotes de internet Vodacom online para o seu número ou para outra pessoa.",
+    sectionHeading: "Como comprar megas online",
+    steps: [
+      "Abra a loja Megabyte e veja os pacotes de internet disponíveis.",
+      "Escolha a quantidade de megas e indique o número Vodacom beneficiário.",
+      "Confirme os dados e pague com M-Pesa ou e-Mola.",
+    ],
+    paragraphs: [
+      "Pode escolher entre pacotes diários, semanais, mensais e Diamante conforme a oferta disponível no catálogo.",
+      "O preço e a quantidade de dados são apresentados antes de confirmar a compra.",
+    ],
+    cta: "Comprar agora",
+  },
+  "/comprar-megas-para-outra-pessoa": {
+    title: "Comprar Megas para Outra Pessoa | Megabyte",
+    description:
+      "Quer oferecer megas? Compre um pacote de internet Vodacom para outra pessoa na Megabyte e pague com M-Pesa ou e-Mola.",
+    canonical: "https://megabyte.live/comprar-megas-para-outra-pessoa/",
+    eyebrow: "Megabyte Moçambique",
+    heading: "Comprar megas para outra pessoa",
+    lead:
+      "Envie um pacote de internet Vodacom para um familiar, amigo ou colega indicando o número que deve receber os megas.",
+    sectionHeading: "Enviar megas para outro número",
+    steps: [
+      "Escolha o pacote de internet que pretende oferecer.",
+      "Seleccione a opção para outro destinatário e escreva o número Vodacom.",
+      "Pague com M-Pesa ou e-Mola e confirme o número antes de concluir.",
+    ],
+    paragraphs: [
+      "A Megabyte permite comprar megas para outro número sem confundir o pagador com o beneficiário.",
+      "Para comprar para várias pessoas, repita a compra individualmente para cada número do grupo.",
+    ],
+    cta: "Começar uma compra",
+  },
+  "/pagar-megas-mpesa-emola": {
+    title: "Pagar Megas com M-Pesa ou e-Mola | Megabyte",
+    description:
+      "Compre pacotes de megas Vodacom em Moçambique e pague com M-Pesa ou e-Mola através da loja Megabyte.",
+    canonical: "https://megabyte.live/pagar-megas-mpesa-emola/",
+    eyebrow: "Pagamentos móveis",
+    heading: "Pagar megas com M-Pesa ou e-Mola",
+    lead:
+      "Escolha um pacote de internet Vodacom e utilize o método de pagamento disponível para concluir a compra.",
+    sectionHeading: "Pagamento de pacotes de internet",
+    steps: [
+      "Escolha um pacote diário, semanal, mensal ou Diamante.",
+      "Informe o número Vodacom que deve receber os megas.",
+      "Seleccione M-Pesa ou e-Mola e siga as instruções de pagamento.",
+    ],
+    paragraphs: [
+      "Verifique sempre o pacote, o valor e o número beneficiário antes de confirmar o pagamento.",
+      "A activação é encaminhada depois da confirmação do pagamento.",
+    ],
+    cta: "Comprar agora",
+  },
 };
 
 function normalizedPathname(pathname: string) {

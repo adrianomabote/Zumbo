@@ -101,6 +101,82 @@ const PUBLIC_CATEGORY_PAGES = {
   },
 }
 const PUBLIC_CATEGORY_PATHS = Object.keys(PUBLIC_CATEGORY_PAGES)
+const PUBLIC_INFO_PAGES = {
+  '/comprar-megas-online': {
+    title: 'Comprar Megas Online em Moçambique | Megabyte',
+    description: 'Compre megas online em Moçambique na Megabyte. Escolha um pacote de internet Vodacom, indique o número e pague com M-Pesa ou e-Mola.',
+    heading: 'Comprar megas online em Moçambique',
+    intro: 'Encontre uma forma simples de comprar pacotes de internet Vodacom online para o seu número ou para outra pessoa.',
+    sections: [
+      {
+        heading: 'Como comprar megas online',
+        steps: [
+          'Abra a loja Megabyte e veja os pacotes de internet disponíveis.',
+          'Escolha a quantidade de megas e indique o número Vodacom beneficiário.',
+          'Confirme os dados e pague com M-Pesa ou e-Mola.',
+        ],
+      },
+      {
+        heading: 'Pacotes para diferentes necessidades',
+        paragraphs: [
+          'Pode escolher entre pacotes diários, semanais, mensais e Diamante conforme a oferta disponível no catálogo.',
+          'O preço e a quantidade de dados são apresentados antes de confirmar a compra.',
+        ],
+      },
+    ],
+  },
+  '/comprar-megas-para-outra-pessoa': {
+    title: 'Comprar Megas para Outra Pessoa | Megabyte',
+    description: 'Quer oferecer megas? Compre um pacote de internet Vodacom para outra pessoa na Megabyte e pague com M-Pesa ou e-Mola.',
+    heading: 'Comprar megas para outra pessoa',
+    intro: 'Envie um pacote de internet Vodacom para um familiar, amigo ou colega indicando o número que deve receber os megas.',
+    sections: [
+      {
+        heading: 'Enviar megas para outro número',
+        steps: [
+          'Escolha o pacote de internet que pretende oferecer.',
+          'Seleccione a opção para outro destinatário e escreva o número Vodacom.',
+          'Pague com M-Pesa ou e-Mola e confirme o número antes de concluir.',
+        ],
+      },
+      {
+        heading: 'Para família, amigos e colegas',
+        paragraphs: [
+          'A Megabyte permite comprar megas para outro número sem confundir o pagador com o beneficiário.',
+          'Para comprar para várias pessoas, repita a compra individualmente para cada número do grupo.',
+        ],
+      },
+    ],
+  },
+  '/pagar-megas-mpesa-emola': {
+    title: 'Pagar Megas com M-Pesa ou e-Mola | Megabyte',
+    description: 'Compre pacotes de megas Vodacom em Moçambique e pague com M-Pesa ou e-Mola através da loja Megabyte.',
+    heading: 'Pagar megas com M-Pesa ou e-Mola',
+    intro: 'Escolha um pacote de internet Vodacom e utilize o método de pagamento disponível para concluir a compra.',
+    sections: [
+      {
+        heading: 'Pagamento de pacotes de internet',
+        steps: [
+          'Escolha um pacote diário, semanal, mensal ou Diamante.',
+          'Informe o número Vodacom que deve receber os megas.',
+          'Seleccione M-Pesa ou e-Mola e siga as instruções de pagamento.',
+        ],
+      },
+      {
+        heading: 'Confirme antes de pagar',
+        paragraphs: [
+          'Verifique sempre o pacote, o valor e o número beneficiário antes de confirmar o pagamento.',
+          'A activação é encaminhada depois da confirmação do pagamento.',
+        ],
+      },
+    ],
+  },
+}
+const PUBLIC_INFO_PATHS = Object.keys(PUBLIC_INFO_PAGES)
+const PUBLIC_INFO_PATHS_WITH_SLASH = [
+  ...PUBLIC_INFO_PATHS,
+  ...PUBLIC_INFO_PATHS.map(path => `${path}/`),
+]
 
 // ── Armazenamento local persistente na VPS ─────────────────────────────────────
 async function dbInit() {
@@ -663,7 +739,7 @@ async function router(req, res) {
   const readOnlyPath = [
     '/', '/megas', '/ping', '/favicon.ico', '/manifest.json', '/sw.js',
     '/api/config', '/api/bundles', '/api/auth/me', '/api/auth/logout',
-  ].includes(path) || staticPath || PUBLIC_CATEGORY_PATHS.includes(path)
+  ].includes(path) || staticPath || PUBLIC_CATEGORY_PATHS.includes(path) || PUBLIC_INFO_PATHS_WITH_SLASH.includes(path)
   const accountSetupPath = ['/api/auth/register', '/api/auth/login'].includes(path)
   const adminLoginPath = path === '/admin/office'
   if (!isLiveConfiguration && !(method === 'GET' && readOnlyPath) && !accountSetupPath && !adminLoginPath) {
@@ -676,6 +752,9 @@ async function router(req, res) {
   if (method === 'GET' && path === '/')         { res.writeHead(302,{'Location':'/megas'}); return res.end() }
   if (method === 'GET' && PUBLIC_CATEGORY_PAGES[path]) {
     return html(res, megasPage(PUBLIC_CATEGORY_PAGES[path]))
+  }
+  if (method === 'GET' && PUBLIC_INFO_PAGES[path.replace(/\/+$/, '')]) {
+    return html(res, seoInfoPage(PUBLIC_INFO_PAGES[path.replace(/\/+$/, '')]))
   }
   // ── Ficheiros estáticos (servidos de ./public/) ───────────────────────────
   const STATIC_MAP = {
@@ -1317,6 +1396,94 @@ NOTAS
 
 
 // ── PÁGINA: Megas ─────────────────────────────────────────────────────────────
+function seoInfoPage(pageConfig) {
+  const pagePath = Object.entries(PUBLIC_INFO_PAGES).find(([, value]) => value === pageConfig)?.[0] || '/'
+  const relatedLinks = [
+    ...Object.entries(PUBLIC_CATEGORY_PAGES),
+    ...Object.entries(PUBLIC_INFO_PAGES),
+  ]
+    .filter(([url]) => url !== pagePath)
+    .map(([url, page]) => `<a href="${url}">${escapeHtml(page.heading)}</a>`)
+    .join(' · ')
+  const sections = pageConfig.sections.map(section => `
+    <section>
+      <h2>${escapeHtml(section.heading)}</h2>
+      ${section.paragraphs?.map(paragraph => `<p>${escapeHtml(paragraph)}</p>`).join('') || ''}
+      ${section.steps ? `<ol>${section.steps.map(step => `<li>${escapeHtml(step)}</li>`).join('')}</ol>` : ''}
+    </section>
+  `).join('')
+
+  return `<!doctype html>
+<html lang="pt-MZ">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${escapeHtml(pageConfig.title)}</title>
+    <meta name="description" content="${escapeHtml(pageConfig.description)}">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="${SITE_URL}${pagePath}/">
+    <meta property="og:site_name" content="Megabyte">
+    <meta property="og:title" content="${escapeHtml(pageConfig.title)}">
+    <meta property="og:description" content="${escapeHtml(pageConfig.description)}">
+    <meta property="og:url" content="${SITE_URL}${pagePath}/">
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="pt_MZ">
+    <meta property="og:image" content="${SITE_URL}/api/legacy/static/icon-512.png?v=5">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="${escapeHtml(pageConfig.title)}">
+    <meta name="twitter:description" content="${escapeHtml(pageConfig.description)}">
+    <meta name="twitter:image" content="${SITE_URL}/api/legacy/static/icon-512.png?v=5">
+    <script type="application/ld+json">${JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'WebPage',
+      name: pageConfig.heading,
+      description: pageConfig.description,
+      url: `${SITE_URL}${pagePath}/`,
+      inLanguage: 'pt-MZ',
+      isPartOf: { '@id': `${SITE_URL}/#website` },
+    })}</script>
+    <style>
+      :root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#17171b;background:#f6f6f8}
+      *{box-sizing:border-box}
+      body{margin:0}
+      .seo-header{display:flex;align-items:center;justify-content:space-between;max-width:980px;margin:0 auto;padding:22px 24px}
+      .seo-brand{color:#cc0000;font-weight:800;text-decoration:none;font-size:20px}
+      .seo-header-link{color:#cc0000;font-weight:700;text-decoration:none}
+      .seo-main{max-width:820px;margin:0 auto;padding:56px 24px 72px}
+      .seo-eyebrow{color:#cc0000;font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+      h1{font-size:clamp(32px,6vw,56px);line-height:1.04;letter-spacing:-.04em;margin:12px 0 18px}
+      .seo-lead{font-size:20px;line-height:1.55;color:#50505a;max-width:680px}
+      .seo-cta{display:inline-block;margin:20px 0 30px;padding:13px 20px;border-radius:10px;background:#cc0000;color:#fff;font-weight:800;text-decoration:none}
+      section{padding:26px 0;border-top:1px solid #dedee5}
+      h2{font-size:24px;margin:0 0 14px}
+      p,li{font-size:17px;line-height:1.65;color:#4f4f58}
+      li{margin:8px 0}
+      .seo-related{padding-top:30px;border-top:1px solid #dedee5;line-height:2}
+      .seo-related a{color:#cc0000;font-weight:700;text-decoration:none}
+      .seo-footer{max-width:980px;margin:0 auto;padding:24px;color:#6f6f78;font-size:14px}
+      @media (max-width:600px){.seo-header{padding:18px}.seo-main{padding:42px 18px 56px}}
+    </style>
+  </head>
+  <body>
+    <header class="seo-header">
+      <a class="seo-brand" href="/">Megabyte</a>
+      <a class="seo-header-link" href="/">Abrir loja</a>
+    </header>
+    <main class="seo-main">
+      <p class="seo-eyebrow">Megabyte Moçambique</p>
+      <h1>${escapeHtml(pageConfig.heading)}</h1>
+      <p class="seo-lead">${escapeHtml(pageConfig.intro)}</p>
+      <a class="seo-cta" href="/">Comprar agora</a>
+      ${sections}
+      <nav class="seo-related" aria-label="Mais páginas sobre megas">
+        <strong>Mais informações:</strong> ${relatedLinks}
+      </nav>
+    </main>
+    <footer class="seo-footer">Megabyte — compra de pacotes de internet Vodacom em Moçambique.</footer>
+  </body>
+</html>`
+}
+
 function megasPage(pageConfig = null) {
   // ── Catálogo server-side ───────────────────────────────────────────────────
   const CAT_DATA = {

@@ -25,7 +25,7 @@ function rewriteLegacyHtml(html: string) {
       "$1/api/legacy/$2",
     )
     .replace(
-      /(["'])\/(pacotes-diarios|pacotes-semanais|pacotes-mensais|pacotes-diamante|pacotes-internet-vodacom)(?=["'#?])/g,
+      /(["'])\/(pacotes-diarios|pacotes-semanais|pacotes-mensais|pacotes-diamante|pacotes-internet-vodacom|comprar-megas-online|comprar-megas-para-outra-pessoa|pagar-megas-mpesa-emola)(?=["'#?])/g,
       "$1/api/legacy/$2",
     )
     .replace(/(["'])\/(megas)(?=["'])/g, "$1/api/legacy/$2")
