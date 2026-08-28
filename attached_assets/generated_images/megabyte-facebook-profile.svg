@@ -1,0 +1,20 @@
+<svg width="1080" height="1080" viewBox="0 0 1080 1080" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Megabyte</title>
+  <desc id="desc">Ícone vermelho e nome Megabyte para foto de perfil</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#b80000"/>
+      <stop offset="1" stop-color="#f21b1b"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#650000" flood-opacity=".3"/>
+    </filter>
+  </defs>
+  <rect width="1080" height="1080" rx="180" fill="url(#bg)"/>
+  <circle cx="540" cy="360" r="226" fill="#fff" filter="url(#shadow)"/>
+  <circle cx="540" cy="360" r="178" fill="#e60000"/>
+  <path d="M455 475V260h48l37 62 37-62h48v215h-48V350l-37 62-37-62v125z" fill="#fff"/>
+  <text x="540" y="715" text-anchor="middle" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-size="122" font-weight="800" letter-spacing="-5">Megabyte</text>
+  <rect x="340" y="790" width="400" height="4" rx="2" fill="#fff" opacity=".75"/>
+  <text x="540" y="860" text-anchor="middle" fill="#fff" opacity=".92" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="600" letter-spacing="4">INTERNET • PAGAMENTOS</text>
+</svg>
