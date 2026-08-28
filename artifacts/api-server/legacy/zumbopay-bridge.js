@@ -2317,9 +2317,11 @@ ${allListHtml}
 
     <!-- Tab: Para Mim -->
     <div class="sh-panel" id="sh-tab-mim">
+      <div class="sh-payer-field">
        <label class="sh-lbl">O seu número de pagamento</label>
        <input class="sh-inp" id="sh-phone" type="tel" placeholder="Número que vai pagar" maxlength="9" inputmode="numeric" autocomplete="off">
        <span class="sh-hint">M-Pesa: 84/85 · e-Mola: 86/87</span>
+      </div>
       <div class="sh-recipient">
         <span class="sh-recipient-label">Os megas serão enviados para</span>
         <strong class="sh-recipient-phone" id="sh-recipient-phone">—</strong>
@@ -2328,8 +2330,10 @@ ${allListHtml}
 
     <!-- Tab: Para Outro -->
     <div class="sh-panel" id="sh-tab-outro" style="display:none">
+      <div class="sh-payer-field">
        <label class="sh-lbl">Número de pagamento</label>
       <input class="sh-inp" id="sh-phone-payer" type="tel" placeholder="Número de telemóvel" maxlength="9" inputmode="numeric" autocomplete="off">
+      </div>
       <label class="sh-lbl">Introduza o número do beneficiário</label>
       <input class="sh-inp" id="sh-phone-bene" type="tel" placeholder="Número de telemóvel" maxlength="9" inputmode="numeric" autocomplete="off">
     </div>
@@ -2820,9 +2824,17 @@ function shSetTab(t) {
   document.getElementById('via-section').style.display = showBtn ? 'block' : 'none'
 }
 
+function syncPayerFields() {
+  const hidden = payVia === 'credit'
+  document.querySelectorAll('.sh-payer-field').forEach(field => {
+    field.style.display = hidden ? 'none' : 'block'
+  })
+}
+
 function selectPayVia(v) {
   payVia = v
   document.querySelectorAll('.via-btn').forEach(b => b.classList.toggle('active', b.dataset.via===v))
+  syncPayerFields()
   const btn = document.getElementById('sh-btn')
   if (v === 'credit') {
     const bal = authState.user?.balance || 0
@@ -2871,7 +2883,7 @@ function openBuyDirect(id) {
   syncSelfPurchaseRecipient()
   document.getElementById('sh-err').style.display = 'none'
   payVia = 'mobile-money'
-  document.querySelectorAll('.via-btn').forEach(b => b.classList.toggle('active', b.dataset.via===payVia))
+  selectPayVia(payVia)
   updateCreditBtn()
   const btn = document.getElementById('sh-btn'); btn.disabled=false; btn.textContent='Próximo'; btn.style.display='block'
   shSetTab('mim')
@@ -2919,9 +2931,28 @@ async function pay() {
     shShow('pending'); listenOrder(d.txId)
   } catch { ee.textContent='Erro de ligação. Tente novamente.'; ee.style.display='block'; btn.disabled=false; btn.textContent='Próximo' }
 }
+
+function getCreditPurchaseFromSheet() {
+  if (shCurTab==='outro') {
+    const bene=document.getElementById('sh-phone-bene').value.trim().replace(/\\D/g,'')
+    return {
+      phone:'',
+      beneficiaryPhone:bene,
+      purchaseFor:'other',
+      error: !bene?'Introduza o número do beneficiário.':phoneMethod(bene)!=='mpesa'?'Número do beneficiário inválido. Use apenas uma faixa 84 ou 85.':null
+    }
+  }
+  return {
+    phone:'',
+    beneficiaryPhone:null,
+    purchaseFor:'self',
+    error: !authState.user?'Faça login para comprar para si.':null
+  }
+}
+
 async function payWithCredit() {
   const ee = document.getElementById('sh-err'); ee.style.display='none'
-  const {phone, beneficiaryPhone, purchaseFor, error} = getPhoneFromSheet()
+  const {beneficiaryPhone, purchaseFor, error} = getCreditPurchaseFromSheet()
   if (shCurTab !== 'req' && error) { ee.textContent=error; ee.style.display='block'; return }
   const btn=document.getElementById('sh-btn'); btn.disabled=true; btn.textContent='A debitar crédito…'
   try {
