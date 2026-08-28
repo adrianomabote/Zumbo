@@ -1,0 +1,15 @@
+<svg width="1080" height="1080" viewBox="0 0 1080 1080" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title">
+  <title id="title">Megabyte com ícone Vodacom</title>
+  <rect width="1080" height="1080" fill="#000000"/>
+
+  <!-- Símbolo Vodacom recriado em vector, sem fundo branco -->
+  <g aria-label="Ícone Vodacom">
+    <circle cx="540" cy="350" r="235" fill="#e60000"/>
+    <circle cx="540" cy="350" r="137" fill="#000000"/>
+    <path d="M540 115C656 115 755 199 772 309C719 252 636 213 540 213V115Z" fill="#e60000"/>
+  </g>
+
+  <text x="540" y="790" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="148" font-weight="700" letter-spacing="-6">
+    <tspan fill="#ffffff">Mega</tspan><tspan fill="#e60000">byte</tspan>
+  </text>
+</svg>
