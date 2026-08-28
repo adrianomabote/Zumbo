@@ -64,3 +64,17 @@ mtime_ms = 1787904186451
 storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:eb234228-0113-4818-9eeb-8f9a84e672de/93167f78-04ca-4686-b628-f60701170653/11d070ab-4286-42af-aab8-c2a4a044a888"
 storage_version_token = "1787904203728248"
 content_type = "image/png"
+
+[[outputs]]
+id = "94rB9UhaXHhA1YZ9ZYlit"
+uri = "file://attached_assets/generated_images/megabyte-facebook-profile-vodacom-aligned.png"
+type = "image"
+title = "Foto de perfil Megabyte — texto alinhado"
+description = "PNG quadrado com fundo preto, ícone Vodacom original e o texto Megabyte alinhado numa única linha, sem letras sobrepostas."
+logical_id = "59d60e67-c72a-41a7-b2eb-7dbcacea49b6"
+content_hash = "sha256:1bfb3397344d27ea72244fc82dff60ff3851bf5a5b614b9d6d33b7dd503719c1"
+size = 108845
+mtime_ms = 1787904320395
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:eb234228-0113-4818-9eeb-8f9a84e672de/59d60e67-c72a-41a7-b2eb-7dbcacea49b6/15a0d5c2-e85e-4a2e-9a6a-65572d7fe606"
+storage_version_token = "1787904338558668"
+content_type = "image/png"
