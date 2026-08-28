@@ -7,3 +7,18 @@ uri = "file://attached_assets/generated_images/megabyte-facebook-profile.png"
 type = "image"
 title = "Foto de perfil Megabyte"
 description = "Imagem quadrada em PNG com o ícone M e o nome Megabyte, pronta para usar como foto de perfil no Facebook."
+logical_id = "5cf3ef10-852b-4ff3-8262-832c95047e5e"
+
+[[outputs]]
+id = "vyS5SJuBQ4hn3NWYmDILE"
+uri = "file://attached_assets/generated_images/megabyte-facebook-profile-simple.png"
+type = "image"
+title = "Foto de perfil Megabyte — versão simples"
+description = "Foto quadrada em PNG com o ícone da Vodacom e apenas o nome Megabyte, usando as cores vermelha e clara do site."
+logical_id = "c16ab44f-be11-4d51-a3f3-f71762896a2d"
+content_hash = "sha256:dde1748a3ca0a4d32b6ae3952b677b16e8e5208548f096f12d97a4911b495b56"
+size = 295102
+mtime_ms = 1787903820192
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:eb234228-0113-4818-9eeb-8f9a84e672de/c16ab44f-be11-4d51-a3f3-f71762896a2d/1619beaa-8d9c-4f0d-b83e-26593808d2a3"
+storage_version_token = "1787903835828822"
+content_type = "image/png"
