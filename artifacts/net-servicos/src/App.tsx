@@ -193,6 +193,27 @@ const SEO_PAGES: Record<string, SeoPage> = {
     ],
     cta: "Comprar agora",
   },
+  "/megas-baratos-vodacom": {
+    title: "Megas Baratos Vodacom a partir de 20 MT | Megabyte",
+    description:
+      "Procura megas baratos em Moçambique? Veja opções de internet Vodacom a partir de 20 MT e pague com M-Pesa ou e-Mola na Megabyte.",
+    canonical: "https://megabyte.live/megas-baratos-vodacom/",
+    eyebrow: "Pacotes acessíveis",
+    heading: "Megas baratos Vodacom a partir de 20 MT",
+    lead:
+      "Compare as opções de megas Vodacom disponíveis na Megabyte para encontrar um pacote de internet acessível para o seu número ou para outra pessoa.",
+    sectionHeading: "Opções de internet a partir de 20 MT",
+    paragraphs: [
+      "O catálogo da Megabyte inclui pacotes de internet Vodacom a partir de 20 MT. Consulte o valor e a quantidade de dados disponíveis antes de confirmar.",
+      "Se pesquisou por “Vodacom megas”, “megas baratos” ou “internet móvel barata”, abra a loja para ver as ofertas actuais.",
+    ],
+    steps: [
+      "Compare o preço, a quantidade de megas e o período de validade.",
+      "Escolha o número Vodacom que deve receber o pacote.",
+      "Pague com M-Pesa ou e-Mola depois de confirmar os dados.",
+    ],
+    cta: "Ver megas disponíveis",
+  },
 };
 
 function normalizedPathname(pathname: string) {
