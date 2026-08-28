@@ -1,0 +1,9 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "R5rBg-ZGL_S4OVl7mEbXD"
+uri = "file://attached_assets/generated_images/megabyte-facebook-profile.png"
+type = "image"
+title = "Foto de perfil Megabyte"
+description = "Imagem quadrada em PNG com o ícone M e o nome Megabyte, pronta para usar como foto de perfil no Facebook."
