@@ -61,6 +61,47 @@ const BUNDLES = new Map([
   ['d05',{label:'50 GB',  price:1490, cat:'diamante'}],
 ])
 
+// URLs públicas de aquisição. Os dados apresentados nestas páginas são
+// sempre derivados do catálogo acima; não há preços SEO separados.
+const PUBLIC_CATEGORY_PAGES = {
+  '/pacotes-diarios': {
+    categoryId: 'diarias',
+    title: 'Pacotes Diários Vodacom em Moçambique | Megabyte',
+    description: 'Compre pacotes diários de internet Vodacom em Moçambique. Escolha os megas disponíveis, pague com M-Pesa ou e-Mola e receba a activação no número indicado.',
+    heading: 'Pacotes diários Vodacom',
+    intro: 'Escolha um pacote de internet Vodacom com validade de 1 dia. Os pacotes e valores apresentados abaixo correspondem ao catálogo disponível na Megabyte.',
+  },
+  '/pacotes-semanais': {
+    categoryId: 'semanais',
+    title: 'Pacotes Semanais Vodacom em Moçambique | Megabyte',
+    description: 'Encontre pacotes semanais de internet Vodacom em Moçambique. Consulte os megas e valores disponíveis e compre com M-Pesa ou e-Mola.',
+    heading: 'Pacotes semanais Vodacom',
+    intro: 'Veja os pacotes de internet Vodacom com validade semanal actualmente disponíveis na Megabyte e escolha a opção certa para navegar.',
+  },
+  '/pacotes-mensais': {
+    categoryId: 'mensais',
+    title: 'Pacotes Mensais Vodacom em Moçambique | Megabyte',
+    description: 'Compre pacotes mensais de internet Vodacom em Moçambique. Compare os megas e valores do catálogo e pague de forma simples com M-Pesa ou e-Mola.',
+    heading: 'Pacotes mensais Vodacom',
+    intro: 'Consulte os pacotes de internet Vodacom com validade de 30 dias disponíveis na Megabyte. Seleccione uma oferta para iniciar a compra.',
+  },
+  '/pacotes-diamante': {
+    categoryId: 'infinitas',
+    title: 'Pacotes Diamante Vodacom em Moçambique | Megabyte',
+    description: 'Conheça os pacotes Diamante Vodacom em Moçambique, com dados e chamadas mais completas. Compre com M-Pesa ou e-Mola na Megabyte.',
+    heading: 'Pacotes Diamante Vodacom',
+    intro: 'Os pacotes Diamante combinam dados com chamadas e SMS ilimitadas durante 30 dias, conforme as ofertas actualmente disponíveis no catálogo.',
+  },
+  '/pacotes-internet-vodacom': {
+    categoryId: null,
+    title: 'Pacotes de Internet Vodacom em Moçambique | Megabyte',
+    description: 'Compre pacotes de internet Vodacom em Moçambique para o seu número ou para outra pessoa. Veja as ofertas diárias, semanais, mensais e Diamante disponíveis.',
+    heading: 'Pacotes de internet Vodacom em Moçambique',
+    intro: 'Na Megabyte encontra pacotes de internet Vodacom diários, semanais, mensais e Diamante. Escolha uma oferta do catálogo e pague com M-Pesa ou e-Mola.',
+  },
+}
+const PUBLIC_CATEGORY_PATHS = Object.keys(PUBLIC_CATEGORY_PAGES)
+
 // ── Armazenamento local persistente na VPS ─────────────────────────────────────
 async function dbInit() {
   console.log('[DB] sem PostgreSQL externo — a usar ficheiros locais na VPS')
@@ -622,7 +663,7 @@ async function router(req, res) {
   const readOnlyPath = [
     '/', '/megas', '/ping', '/favicon.ico', '/manifest.json', '/sw.js',
     '/api/config', '/api/bundles', '/api/auth/me', '/api/auth/logout',
-  ].includes(path) || staticPath
+  ].includes(path) || staticPath || PUBLIC_CATEGORY_PATHS.includes(path)
   const accountSetupPath = ['/api/auth/register', '/api/auth/login'].includes(path)
   const adminLoginPath = path === '/admin/office'
   if (!isLiveConfiguration && !(method === 'GET' && readOnlyPath) && !accountSetupPath && !adminLoginPath) {
@@ -633,6 +674,9 @@ async function router(req, res) {
 
   // ── Páginas públicas ──────────────────────────────────────────────────────
   if (method === 'GET' && path === '/')         { res.writeHead(302,{'Location':'/megas'}); return res.end() }
+  if (method === 'GET' && PUBLIC_CATEGORY_PAGES[path]) {
+    return html(res, megasPage(PUBLIC_CATEGORY_PAGES[path]))
+  }
   // ── Ficheiros estáticos (servidos de ./public/) ───────────────────────────
   const STATIC_MAP = {
     '/static/vodacom.webp'        :['public/vodacom.webp'        ,'image/webp'],
@@ -1273,7 +1317,7 @@ NOTAS
 
 
 // ── PÁGINA: Megas ─────────────────────────────────────────────────────────────
-function megasPage() {
+function megasPage(pageConfig = null) {
   // ── Catálogo server-side ───────────────────────────────────────────────────
   const CAT_DATA = {
     diarias: {
@@ -1335,7 +1379,28 @@ function megasPage() {
       ]
     },
   }
-  const CATS_ORDER = ['diarias','semanais','mensais','infinitas']
+  // Keep the presentation layer in lockstep with the order/price catalogue
+  // used by the purchase API.
+  Object.values(CAT_DATA).forEach(category => {
+    category.pkgs = category.pkgs
+      .filter(pkg => BUNDLES.has(pkg.id))
+      .map(pkg => ({ ...pkg, size: BUNDLES.get(pkg.id).label, price: BUNDLES.get(pkg.id).price }))
+  })
+  const CATS_ORDER = pageConfig?.categoryId
+    ? [pageConfig.categoryId]
+    : ['diarias','semanais','mensais','infinitas']
+  const homePage = {
+    title: 'Megabyte — Compre Megas de Forma Rápida e Fácil',
+    description: 'Aproveite os nossos pacotes de megas a partir de 20 MT, incluindo 1 GB por apenas 25 MT. Compre facilmente para o seu próprio número ou para outro número à sua escolha.',
+    heading: 'Ofertas de Internet',
+    intro: 'São ofertas diferenciadas e ricas em <strong>DADOS</strong> que te permitem aceder a todas as plataformas e conteúdos de internet para navegares à vontade.',
+    path: '/megas',
+  }
+  const seo = pageConfig ? { ...homePage, ...pageConfig, path: Object.entries(PUBLIC_CATEGORY_PAGES).find(([, value]) => value === pageConfig)?.[0] || '/megas' } : homePage
+  const canonicalUrl = `${SITE_URL}${seo.path}`
+  const categoryLinks = Object.entries(PUBLIC_CATEGORY_PAGES).map(([url, page]) =>
+    `<a href="${url}"${page === pageConfig ? ' aria-current="page"' : ''}>${page.heading.replace(' em Moçambique', '')}</a>`
+  ).join('')
 
   // Generate one slide card HTML
   const slideHtml = p =>
@@ -1385,7 +1450,8 @@ function megasPage() {
       CAT_DATA[catId].pkgs.map(pkgListItem).join('')
     ).join('') + '</div>'
 
-  // Build all 4 sections
+  // Build the selected section on category pages, or all sections on the
+  // general catalogue page.
   const allSections = CATS_ORDER.map((c, i) => sectionHtml(c, i === 0)).join('')
 
   // JS catalog (for the buy sheet)
@@ -1400,20 +1466,20 @@ function megasPage() {
   return `<!DOCTYPE html>
 <html lang="pt"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
-<title>Megabyte — Compre Megas de Forma Rápida e Fácil</title>
-<link rel="canonical" href="${SITE_URL}/megas">
+<title>${escapeHtml(seo.title)}</title>
+<link rel="canonical" href="${escapeHtml(canonicalUrl)}">
 <meta property="og:site_name" content="Megabyte">
-<meta property="og:title" content="Megabyte — Compre Megas de Forma Rápida e Fácil">
-<meta property="og:description" content="Aproveite os nossos pacotes de megas a partir de 20 MT, incluindo 1 GB por apenas 25 MT. Compre facilmente para o seu próprio número ou para outro número à sua escolha.">
-<meta property="og:url" content="${SITE_URL}/megas">
+<meta property="og:title" content="${escapeHtml(seo.title)}">
+<meta property="og:description" content="${escapeHtml(seo.description)}">
+<meta property="og:url" content="${escapeHtml(canonicalUrl)}">
 <meta property="og:locale" content="pt_MZ">
 <meta property="og:image" content="${SITE_URL}/api/legacy/static/icon-512.png?v=5">
 <meta property="og:image:alt" content="Logótipo Megabyte">
 <meta property="og:type" content="website">
-<meta name="description" content="Aproveite os nossos pacotes de megas a partir de 20 MT, incluindo 1 GB por apenas 25 MT. Compre facilmente para o seu próprio número ou para outro número à sua escolha.">
+<meta name="description" content="${escapeHtml(seo.description)}">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Megabyte — Compre Megas de Forma Rápida e Fácil">
-<meta name="twitter:description" content="Aproveite os nossos pacotes de megas a partir de 20 MT, incluindo 1 GB por apenas 25 MT. Compre facilmente para o seu próprio número ou para outro número à sua escolha.">
+<meta name="twitter:title" content="${escapeHtml(seo.title)}">
+<meta name="twitter:description" content="${escapeHtml(seo.description)}">
 <meta name="twitter:image" content="${SITE_URL}/api/legacy/static/icon-512.png?v=5">
 <link rel="icon" href="/static/icon-192.png?v=4" type="image/png" sizes="192x192">
 <link rel="manifest" href="/manifest.json">
@@ -1467,6 +1533,9 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .offer-header{padding:24px 20px 32px;background:#fff;border-bottom:1px solid #e5e5ea;text-align:left;}
 .offer-title{font-size:18px;font-weight:700;color:#1c1c1e;margin-bottom:10px;text-align:center;}
 .offer-desc{font-size:14px;color:#3a3a3c;line-height:1.6;}
+.category-seo-links{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px;}
+.category-seo-links a{display:inline-flex;align-items:center;padding:8px 11px;border:1px solid #e5e5ea;border-radius:999px;background:#f8f8fa;color:#cc0000;font-size:12px;font-weight:600;line-height:1.2;text-decoration:none;}
+.category-seo-links a[aria-current="page"]{border-color:#cc0000;background:#fff0f0;}
 
 /* ── Tabs (Vodacom style) ── */
 .tabs-wrap{background:#fff;border-bottom:1px solid #e5e5ea;position:sticky;top:53px;z-index:40;}
@@ -1866,17 +1935,18 @@ ${isTestMode ? '<div style="background:#fff3cd;color:#664d03;border-bottom:1px s
 </div>
 
 <div class="offer-header">
-  <h2 class="offer-title">Ofertas de Internet</h2>
-  <p class="offer-desc">São ofertas diferenciadas e ricas em <strong>DADOS</strong> que te permitem aceder a todas as plataformas e conteúdos de internet para navegares à vontade.</p>
+  <h1 class="offer-title">${escapeHtml(seo.heading)}</h1>
+  <p class="offer-desc">${seo.intro}</p>
+  ${pageConfig ? `<nav class="category-seo-links" aria-label="Categorias de pacotes">${categoryLinks}</nav>` : ''}
 </div>
 
 <div class="tabs-wrap">
-  <div class="tabs" id="tab-bar">
+  ${pageConfig ? '' : `<div class="tabs" id="tab-bar">
     <button class="tab active" onclick="setCat('diarias')">Diárias</button>
     <button class="tab" onclick="setCat('semanais')">Semanais</button>
     <button class="tab" onclick="setCat('mensais')">Mensais</button>
     <button class="tab" onclick="setCat('infinitas')">Diamante</button>
-  </div>
+  </div>`}
 </div>
 
 <div class="carousel-area">${allSections}</div>
@@ -2308,9 +2378,9 @@ ${allListHtml}
 // ── Catálogo (para o sheet de compra) ──
 ${jsPkgs}
 const CLABELS = {diarias:'Diárias',semanais:'Semanais',mensais:'Mensais',infinitas:'Infinitas'}
-const CATS_JS  = ['diarias','semanais','mensais','infinitas']
+const CATS_JS  = ${JSON.stringify(CATS_ORDER)}
 
-let curCat = 'diarias', curPkg = null, evtSrc = null
+let curCat = ${JSON.stringify(CATS_ORDER[0])}, curPkg = null, evtSrc = null
 
 // ── Tab switching (mostra/esconde secções pré-renderizadas) ──
 function setCat(id) {

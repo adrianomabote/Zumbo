@@ -6,6 +6,33 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
 };
 
+const PUBLIC_SEO_PAGES: Record<string, { title: string; description: string }> = {
+  "/pacotes-diarios": {
+    title: "Pacotes Diários Vodacom em Moçambique | Megabyte",
+    description:
+      "Compre pacotes diários de internet Vodacom em Moçambique. Escolha os megas disponíveis, pague com M-Pesa ou e-Mola e receba a activação no número indicado.",
+  },
+  "/pacotes-semanais": {
+    title: "Pacotes Semanais Vodacom em Moçambique | Megabyte",
+    description:
+      "Encontre pacotes semanais de internet Vodacom em Moçambique. Consulte os megas e valores disponíveis e compre com M-Pesa ou e-Mola.",
+  },
+  "/pacotes-mensais": {
+    title: "Pacotes Mensais Vodacom em Moçambique | Megabyte",
+    description:
+      "Compre pacotes mensais de internet Vodacom em Moçambique. Compare os megas e valores do catálogo e pague de forma simples com M-Pesa ou e-Mola.",
+  },
+  "/pacotes-diamante": {
+    title: "Pacotes Diamante Vodacom em Moçambique | Megabyte",
+    description:
+      "Conheça os pacotes Diamante Vodacom em Moçambique, com dados e chamadas mais completas. Compre com M-Pesa ou e-Mola na Megabyte.",
+  },
+  "/pacotes-internet-vodacom": {
+    title: "Pacotes de Internet Vodacom em Moçambique | Megabyte",
+    description:
+      "Compre pacotes de internet Vodacom em Moçambique para o seu número ou para outra pessoa. Veja as ofertas diárias, semanais, mensais e Diamante disponíveis.",
+  },
+};
 type SeoPage = {
   title: string;
   description: string;
@@ -195,6 +222,8 @@ function App() {
   const [installVisible, setInstallVisible] = useState(false);
   const [installHelp, setInstallHelp] = useState(false);
   const installDismissKey = "pwa-install-notice-dismissed-v2";
+  const publicPath = normalizedPathname(window.location.pathname);
+  const publicPage = PUBLIC_SEO_PAGES[publicPath];
 
   useEffect(() => {
     // The legacy admin panel is served by the API bridge. Redirect friendly
@@ -202,6 +231,18 @@ function App() {
     if (window.location.pathname.startsWith("/admin")) {
       const target = `/api/legacy${window.location.pathname}${window.location.search}`;
       window.location.replace(target);
+    }
+
+    if (publicPage) {
+      document.title = publicPage.title;
+      updateMeta('meta[name="description"]', "content", publicPage.description);
+      updateMeta('meta[property="og:title"]', "content", publicPage.title);
+      updateMeta('meta[property="og:description"]', "content", publicPage.description);
+      updateMeta('meta[property="og:url"]', "content", `${window.location.origin}${publicPath}`);
+      updateMeta('meta[name="twitter:title"]', "content", publicPage.title);
+      updateMeta('meta[name="twitter:description"]', "content", publicPage.description);
+      const canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+      if (canonical) canonical.href = `${window.location.origin}${publicPath}`;
     }
 
     const isStandalone = () => {
@@ -283,17 +324,19 @@ function App() {
     return null;
   }
 
-  const seoPage = SEO_PAGES[normalizedPathname(window.location.pathname)];
-  if (seoPage) {
+  const seoPage = SEO_PAGES[publicPath];
+  if (seoPage && !publicPage) {
     return <SeoLandingPage page={seoPage} />;
   }
+
+  const storefrontPath = publicPage ? publicPath : "/megas";
 
   return (
     <>
       <iframe
         title="Loja Megabyte — comprar pacotes de internet Vodacom"
         ref={storefrontRef}
-        src={`${import.meta.env.BASE_URL}api/legacy/megas`}
+        src={`${import.meta.env.BASE_URL}api/legacy${storefrontPath}`}
         style={{
           border: 0,
           display: "block",

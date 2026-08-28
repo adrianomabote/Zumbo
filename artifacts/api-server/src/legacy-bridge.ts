@@ -24,6 +24,10 @@ function rewriteLegacyHtml(html: string) {
       /(["'])\/(api|events|admin|gateway|static)(?=\/)/g,
       "$1/api/legacy/$2",
     )
+    .replace(
+      /(["'])\/(pacotes-diarios|pacotes-semanais|pacotes-mensais|pacotes-diamante|pacotes-internet-vodacom)(?=["'#?])/g,
+      "$1/api/legacy/$2",
+    )
     .replace(/(["'])\/(megas)(?=["'])/g, "$1/api/legacy/$2")
     .replace(/(["'])\/(manifest\.json|sw\.js)(?=["'])/g, "$1/api/legacy/$2");
 }
