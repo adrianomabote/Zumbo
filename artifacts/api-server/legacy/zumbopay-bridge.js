@@ -1812,8 +1812,12 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .footer-bottom{border-top:1px solid #3a3a3c;padding:20px 0 40px;text-align:center;}
 .footer-portal{font-size:13px;font-weight:600;color:#8e8e93;margin-bottom:16px;}
 .footer-social{display:flex;justify-content:center;gap:14px;margin-bottom:18px;}
-.footer-social a{width:40px;height:40px;border-radius:50%;background:#2c2c2e;display:flex;align-items:center;justify-content:center;color:#8e8e93;text-decoration:none;transition:background .15s,color .15s;flex-shrink:0;}
-.footer-social a:active{background:#cc0000;color:#fff;}
+.footer-social a{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;text-decoration:none;transition:transform .15s,filter .15s;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.22);}
+.footer-social a:hover{filter:brightness(1.08);transform:translateY(-2px);}
+.footer-social a:focus-visible{outline:3px solid #fff;outline-offset:3px;}
+.footer-social a:active{transform:translateY(0);filter:brightness(.92);}
+.footer-social a.facebook{background:#1877f2;}
+.footer-social a.whatsapp{background:#25d366;}
 .footer-social svg{width:18px;height:18px;fill:currentColor;flex-shrink:0;}
 .footer-support{margin-bottom:24px;}
 .footer-support-title{font-size:11px;font-weight:700;color:#636366;letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px;}
@@ -2255,20 +2259,11 @@ ${allListHtml}
   <div class="footer-bottom">
     <p class="footer-portal">Portal do Fornecedor</p>
     <div class="footer-social">
-      <a href="#" aria-label="Facebook">
+      <a class="facebook" href="https://www.facebook.com/profile.php?id=61593676661544" target="_blank" rel="noopener noreferrer" aria-label="Facebook da Megabyte" title="Facebook da Megabyte">
         <svg viewBox="0 0 24 24"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg>
       </a>
-      <a href="#" aria-label="Instagram">
-        <svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z" fill="none" stroke="currentColor" stroke-width="1.8"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      </a>
-      <a href="#" aria-label="YouTube">
-        <svg viewBox="0 0 24 24"><path d="M22.54 6.42a2.78 2.78 0 00-1.95-1.97C18.88 4 12 4 12 4s-6.88 0-8.59.45A2.78 2.78 0 001.46 6.42 29 29 0 001 12a29 29 0 00.46 5.58 2.78 2.78 0 001.95 1.97C5.12 20 12 20 12 20s6.88 0 8.59-.45a2.78 2.78 0 001.95-1.97A29 29 0 0023 12a29 29 0 00-.46-5.58z"/><polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="#1c1c1e"/></svg>
-      </a>
-      <a href="#" aria-label="X / Twitter">
-        <svg viewBox="0 0 24 24"><path d="M4 4l16 16M4 20L20 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      </a>
-      <a href="#" aria-label="LinkedIn">
-        <svg viewBox="0 0 24 24"><path d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-2-2 2 2 0 00-2 2v7h-4v-7a6 6 0 016-6zM2 9h4v12H2z"/><circle cx="4" cy="4" r="2"/></svg>
+      <a class="whatsapp" href="https://wa.me/258876563910" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp do suporte" title="WhatsApp do suporte">
+        <svg viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.198-.298.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.118 1.528 5.847L.057 23.882a.5.5 0 00.606.63l6.266-1.643A11.94 11.94 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.686-.528-5.204-1.443l-.374-.22-3.878 1.018 1.037-3.785-.241-.389A9.96 9.96 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
       </a>
     </div>
     <div class="footer-support">
