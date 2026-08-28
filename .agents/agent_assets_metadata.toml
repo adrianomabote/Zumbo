@@ -50,3 +50,17 @@ mtime_ms = 1787904103263
 storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:eb234228-0113-4818-9eeb-8f9a84e672de/05824e4d-81db-4fb8-a560-3c638c9a8bbb/d5deef87-0e9d-4425-bea0-6de67ca0e4c5"
 storage_version_token = "1787904136488225"
 content_type = "image/png"
+
+[[outputs]]
+id = "sfagcqZZPFJD75HXq38iZ"
+uri = "file://attached_assets/generated_images/megabyte-facebook-profile-vodacom-official.png"
+type = "image"
+title = "Foto de perfil Megabyte — ícone Vodacom correcto"
+description = "PNG quadrado com a forma original do ícone Vodacom, fundo preto, e apenas o nome Megabyte nas cores da marca."
+logical_id = "93167f78-04ca-4686-b628-f60701170653"
+content_hash = "sha256:aef8c423d68cb5071c58725a9f5cac363c3a6b28f5622575f0239464881fc5db"
+size = 124933
+mtime_ms = 1787904186451
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:eb234228-0113-4818-9eeb-8f9a84e672de/93167f78-04ca-4686-b628-f60701170653/11d070ab-4286-42af-aab8-c2a4a044a888"
+storage_version_token = "1787904203728248"
+content_type = "image/png"
