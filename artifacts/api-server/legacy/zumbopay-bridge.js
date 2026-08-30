@@ -26,6 +26,7 @@ const isTestMode           = PAYMENT_MODE === 'mock' || PAYMENT_MODE === 'test'
 const ORDERS_FILE          = './orders.json'
 const USERS_FILE           = './users.json'
 const RECHARGE_CREDITS_FILE = './recharge-credits.json'
+const SHARE_DESCRIPTION = 'Compra mínima: 10 MT. 380 MB = 10 MT e 1024 MB (1 GB) = 25 MT. Compre para o seu número ou envie para outro número Vodacom. Pague com saldo, M-Pesa ou e-Mola.'
 
 function adminToken() {
   return createHmac('sha256', (process.env.PAGAR_WEBHOOK_SECRET || '') + ADMIN_PASS).update('netservicos:admin').digest('hex')
@@ -1718,7 +1719,7 @@ function megasPage(pageConfig = null) {
     : ['diarias','semanais','mensais','infinitas']
   const homePage = {
     title: 'Megabyte — Compre Megas de Forma Rápida e Fácil',
-    description: 'Aproveite os nossos pacotes de megas a partir de 10 MT com saldo. Recarregue a sua conta a partir de 20 MT com M-Pesa ou e-Mola e compre facilmente para o seu próprio número ou para outro número à sua escolha.',
+    description: SHARE_DESCRIPTION,
     heading: 'Ofertas de Internet',
     intro: 'São ofertas diferenciadas e ricas em <strong>DADOS</strong> que te permitem aceder a todas as plataformas e conteúdos de internet para navegares à vontade.',
     path: '/megas',
@@ -1797,7 +1798,7 @@ function megasPage(pageConfig = null) {
 <link rel="canonical" href="${escapeHtml(canonicalUrl)}">
 <meta property="og:site_name" content="Megabyte">
 <meta property="og:title" content="${escapeHtml(seo.title)}">
-<meta property="og:description" content="${escapeHtml(seo.description)}">
+<meta property="og:description" content="${escapeHtml(SHARE_DESCRIPTION)}">
 <meta property="og:url" content="${escapeHtml(canonicalUrl)}">
 <meta property="og:locale" content="pt_MZ">
 <meta property="og:image" content="${SITE_URL}/api/legacy/static/icon-512.png?v=5">
@@ -1806,7 +1807,7 @@ function megasPage(pageConfig = null) {
 <meta name="description" content="${escapeHtml(seo.description)}">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${escapeHtml(seo.title)}">
-<meta name="twitter:description" content="${escapeHtml(seo.description)}">
+<meta name="twitter:description" content="${escapeHtml(SHARE_DESCRIPTION)}">
 <meta name="twitter:image" content="${SITE_URL}/api/legacy/static/icon-512.png?v=5">
 <link rel="icon" href="/static/icon-192.png?v=4" type="image/png" sizes="192x192">
 <link rel="manifest" href="/manifest.json">
