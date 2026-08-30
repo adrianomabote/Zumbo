@@ -222,6 +222,7 @@ async function writeJsonAtomic(file, data) {
 // ── Estado em memória ─────────────────────────────────────────────────────────
 const transactions  = new Map()
 const sseClients    = new Map()
+const pagarReconciliationTimers = new Map()
 let   orders        = []           // persiste em ORDERS_FILE
 let   rechargeCredits = []         // diário de créditos de saldo recuperável
 let   rechargeCreditQueue = Promise.resolve()
@@ -700,6 +701,7 @@ function notifyTx(txId, data) {
 }
 
 async function initiateCharge(tx, customerName) {
+  tx.pagarTitle = customerName
   if (isTestMode) {
     tx.ref = `test-${tx.sourceId || tx.id}`
     tx.status = 'succeeded'
@@ -729,10 +731,23 @@ async function initiateCharge(tx, customerName) {
     const data = await resp.json().catch(()=>({}))
     console.log(`[Pagar] POST /payments → ${resp.status}`, JSON.stringify({ status:data.status, reference:data.reference }))
     if (resp.status === 202) {
-      tx.ref = data.reference || `net-${tx.id}`; tx.status = 'pending'
-      notifyTx(tx.id, { status:'pending', method:tx.method })
-      await updateOrderStatus(tx.id, 'pending', { pagarRef: tx.ref })
-      scheduleTimeout(tx); return
+      tx.ref = data.reference || tx.ref || `net-${tx.id}`
+      const providerStatus = String(data.status || 'PENDING').toUpperCase()
+      if (providerStatus === 'PAID') {
+        await applyPagarProviderStatus(tx, providerStatus, { reference: tx.ref })
+      } else if (['FAILED','CANCELLED','REFUNDED'].includes(providerStatus)) {
+        await applyPagarProviderStatus(tx, providerStatus, { reference: tx.ref })
+      } else {
+        tx.status = 'pending'
+        notifyTx(tx.id, { status:'pending', method:tx.method })
+        await updateOrderStatus(tx.id, 'pending', {
+          pagarRef: tx.ref,
+          pagarReconciliationStatus: 'pending',
+          pagarReconciliationError: null,
+        })
+        schedulePagarReconciliation(tx)
+      }
+      return
     }
     const msg = data.error || data.message || `Erro ${resp.status}`
     tx.status = 'failed'; tx.error = msg
@@ -740,19 +755,137 @@ async function initiateCharge(tx, customerName) {
     await updateOrderStatus(tx.id, 'failed'); gwFinalize(tx)
   } catch (err) {
     console.error('[Pagar]', err.message)
-    tx.status = 'failed'; tx.error = 'Erro de ligação. Tente novamente.'
-    notifyTx(tx.id, { status:'failed', error:tx.error, method:tx.method })
-    await updateOrderStatus(tx.id, 'failed'); gwFinalize(tx)
+    tx.ref = tx.ref || `net-${tx.id}`
+    tx.status = 'pending'
+    tx.error = 'A confirmar o pagamento com o Pagar.'
+    notifyTx(tx.id, { status:'pending', method:tx.method })
+    await updateOrderStatus(tx.id, 'pending', {
+      pagarRef: tx.ref,
+      pagarReconciliationStatus: 'pending',
+      pagarReconciliationError: tx.error,
+    })
+    schedulePagarReconciliation(tx, 15_000)
   }
 }
 
-function scheduleTimeout(tx) {
-  setTimeout(async () => {
+async function applyPagarProviderStatus(tx, providerStatus, details = {}) {
+  const status = String(providerStatus || '').toUpperCase()
+  if (status === 'PAID') {
+    const duplicate = tx.status === 'succeeded'
+    tx.status = 'succeeded'
+    tx.ref = details.reference || tx.ref || `net-${tx.id}`
+    tx.error = null
+    await updateOrderStatus(tx.id, 'succeeded', {
+      pagarRef: tx.ref,
+      pagarReconciliationStatus: 'confirmed',
+      pagarReconciliationError: null,
+    })
+    await creditRechargeOnce(tx)
+    if (!duplicate) notifyTx(tx.id, { status:'succeeded', method:tx.method })
+    gwFinalize(tx)
+    return 'succeeded'
+  }
+  if (['FAILED','CANCELLED','REFUNDED'].includes(status)) {
+    // A provider-confirmed payment is monotonic. Do not let a late failure
+    // event undo a PAID operation.
+    if (tx.status === 'succeeded') return 'succeeded'
+    const duplicate = tx.status === 'failed'
+    tx.status = 'failed'
+    tx.ref = details.reference || tx.ref || `net-${tx.id}`
+    tx.error = details.error || (status === 'FAILED' ? 'Pagamento recusado.' : `Pagamento ${status.toLowerCase()}.`)
+    await updateOrderStatus(tx.id, 'failed', {
+      pagarRef: tx.ref,
+      pagarReconciliationStatus: 'failed',
+      pagarReconciliationError: tx.error,
+    })
+    if (!duplicate) notifyTx(tx.id, { status:'failed', error:tx.error, method:tx.method })
+    gwFinalize(tx)
+    return 'failed'
+  }
+  return 'pending'
+}
+
+async function reconcilePagarTransaction(tx) {
+  const mainPort = process.env.MAIN_API_PORT
+  const secret = process.env.SESSION_SECRET
+  if (!mainPort || !secret) return 'pending'
+  try {
+    const res = await fetch(
+      `http://localhost:${mainPort}/api/pagar/internal/payments/${encodeURIComponent(tx.id)}/reconcile`,
+      {
+        method: 'POST',
+        headers: { 'x-internal-payment-key': secret },
+        signal: AbortSignal.timeout(10_000),
+      },
+    )
+    const data = await res.json().catch(() => ({}))
+    if (res.status === 404) return 'missing'
+    if (!res.ok) throw new Error(data.error || `Reconciliação recusada: ${res.status}`)
+    const providerStatus = String(data.status || '').toUpperCase()
+    if (providerStatus === 'PAID' || ['FAILED','CANCELLED','REFUNDED'].includes(providerStatus)) {
+      return applyPagarProviderStatus(tx, providerStatus, { reference: data.reference || tx.ref })
+    }
+    tx.status = 'pending'
+    tx.error = null
+    await updateOrderStatus(tx.id, 'pending', {
+      pagarRef: data.reference || tx.ref || `net-${tx.id}`,
+      pagarReconciliationStatus: 'pending',
+      pagarReconciliationError: null,
+    })
+    return 'pending'
+  } catch (error) {
+    console.error('[Pagar] Falha na reconciliação:', error.message)
+    await updateOrderStatus(tx.id, 'pending', {
+      pagarRef: tx.ref || `net-${tx.id}`,
+      pagarReconciliationStatus: 'pending',
+      pagarReconciliationError: 'A confirmação continua pendente.',
+    })
+    return 'pending'
+  }
+}
+
+function schedulePagarReconciliation(tx, delayMs = 30_000) {
+  if (tx.status !== 'pending' || pagarReconciliationTimers.has(tx.id)) return
+  const timer = setTimeout(async () => {
+    pagarReconciliationTimers.delete(tx.id)
     if (tx.status !== 'pending') return
-    tx.status = 'failed'; tx.error = 'Tempo esgotado. O PIN não foi introduzido.'
-    notifyTx(tx.id, { status:'failed', error:tx.error, method:tx.method })
-    await updateOrderStatus(tx.id, 'failed'); gwFinalize(tx)
-  }, 5 * 60 * 1000)
+    const result = await reconcilePagarTransaction(tx)
+    if (tx.status !== 'pending') return
+    if (result === 'missing') {
+      await initiateCharge(tx, tx.pagarTitle || tx.extDesc || 'Pagamento Megabyte')
+    } else {
+      schedulePagarReconciliation(tx)
+    }
+  }, delayMs)
+  timer.unref?.()
+  pagarReconciliationTimers.set(tx.id, timer)
+}
+
+function restorePendingPagarReconciliations() {
+  for (const order of orders) {
+    if (order.status !== 'pending' || !order.txId || !['mpesa','emola'].includes(order.method)) continue
+    const tx = {
+      id: order.txId,
+      type: order.type || 'bundle',
+      bundleId: order.bundleId,
+      bundleLabel: order.bundleLabel,
+      phone: order.phone,
+      beneficiaryPhone: order.beneficiaryPhone,
+      amount: order.amount,
+      method: order.method,
+      status: 'pending',
+      ref: order.pagarRef || `net-${order.txId}`,
+      sourceId: order.sourceId,
+      ts: order.ts,
+      userId: order.userId,
+      gwKeyId: order.gwKeyId,
+      extRef: order.extRef,
+      callbackUrl: order.callbackUrl,
+      pagarTitle: order.extDesc || order.extRef || 'Pagamento Megabyte',
+    }
+    transactions.set(tx.id, tx)
+    schedulePagarReconciliation(tx, 1_000)
+  }
 }
 
 // ── Router ────────────────────────────────────────────────────────────────────
@@ -908,8 +1041,8 @@ self.addEventListener('fetch',e=>{
     if (!process.env.SESSION_SECRET || req.headers['x-internal-payment-key'] !== process.env.SESSION_SECRET) {
       return json(res, { error:'Origem não autorizada.' }, 401)
     }
-    const status = body.eventType === 'payment.succeeded' ? 'succeeded' : body.eventType === 'payment.failed' ? 'failed' : null
-    if (!status) return json(res, { ok:true })
+    const providerStatus = body.eventType === 'payment.succeeded' ? 'PAID' : body.eventType === 'payment.failed' ? 'FAILED' : null
+    if (!providerStatus) return json(res, { ok:true })
     const rec = orders.find(o => o.sourceId === body.reference || o.sourceId === body.operationId ||
       o.txId === body.reference || o.pagarRef === body.reference || o.pagarRef === body.operationId)
     const tx = [...transactions.values()].find(t => t.id === body.reference || t.sourceId === body.reference ||
@@ -919,17 +1052,12 @@ self.addEventListener('fetch',e=>{
     const txId = target.id || target.txId
     const liveTx = transactions.get(txId) || { id:txId, type:rec?.type, amount:rec?.amount, phone:rec?.phone, method:rec?.method,
       extRef:rec?.extRef, callbackUrl:rec?.callbackUrl, gwKeyId:rec?.gwKeyId, status:rec?.status }
-    const duplicate = liveTx.status === status
-    liveTx.status = status
     if (body.reference) liveTx.ref = body.reference
-    if (status === 'failed') liveTx.error = 'Pagamento recusado.'
     transactions.set(txId, liveTx)
-    await updateOrderStatus(txId, status, { pagarRef: body.reference || null })
-    if (!duplicate) {
-      if (status === 'succeeded') await creditRechargeOnce(liveTx)
-      notifyTx(txId, { status, method:liveTx.method, error:liveTx.error || null })
-      gwFinalize(liveTx)
-    }
+    await applyPagarProviderStatus(liveTx, providerStatus, {
+      reference: body.reference || liveTx.ref,
+      error: providerStatus === 'FAILED' ? 'Pagamento recusado.' : undefined,
+    })
     return json(res, { ok:true })
   }
 
@@ -1119,7 +1247,9 @@ Resposta 200:
     "reference": "pedido-123", "error": null | "motivo da falha", "ts": "2026-..."
   }
 Recomendação: consultar a cada 3-5 segundos até status deixar de ser "pending".
-O pagamento expira ao fim de 5 minutos se o cliente não introduzir o PIN (status "failed").
+Se a resposta ou o webhook atrasar, o sistema mantém a cobrança em reconciliação e
+consulta o Pagar novamente; só o estado terminal confirmado pelo Pagar pode falhar
+ou concluir o pagamento.
 
 3) CALLBACK AUTOMÁTICO (opcional, recomendado)
 ----------------------------------------------
@@ -3491,6 +3621,7 @@ function adminDashboard(filter = 'all', requestedPage = 1) {
         const isForOther = o.beneficiaryPhone && o.beneficiaryPhone !== o.phone
         const deliveryAttention = ['failed','manual_intervention'].includes(o.deliveryStatus)
         const forwardingAttention = ['pending','forwarding','failed'].includes(o.pagarForwardingStatus)
+        const reconciliationAttention = o.status === 'pending' && o.pagarReconciliationStatus === 'pending'
         const canActivate = o.status === 'succeeded' && !o.deliveryStatus && !forwardingAttention
         const forwardingRetryAt = o.pagarForwardingNextRetryAt ? new Date(o.pagarForwardingNextRetryAt).toLocaleString('pt-MZ',{dateStyle:'short',timeStyle:'short'}) : null
         return `<div class="order-card" id="card-${o.txId}">
@@ -3536,7 +3667,10 @@ function adminDashboard(filter = 'all', requestedPage = 1) {
     </div>
     ${o.deliveryStatus && !deliveryAttention ? `<div class="delivery-state">Entrega USSD: ${o.deliveryStatus === 'queued' ? 'na fila' : o.deliveryStatus === 'leased' ? 'reservada pelo agente' : o.deliveryStatus}</div>` : ''}
   </div>
-  ${forwardingAttention ? `<div class="delivery-alert pagar-forwarding-alert">
+  ${reconciliationAttention ? `<div class="delivery-alert pagar-reconciliation-alert">
+     <strong>Pagamento em reconciliação</strong>
+     <span>${o.pagarReconciliationError || 'A confirmar o estado desta cobrança com o Pagar. O pagamento não foi marcado como falhado.'}</span>
+   </div>` : ''}${forwardingAttention ? `<div class="delivery-alert pagar-forwarding-alert">
     <strong>${o.pagarForwardingStatus === 'failed' ? 'Encaminhamento Pagar falhou' : o.pagarForwardingStatus === 'forwarding' ? 'A encaminhar confirmação Pagar' : 'A aguardar encaminhamento Pagar'}</strong>
     <span>${o.pagarForwardingFailureReason ? escapeHtml(o.pagarForwardingFailureReason) : o.pagarForwardingStatus === 'failed' ? 'O bridge legado está indisponível.' : 'A confirmação de pagamento ficará na fila até o bridge estar disponível.'}</span>
     ${forwardingRetryAt && o.pagarForwardingStatus !== 'forwarding' ? `<span>Nova tentativa automática: ${forwardingRetryAt}</span>` : ''}
@@ -3986,6 +4120,7 @@ await loadUsers()
 await loadRechargeCredits()
 await recoverRechargeCredits()
 await loadGwKeys()
+restorePendingPagarReconciliations()
 createServer((req, res) => {
   router(req, res).catch(err => {
     console.error('[Server]', err)

@@ -209,7 +209,10 @@ export async function createPagarPayment(input: PagarPaymentInput) {
       "UPDATE pagar_operations SET pagar_operation_id = $1, status = $2 WHERE internal_id = $3 RETURNING *",
       [
         typeof operation.id === "string" && operation.id ? operation.id : null,
-        normalizePaymentStatus(operation.status) || "PENDING",
+        (() => {
+          const status = normalizePaymentStatus(operation.status);
+          return status && knownPaymentStates.has(status) ? status : "RECONCILIATION_REQUIRED";
+        })(),
         input.localTransactionId,
       ],
     );
@@ -242,7 +245,11 @@ export async function reconcilePagarPayment(localTransactionId: string) {
     [localTransactionId],
   );
   const local = localResult.rows[0];
-  if (!local) throw new Error("Operação de pagamento não encontrada.");
+  if (!local) {
+    const error = new Error("Operação de pagamento não encontrada.");
+    Object.assign(error, { status: 404 });
+    throw error;
+  }
 
   const data = await getPagarPayment({
     id: local.pagar_operation_id || undefined,
@@ -282,7 +289,11 @@ export async function reconcilePagarPayment(localTransactionId: string) {
       [localTransactionId],
     );
     const current = currentResult.rows[0];
-    if (!current) throw new Error("Operação de pagamento não encontrada.");
+    if (!current) {
+      const error = new Error("Operação de pagamento não encontrada.");
+      Object.assign(error, { status: 404 });
+      throw error;
+    }
 
     // PAID is monotonic: a late or inconsistent failure response must not
     // undo a payment that the provider already confirmed.

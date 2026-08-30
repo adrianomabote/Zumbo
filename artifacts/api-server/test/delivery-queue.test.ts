@@ -29,9 +29,11 @@ const {
   reportDelivery,
 } = await import("../src/services/delivery-queue.ts");
 const {
+  createPagarPayment,
   ensurePagarTables,
   forwardPagarWebhook,
   getPagarWebhookEvent,
+  reconcilePagarPayment,
   startPagarWebhookRetryWorker,
 } = await import("../src/services/pagar.ts");
 const { default: app } = await import("../src/app.ts");
@@ -499,6 +501,86 @@ test("the delivery contract preserves the package name and purchase timestamp fr
     (delivery) => delivery.paymentId === `delivery-test-metadata-${testId}`,
   );
   assert.equal(stored?.createdAt, createdAt);
+});
+
+test("keeps a payment recoverable when the Pagar creation response is lost", async () => {
+  const txId = `delivery-test-pagar-timeout-${testId}`;
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = (async () => {
+      throw new TypeError("socket closed after provider accepted the request");
+    }) as typeof fetch;
+
+    const payment = await createPagarPayment({
+      localTransactionId: txId,
+      sourceId: `source-${txId}`,
+      reference: `net-${txId}`,
+      title: "Compra teste Pagar",
+      description: "Compra teste Pagar",
+      amountMzn: 20,
+      method: "MPESA",
+      payerPhone: "841112223",
+      idempotencyKey: `pagar-${txId}`,
+    });
+    assert.equal(payment.status, "RECONCILIATION_REQUIRED");
+
+    const stored = await pool!.query("SELECT status FROM pagar_operations WHERE internal_id = $1", [txId]);
+    assert.equal(stored.rows[0]?.status, "RECONCILIATION_REQUIRED");
+  } finally {
+    globalThis.fetch = originalFetch;
+    await pool!.query("DELETE FROM pagar_operations WHERE internal_id = $1", [txId]);
+  }
+});
+
+test("reconciliation adopts the provider PAID status and keeps the local record monotonic", async () => {
+  const txId = `delivery-test-pagar-reconcile-${testId}`;
+  const operationId = `pagar-reconcile-${testId}`;
+  const reference = `net-${txId}`;
+  await insertPendingOperation(txId, operationId, reference);
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = (async () => new Response(JSON.stringify({
+      payment: { id: operationId, reference, status: "PAID", amountMzn: 20 },
+    }), { status: 200, headers: { "content-type": "application/json" } })) as typeof fetch;
+
+    const reconciled = await reconcilePagarPayment(txId);
+    assert.equal(reconciled.status, "PAID");
+
+    const stored = await pool!.query("SELECT status, confirmed_at FROM pagar_operations WHERE internal_id = $1", [txId]);
+    assert.equal(stored.rows[0]?.status, "PAID");
+    assert.ok(stored.rows[0]?.confirmed_at);
+  } finally {
+    globalThis.fetch = originalFetch;
+    await pool!.query("DELETE FROM pagar_operations WHERE internal_id = $1", [txId]);
+  }
+});
+
+test("keeps an explicit provider rejection as a real payment failure", async () => {
+  const txId = `delivery-test-pagar-rejected-${testId}`;
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = (async () => new Response(JSON.stringify({
+      message: "Pagamento recusado pelo provedor.",
+    }), { status: 400, headers: { "content-type": "application/json" } })) as typeof fetch;
+
+    await assert.rejects(() => createPagarPayment({
+      localTransactionId: txId,
+      sourceId: `source-${txId}`,
+      reference: `net-${txId}`,
+      title: "Compra teste Pagar",
+      description: "Compra teste Pagar",
+      amountMzn: 20,
+      method: "MPESA",
+      payerPhone: "841112223",
+      idempotencyKey: `pagar-${txId}`,
+    }), /Pagamento recusado/);
+
+    const stored = await pool!.query("SELECT status FROM pagar_operations WHERE internal_id = $1", [txId]);
+    assert.equal(stored.rows[0]?.status, "FAILED");
+  } finally {
+    globalThis.fetch = originalFetch;
+    await pool!.query("DELETE FROM pagar_operations WHERE internal_id = $1", [txId]);
+  }
 });
 
 test("worker retries a confirmed webhook after the bridge becomes unavailable without duplicating delivery", async () => {

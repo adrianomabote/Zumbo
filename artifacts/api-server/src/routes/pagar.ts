@@ -56,7 +56,8 @@ router.post("/pagar/internal/payments/:localTransactionId/reconcile", async (req
       reference: payment.pagar_reference,
     });
   } catch (error) {
-    return res.status(502).json({ error: error instanceof Error ? error.message : "Não foi possível reconciliar o pagamento." });
+    const status = (error as { status?: unknown })?.status === 404 ? 404 : 502;
+    return res.status(status).json({ error: error instanceof Error ? error.message : "Não foi possível reconciliar o pagamento." });
   }
 });
 
