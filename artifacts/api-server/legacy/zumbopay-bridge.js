@@ -1645,7 +1645,7 @@ function megasPage(pageConfig = null) {
   // ── Catálogo server-side ───────────────────────────────────────────────────
   const CAT_DATA = {
     diarias: {
-      note: '🔥 Grupo aberto 24H — não fechamos! Atendimento automático, rápido e eficaz. Super Promoção.',
+      note: null,
       pkgs: [
         {id:'n01',name:'Diário 10', size:'380 MB', price:10,  dur:'1 dia(s)'},
         {id:'n02',name:'Diário 13', size:'512 MB', price:13,  dur:'1 dia(s)'},
