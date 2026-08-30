@@ -127,6 +127,7 @@ export const ussdAgentOpenApi = {
                         paymentId: "payment_123",
                         beneficiaryPhone: "841234567",
                         packageLabel: "1 GB",
+                         createdAt: "2026-08-27T19:59:58.000Z",
                         ussdSequence: [
                           "*111#",
                           "Escolher Internet",
@@ -255,6 +256,7 @@ export const ussdAgentOpenApi = {
           "status",
           "attempts",
           "maxAttempts",
+          "createdAt",
           "updatedAt",
         ],
         properties: {
@@ -267,6 +269,12 @@ export const ussdAgentOpenApi = {
             example: "841234567",
           },
           packageLabel: { type: "string", example: "1 GB" },
+          createdAt: {
+            type: "string",
+            format: "date-time",
+            description: "Data e hora canónicas da compra que originou a entrega.",
+            example: "2026-08-27T19:59:58.000Z",
+          },
           ussdSequence: {
             type: "array",
             minItems: 1,

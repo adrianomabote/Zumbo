@@ -127,6 +127,7 @@ async function enqueuePaidDeliveryLocked(input: {
   paymentId: string;
   beneficiaryPhone: string;
   packageLabel: string;
+  createdAt?: string;
   ussdSequence: string[];
 }) {
   await ensureLoaded();
@@ -135,7 +136,10 @@ async function enqueuePaidDeliveryLocked(input: {
   );
   if (existing) return existing;
 
-  const timestamp = now();
+  const createdAt = input.createdAt && Number.isFinite(Date.parse(input.createdAt))
+    ? new Date(input.createdAt).toISOString()
+    : now();
+  const updatedAt = now();
   const delivery: Delivery = {
     id: makeId("delivery"),
     idempotencyKey: input.idempotencyKey,
@@ -146,9 +150,9 @@ async function enqueuePaidDeliveryLocked(input: {
     status: "queued",
     attempts: 0,
     maxAttempts: 2,
-    events: [{ at: timestamp, status: "queued", detail: "Pagamento confirmado; entrega enfileirada." }],
-    createdAt: timestamp,
-    updatedAt: timestamp,
+    events: [{ at: updatedAt, status: "queued", detail: "Pagamento confirmado; entrega enfileirada." }],
+    createdAt,
+    updatedAt,
   };
   state.deliveries.push(delivery);
   await persist();
@@ -160,6 +164,7 @@ export function enqueuePaidDelivery(input: {
   paymentId: string;
   beneficiaryPhone: string;
   packageLabel: string;
+  createdAt?: string;
   ussdSequence: string[];
 }) {
   const work = enqueueQueue.then(() => enqueuePaidDeliveryLocked(input));

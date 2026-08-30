@@ -42,6 +42,26 @@ export function DeliveryStatusPill({ status }: { status: DeliveryStatus }) {
   );
 }
 
+function formatDeliveryDate(value?: string) {
+  if (!value) return "Data não disponível";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Data não disponível";
+  try {
+    const dateLabel = new Intl.DateTimeFormat("pt-MZ", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }).format(date);
+    const timeLabel = new Intl.DateTimeFormat("pt-MZ", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date);
+    return `${dateLabel} às ${timeLabel}`;
+  } catch {
+    return date.toISOString();
+  }
+}
+
 export function DeliverySummary({ delivery }: { delivery: Delivery }) {
   const colors = useColors();
   return (
@@ -57,6 +77,10 @@ export function DeliverySummary({ delivery }: { delivery: Delivery }) {
       <View style={styles.infoRow}>
         <Feather name="hash" size={14} color={colors.mutedForeground} />
         <Text style={[styles.infoText, { color: colors.mutedForeground }]}>Pedido {delivery.paymentId}</Text>
+      </View>
+      <View style={styles.infoRow}>
+        <Feather name="calendar" size={14} color={colors.mutedForeground} />
+        <Text style={[styles.infoText, { color: colors.mutedForeground }]}>Compra {formatDeliveryDate(delivery.createdAt)}</Text>
       </View>
     </View>
   );

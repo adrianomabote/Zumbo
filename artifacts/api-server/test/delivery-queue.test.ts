@@ -408,6 +408,8 @@ test("PAID Para Mim reaches the account number and repeated equivalent webhooks 
   let delivery = deliveries.find((candidate) => candidate.paymentId === txId);
   assert.ok(delivery);
   assert.equal(delivery.beneficiaryPhone, "841112223");
+  assert.equal(delivery.packageLabel, "780 MB");
+  assert.ok(Number.isFinite(Date.parse(delivery.createdAt)));
   assert.match(delivery.ussdSequence.at(-1), /841112223/);
 
   assert.equal((await webhookRequest(`delivery-test-self-event-${testId}`, operationId, reference)).status, 204);
@@ -436,6 +438,8 @@ test("PAID Para Outro keeps the informed beneficiary and failed delivery can be 
   const created = (await listDeliveries()).find((candidate) => candidate.paymentId === txId);
   assert.ok(created);
   assert.equal(created.beneficiaryPhone, "852223334");
+  assert.equal(created.packageLabel, "780 MB");
+  assert.ok(Number.isFinite(Date.parse(created.createdAt)));
   assert.match(created.ussdSequence.at(-1), /852223334/);
 
   const leased = await leaseNextDelivery("other-agent");
@@ -466,6 +470,35 @@ test("PAID Para Outro keeps the informed beneficiary and failed delivery can be 
   assert.equal(leasedAgain.id, leased.id);
   assert.equal(leasedAgain.beneficiaryPhone, "852223334");
   assert.match(leasedAgain.ussdSequence.at(-1), /852223334/);
+});
+
+test("the delivery contract preserves the package name and purchase timestamp from the bridge", async () => {
+  const createdAt = "2026-08-30T07:45:12.000Z";
+  const response = await fetch(`${baseUrl}/api/ussd-agent/internal/paid-deliveries`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-internal-delivery-key": process.env.SESSION_SECRET!,
+    },
+    body: JSON.stringify({
+      paymentId: `delivery-test-metadata-${testId}`,
+      idempotencyKey: `order-delivery-test-metadata-${testId}`,
+      beneficiaryPhone: "841112223",
+      packageLabel: "5.8 GB",
+      createdAt,
+      ussdSequence: ["*111#", "Enviar pacote 5.8 GB para 841112223"],
+    }),
+  });
+  assert.equal(response.status, 201);
+  const data = (await response.json()) as {
+    delivery: { packageLabel: string; createdAt: string };
+  };
+  assert.equal(data.delivery.packageLabel, "5.8 GB");
+  assert.equal(data.delivery.createdAt, createdAt);
+  const stored = (await listDeliveries()).find(
+    (delivery) => delivery.paymentId === `delivery-test-metadata-${testId}`,
+  );
+  assert.equal(stored?.createdAt, createdAt);
 });
 
 test("worker retries a confirmed webhook after the bridge becomes unavailable without duplicating delivery", async () => {

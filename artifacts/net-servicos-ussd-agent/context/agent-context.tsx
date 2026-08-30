@@ -14,6 +14,7 @@ export interface Delivery {
   status: DeliveryStatus;
   attempts: number;
   maxAttempts: number;
+  createdAt?: string;
   leaseExpiresAt?: string;
   confirmationReference?: string;
   failureReason?: string;

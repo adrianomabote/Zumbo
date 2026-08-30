@@ -469,6 +469,7 @@ async function enqueueUssdDelivery(order) {
     idempotencyKey:      `order-${order.txId}`,
     beneficiaryPhone,
     packageLabel:        order.bundleLabel || 'Pacote de dados',
+    createdAt:           order.ts,
     ussdSequence:        bundleUssdSequence(order.bundleLabel || 'Pacote de dados', beneficiaryPhone),
   })
   try {

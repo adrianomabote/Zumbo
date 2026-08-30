@@ -107,6 +107,7 @@ router.post("/ussd-agent/internal/paid-deliveries", async (req, res) => {
     idempotencyKey: String(body.idempotencyKey),
     beneficiaryPhone: String(body.beneficiaryPhone),
     packageLabel: String(body.packageLabel),
+    createdAt: typeof body.createdAt === "string" ? body.createdAt : undefined,
     ussdSequence: Array.isArray(body.ussdSequence) ? body.ussdSequence.map(String) : ["*111#"],
   });
   return res.status(201).json({ delivery });
