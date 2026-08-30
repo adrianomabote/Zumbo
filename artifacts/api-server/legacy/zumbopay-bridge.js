@@ -38,6 +38,8 @@ function checkAdminCookie(req) {
 
 // ── Catálogo de pacotes ───────────────────────────────────────────────────────
 const BUNDLES = new Map([
+  ['n01',{label:'380 MB', price:10,  cat:'normal'}],['n02',{label:'512 MB', price:13,  cat:'normal'}],
+  ['n03',{label:'624 MB', price:17,  cat:'normal'}],
   ['n04',{label:'780 MB', price:20,  cat:'normal'}],
   ['n05',{label:'1 GB',   price:25,  cat:'normal'}],['n06',{label:'1.1 GB', price:28,  cat:'normal'}],
   ['n07',{label:'1.6 GB', price:41,  cat:'normal'}],['n08',{label:'2 GB',   price:50,  cat:'normal'}],
@@ -172,15 +174,15 @@ const PUBLIC_INFO_PAGES = {
     ],
   },
   '/megas-baratos-vodacom': {
-    title: 'Megas Baratos Vodacom a partir de 20 MT | Megabyte',
-    description: 'Procura megas baratos em Moçambique? Veja opções de internet Vodacom a partir de 20 MT e pague com M-Pesa ou e-Mola na Megabyte.',
-    heading: 'Megas baratos Vodacom a partir de 20 MT',
-    intro: 'Compare as opções de megas Vodacom disponíveis na Megabyte para encontrar um pacote de internet acessível para o seu número ou para outra pessoa.',
+    title: 'Megas Baratos Vodacom a partir de 10 MT | Megabyte',
+    description: 'Procura megas baratos em Moçambique? Veja opções de internet Vodacom a partir de 10 MT com saldo de crédito. Recarregue a partir de 20 MT usando M-Pesa ou e-Mola.',
+    heading: 'Megas baratos Vodacom a partir de 10 MT',
+    intro: 'Compare as opções de megas Vodacom disponíveis na Megabyte. As ofertas abaixo de 20 MT são pagas somente com saldo de crédito.',
     sections: [
       {
-        heading: 'Opções de internet a partir de 20 MT',
+        heading: 'Opções de internet a partir de 10 MT',
         paragraphs: [
-          'O catálogo da Megabyte inclui pacotes de internet Vodacom a partir de 20 MT. Consulte o valor e a quantidade de dados disponíveis antes de confirmar.',
+          'O catálogo da Megabyte inclui pacotes de internet Vodacom a partir de 10 MT. Para usar as ofertas abaixo de 20 MT, recarregue o saldo com M-Pesa ou e-Mola a partir de 20 MT.',
           'Se pesquisou por “Vodacom megas”, “megas baratos” ou “internet móvel barata”, abra a loja para ver as ofertas actuais.',
         ],
       },
@@ -189,7 +191,7 @@ const PUBLIC_INFO_PAGES = {
         steps: [
           'Compare o preço, a quantidade de megas e o período de validade.',
           'Escolha o número Vodacom que deve receber o pacote.',
-          'Pague com M-Pesa ou e-Mola depois de confirmar os dados.',
+          'Use saldo de crédito para ofertas abaixo de 20 MT; pacotes a partir de 20 MT também aceitam M-Pesa ou e-Mola.',
         ],
       },
     ],
@@ -875,6 +877,7 @@ self.addEventListener('fetch',e=>{
     const { phone, beneficiaryPhone, bundleId } = body
     const bundle = BUNDLES.get(bundleId)
     if (!bundle) return json(res, { error:'Pacote inválido.' }, 400)
+    if (bundle.price < 20) return json(res, { error:'Esta oferta abaixo de 20 MT só pode ser comprada com saldo de crédito.' }, 400)
     const purchaseFor = String(body.purchaseFor || '').toLowerCase()
     const isSelfPurchase = purchaseFor === 'self' || (!purchaseFor && !beneficiaryPhone)
     const payerPhone = normalizeLocalPhone(phone)
@@ -1513,6 +1516,9 @@ function megasPage(pageConfig = null) {
     diarias: {
       note: null,
       pkgs: [
+        {id:'n01',name:'Diário 10', size:'380 MB', price:10,  dur:'1 dia(s)'},
+        {id:'n02',name:'Diário 13', size:'512 MB', price:13,  dur:'1 dia(s)'},
+        {id:'n03',name:'Diário 17', size:'624 MB', price:17,  dur:'1 dia(s)'},
         {id:'n04',name:'Diário 20', size:'780 MB', price:20,  dur:'1 dia(s)'},
         {id:'n05',name:'Diário 25', size:'1 GB',   price:25,  dur:'1 dia(s)'},
         {id:'n06',name:'Diário 28', size:'1.1 GB', price:28,  dur:'1 dia(s)'},
@@ -1581,7 +1587,7 @@ function megasPage(pageConfig = null) {
     : ['diarias','semanais','mensais','infinitas']
   const homePage = {
     title: 'Megabyte — Compre Megas de Forma Rápida e Fácil',
-    description: 'Aproveite os nossos pacotes de megas a partir de 20 MT, incluindo 1 GB por apenas 25 MT. Compre facilmente para o seu próprio número ou para outro número à sua escolha.',
+    description: 'Aproveite os nossos pacotes de megas a partir de 10 MT com saldo. Recarregue a sua conta a partir de 20 MT com M-Pesa ou e-Mola e compre facilmente para o seu próprio número ou para outro número à sua escolha.',
     heading: 'Ofertas de Internet',
     intro: 'São ofertas diferenciadas e ricas em <strong>DADOS</strong> que te permitem aceder a todas as plataformas e conteúdos de internet para navegares à vontade.',
     path: '/megas',
@@ -2367,6 +2373,9 @@ ${allListHtml}
           </div>
         </button>
       </div>
+      <div id="via-note" style="display:none;margin-top:10px;padding:9px 11px;border-radius:8px;background:#fff3cd;color:#856404;font-size:12px;line-height:1.4">
+        Ofertas abaixo de 20 MT só podem ser pagas com saldo de crédito.
+      </div>
     </div>
 
     <div class="sh-err" id="sh-err"></div>
@@ -2504,7 +2513,7 @@ ${allListHtml}
       <div class="auth-card-head">
         <div style="margin-bottom:12px;display:flex;justify-content:center"><img src="/static/coins.png" style="width:56px;height:56px" alt="saldo"></div>
         <div class="auth-card-title">Recarregar Saldo</div>
-         <div class="auth-card-sub">M-Pesa ou e-Mola, conforme o seu número</div>
+         <div class="auth-card-sub">M-Pesa ou e-Mola, conforme o número da conta · mínimo 20 MT</div>
       </div>
       <div class="auth-body">
         <div class="rech-amount-wrap">
@@ -2832,8 +2841,14 @@ function syncPayerFields() {
 }
 
 function selectPayVia(v) {
+  const creditOnly = (curPkg?.price || 0) < 20
+  if (creditOnly && v === 'mobile-money') v = 'credit'
   payVia = v
   document.querySelectorAll('.via-btn').forEach(b => b.classList.toggle('active', b.dataset.via===v))
+  const mobileBtn = document.querySelector('.via-btn[data-via="mobile-money"]')
+  if (mobileBtn) mobileBtn.disabled = creditOnly
+  const viaNote = document.getElementById('via-note')
+  if (viaNote) viaNote.style.display = creditOnly ? 'block' : 'none'
   syncPayerFields()
   const btn = document.getElementById('sh-btn')
   if (v === 'credit') {
@@ -2882,10 +2897,10 @@ function openBuyDirect(id) {
   selfInput.placeholder = 'Número que vai pagar'
   syncSelfPurchaseRecipient()
   document.getElementById('sh-err').style.display = 'none'
+  const btn = document.getElementById('sh-btn'); btn.disabled=false; btn.textContent='Próximo'; btn.style.display='block'
   payVia = 'mobile-money'
   selectPayVia(payVia)
   updateCreditBtn()
-  const btn = document.getElementById('sh-btn'); btn.disabled=false; btn.textContent='Próximo'; btn.style.display='block'
   shSetTab('mim')
   shShow('buy')
   document.getElementById('overlay').classList.add('open')
