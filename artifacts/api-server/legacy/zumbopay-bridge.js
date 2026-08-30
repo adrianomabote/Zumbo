@@ -1924,6 +1924,8 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .sh-via.active{border-color:#cc0000;color:#cc0000;background:#fff8f8;}
 /* error */
 .sh-err{background:#fff0f0;border:1px solid #ffcdd2;border-radius:10px;padding:10px 14px;font-size:13px;color:#cc0000;margin:12px 16px 0;display:none;}
+.sh-recharge-btn{display:block;width:100%;margin-top:10px;padding:10px 12px;border:0;border-radius:8px;background:#cc0000;color:#fff;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;}
+.sh-recharge-btn:active{opacity:.85;}
 /* próximo button */
 .sh-next{position:sticky;bottom:0;width:calc(100% - 32px);margin:16px 16px max(18px, env(safe-area-inset-bottom));padding:17px;border:none;border-radius:14px;font-size:16px;font-weight:700;font-family:inherit;cursor:pointer;background:linear-gradient(135deg,#e53935,#cc0000);color:#fff;transition:opacity .2s;box-shadow:0 -10px 18px rgba(255,255,255,.92);}
 .sh-next:disabled{opacity:.45;cursor:not-allowed;}
@@ -2919,6 +2921,22 @@ function shShow(s) {
   const centered=['pending','recharging']
   if(centered.includes(s)){sh.classList.add('pending-full')}else{sh.classList.remove('pending-full')}
 }
+function showSheetError(message, showRecharge=false) {
+  const ee=document.getElementById('sh-err')
+  ee.textContent=''
+  const messageEl=document.createElement('div')
+  messageEl.textContent=message||'Erro ao processar.'
+  ee.appendChild(messageEl)
+  if (showRecharge || /saldo insuficiente/i.test(message||'')) {
+    const rechargeBtn=document.createElement('button')
+    rechargeBtn.type='button'
+    rechargeBtn.className='sh-recharge-btn'
+    rechargeBtn.textContent='Recarregar saldo'
+    rechargeBtn.onclick=()=>{ closeSheet(); openRechargeDialog() }
+    ee.appendChild(rechargeBtn)
+  }
+  ee.style.display='block'
+}
 
 function getPhoneFromSheet() {
   if (shCurTab==='outro') {
@@ -2975,7 +2993,7 @@ async function payWithCredit() {
     if(beneficiaryPhone) payload.beneficiaryPhone=beneficiaryPhone
     const r=await fetch('/api/buy-credit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
     const d=await r.json()
-    if(!r.ok){ee.textContent=d.error||'Erro.';ee.style.display='block';selectPayVia('credit');return}
+    if(!r.ok){showSheetError(d.error||'Erro.', /saldo insuficiente/i.test(d.error||''));selectPayVia('credit');return}
     authState.user.balance=d.newBalance; updateNavAuth()
     document.getElementById('sh-ok-pkg-credit').textContent=curPkg.name+' — '+curPkg.price+' MT'
     shShow('success-credit')
