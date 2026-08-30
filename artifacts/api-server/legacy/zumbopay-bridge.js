@@ -2842,7 +2842,12 @@ function syncPayerFields() {
   })
 }
 
-function selectPayVia(v) {
+function clearSheetError() {
+  const ee=document.getElementById('sh-err')
+  ee.textContent=''
+  ee.style.display='none'
+}
+function selectPayVia(v, preserveError=false) {
   const creditOnly = (curPkg?.price || 0) < 20
   if (creditOnly && v === 'mobile-money') v = 'credit'
   payVia = v
@@ -2859,13 +2864,16 @@ function selectPayVia(v) {
     if (bal < price) {
       btn.textContent = 'Saldo insuficiente (' + bal.toLocaleString('pt-MZ') + ' MT)'
       btn.disabled = true
+      showSheetError('Saldo insuficiente. Tens ' + bal.toLocaleString('pt-MZ') + ' MT, precisas de ' + price + ' MT.', true)
     } else {
       btn.textContent = 'Pagar ' + price + ' MT com Crédito'
       btn.disabled = false
+      if (!preserveError) clearSheetError()
     }
   } else {
     btn.textContent = 'Próximo'
     btn.disabled = false
+    clearSheetError()
   }
 }
 function updateCreditBtn() {
@@ -2993,7 +3001,7 @@ async function payWithCredit() {
     if(beneficiaryPhone) payload.beneficiaryPhone=beneficiaryPhone
     const r=await fetch('/api/buy-credit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
     const d=await r.json()
-    if(!r.ok){showSheetError(d.error||'Erro.', /saldo insuficiente/i.test(d.error||''));selectPayVia('credit');return}
+    if(!r.ok){showSheetError(d.error||'Erro.', /saldo insuficiente/i.test(d.error||''));selectPayVia('credit', true);return}
     authState.user.balance=d.newBalance; updateNavAuth()
     document.getElementById('sh-ok-pkg-credit').textContent=curPkg.name+' — '+curPkg.price+' MT'
     shShow('success-credit')
