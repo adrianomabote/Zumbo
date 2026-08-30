@@ -6,6 +6,7 @@
 - [Perfil do utilizador](profile-ui.md) — o perfil deve abrir como ecrã inteiro, não como diálogo, sem texto de prefixos
 - [Conta que recebe megas](self-purchase-account.md) — Comprar Para Mim usa sempre o telefone autenticado no perfil como conta beneficiária
 - [Encaminhamento de webhooks Pagar](pagar-webhook-forwarding.md) — deduplicar o evento não substitui persistir e repetir a entrega ao bridge
+- [Reconciliação de pagamentos Pagar](pagar-payment-reconciliation.md) — timeout ou resposta perdida não provam falha; só estado terminal explícito pode marcar pagamento falhado
 - [Teste de recuperação Pagar](pagar-forwarding-recovery-test.md) — validar falha real do bridge, estado persistido e repetição idempotente até uma única entrega
 - [Isolamento do teste de restart](api-restart-test-isolation.md) — testes de subprocessos não devem assumir que a porta legada fixa está livre
 - [Páginas SEO no preview](seo-static-preview-paths.md) — páginas estáticas em rotas profundas devem usar assets relativos para respeitar o prefixo do artefacto
