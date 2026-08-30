@@ -26,7 +26,7 @@ const isTestMode           = PAYMENT_MODE === 'mock' || PAYMENT_MODE === 'test'
 const ORDERS_FILE          = './orders.json'
 const USERS_FILE           = './users.json'
 const RECHARGE_CREDITS_FILE = './recharge-credits.json'
-const SHARE_DESCRIPTION = 'Compra mínima: 10 MT. 380 MB = 10 MT e 1024 MB (1 GB) = 25 MT. Compre para o seu número ou envie para outro número Vodacom. Pague com saldo, M-Pesa ou e-Mola.'
+const SHARE_DESCRIPTION = 'Pacotes a partir de 10 MT. 380 MB = 10 MT e 1024 MB = 25 MT. Compre para o seu número ou envie para outro número Vodacom. Pague com saldo, M-Pesa ou e-Mola.'
 
 function adminToken() {
   return createHmac('sha256', (process.env.PAGAR_WEBHOOK_SECRET || '') + ADMIN_PASS).update('netservicos:admin').digest('hex')
