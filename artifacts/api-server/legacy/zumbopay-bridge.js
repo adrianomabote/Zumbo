@@ -1924,7 +1924,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .sh-via.active{border-color:#cc0000;color:#cc0000;background:#fff8f8;}
 /* error */
 .sh-err{background:#fff0f0;border:1px solid #ffcdd2;border-radius:10px;padding:10px 14px;font-size:13px;color:#cc0000;margin:12px 16px 0;display:none;}
-.sh-recharge-btn{display:block;width:100%;margin-top:10px;padding:10px 12px;border:0;border-radius:8px;background:#cc0000;color:#fff;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;}
+.sh-recharge-btn{display:block;width:calc(100% + 28px);margin:12px -14px -10px;padding:17px;border:none;border-radius:14px;font-size:16px;font-weight:700;font-family:inherit;cursor:pointer;background:linear-gradient(135deg,#e53935,#cc0000);color:#fff;transition:opacity .2s;box-shadow:0 -10px 18px rgba(255,255,255,.92);}
 .sh-recharge-btn:active{opacity:.85;}
 /* próximo button */
 .sh-next{position:sticky;bottom:0;width:calc(100% - 32px);margin:16px 16px max(18px, env(safe-area-inset-bottom));padding:17px;border:none;border-radius:14px;font-size:16px;font-weight:700;font-family:inherit;cursor:pointer;background:linear-gradient(135deg,#e53935,#cc0000);color:#fff;transition:opacity .2s;box-shadow:0 -10px 18px rgba(255,255,255,.92);}
