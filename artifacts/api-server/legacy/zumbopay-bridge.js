@@ -2831,7 +2831,8 @@ function shSetTab(t) {
     document.querySelectorAll('.sh-tab')[i].classList.toggle('active', x===t)
   })
   const showBtn = t !== 'req'
-  document.getElementById('sh-btn').style.display = showBtn ? 'block' : 'none'
+  const creditInsufficient = payVia === 'credit' && (authState.user?.balance || 0) < (curPkg?.price || 0)
+  document.getElementById('sh-btn').style.display = showBtn && !creditInsufficient ? 'block' : 'none'
   document.getElementById('via-section').style.display = showBtn ? 'block' : 'none'
 }
 
@@ -2862,15 +2863,16 @@ function selectPayVia(v, preserveError=false) {
     const bal = authState.user?.balance || 0
     const price = curPkg?.price || 0
     if (bal < price) {
-      btn.textContent = 'Saldo insuficiente (' + bal.toLocaleString('pt-MZ') + ' MT)'
-      btn.disabled = true
+      btn.style.display = 'none'
       showSheetError('Saldo insuficiente. Tens ' + bal.toLocaleString('pt-MZ') + ' MT, precisas de ' + price + ' MT.', true)
     } else {
+      btn.style.display = 'block'
       btn.textContent = 'Pagar ' + price + ' MT com Crédito'
       btn.disabled = false
       if (!preserveError) clearSheetError()
     }
   } else {
+    btn.style.display = 'block'
     btn.textContent = 'Próximo'
     btn.disabled = false
     clearSheetError()
