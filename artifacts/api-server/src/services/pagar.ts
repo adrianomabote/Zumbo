@@ -3,6 +3,15 @@ import { hasDatabase, pool } from "@workspace/db";
 
 const DEFAULT_BASE_URL = "https://api.pagar.co.mz/api/v1";
 const terminalStates = new Set(["PAID", "FAILED", "CANCELLED", "REFUNDED"]);
+const knownPaymentStates = new Set([
+  "PAID",
+  "FAILED",
+  "CANCELLED",
+  "REFUNDED",
+  "PENDING",
+  "PROCESSING",
+  "RECONCILIATION_REQUIRED",
+]);
 const forwardableEventTypes = new Set(["payment.succeeded", "payment.failed"]);
 const forwardingStatuses = new Set(["pending", "forwarding", "failed", "delivered"]);
 
@@ -105,6 +114,25 @@ function validateInput(input: PagarPaymentInput) {
   if (!valid) throw new Error("O telefone não corresponde ao método de pagamento.");
 }
 
+function errorStatus(error: unknown) {
+  const status = (error as { status?: unknown })?.status;
+  return typeof status === "number" && Number.isFinite(status) ? status : undefined;
+}
+
+function isConfigurationError(error: unknown) {
+  return error instanceof Error && error.message === "Pagar API não está configurada no servidor.";
+}
+
+function isUncertainPagarError(error: unknown) {
+  if (isConfigurationError(error)) return false;
+  const status = errorStatus(error);
+  return status === undefined || status === 408 || status === 409 || status === 429 || status >= 500;
+}
+
+function normalizePaymentStatus(value: unknown) {
+  return typeof value === "string" ? value.trim().toUpperCase() : undefined;
+}
+
 export async function ensurePagarTables() {
   if (!hasDatabase || !pool) return;
   await pool.query(`
@@ -179,10 +207,21 @@ export async function createPagarPayment(input: PagarPaymentInput) {
     const operation = (data.payment || data) as Record<string, unknown>;
     const updated = await database.query(
       "UPDATE pagar_operations SET pagar_operation_id = $1, status = $2 WHERE internal_id = $3 RETURNING *",
-      [String(operation.id || ""), String(operation.status || "PENDING"), input.localTransactionId],
+      [
+        typeof operation.id === "string" && operation.id ? operation.id : null,
+        normalizePaymentStatus(operation.status) || "PENDING",
+        input.localTransactionId,
+      ],
     );
     return updated.rows[0] || inserted.rows[0];
   } catch (error) {
+    if (isUncertainPagarError(error)) {
+      const recovered = await database.query(
+        "UPDATE pagar_operations SET status = 'RECONCILIATION_REQUIRED' WHERE internal_id = $1 RETURNING *",
+        [input.localTransactionId],
+      );
+      return recovered.rows[0] || { ...inserted.rows[0], status: "RECONCILIATION_REQUIRED" };
+    }
     await database.query("UPDATE pagar_operations SET status = 'FAILED' WHERE internal_id = $1", [input.localTransactionId]);
     throw error;
   }
@@ -193,6 +232,88 @@ export async function getPagarPayment(identifier: { id?: string; reference?: str
     ? `/payments/${encodeURIComponent(identifier.id)}`
     : `/payments/by-reference/${encodeURIComponent(identifier.reference || "")}`;
   return request("GET", endpoint);
+}
+
+export async function reconcilePagarPayment(localTransactionId: string) {
+  const database = requirePool();
+  const localResult = await database.query(
+    `SELECT internal_id, pagar_operation_id, pagar_reference, amount_mzn, status
+       FROM pagar_operations WHERE internal_id = $1`,
+    [localTransactionId],
+  );
+  const local = localResult.rows[0];
+  if (!local) throw new Error("Operação de pagamento não encontrada.");
+
+  const data = await getPagarPayment({
+    id: local.pagar_operation_id || undefined,
+    reference: local.pagar_reference,
+  });
+  const operation = (data.payment || data) as Record<string, unknown>;
+  const providerStatus = normalizePaymentStatus(operation.status);
+  if (!providerStatus || !knownPaymentStates.has(providerStatus)) {
+    throw new Error("O Pagar devolveu um estado de pagamento desconhecido.");
+  }
+
+  const operationId = typeof operation.id === "string" && operation.id ? operation.id : undefined;
+  const reference = typeof operation.reference === "string" && operation.reference
+    ? operation.reference
+    : undefined;
+  if (local.pagar_operation_id && operationId && local.pagar_operation_id !== operationId) {
+    throw new Error("A operação devolvida pelo Pagar não corresponde ao pagamento local.");
+  }
+  if (local.pagar_reference && reference && local.pagar_reference !== reference) {
+    throw new Error("A referência devolvida pelo Pagar não corresponde ao pagamento local.");
+  }
+  const amount = typeof operation.amountMzn === "number"
+    ? operation.amountMzn
+    : typeof operation.amount === "number"
+      ? operation.amount
+      : undefined;
+  if (amount !== undefined && amount !== local.amount_mzn) {
+    throw new Error("O valor devolvido pelo Pagar não corresponde ao pagamento local.");
+  }
+
+  const receipt = (operation.receipt || {}) as Record<string, unknown>;
+  const client = await database.connect();
+  try {
+    await client.query("BEGIN");
+    const currentResult = await client.query(
+      "SELECT * FROM pagar_operations WHERE internal_id = $1 FOR UPDATE",
+      [localTransactionId],
+    );
+    const current = currentResult.rows[0];
+    if (!current) throw new Error("Operação de pagamento não encontrada.");
+
+    // PAID is monotonic: a late or inconsistent failure response must not
+    // undo a payment that the provider already confirmed.
+    const nextStatus = current.status === "PAID" && providerStatus !== "PAID"
+      ? "PAID"
+      : providerStatus;
+    const updated = await client.query(
+      `UPDATE pagar_operations
+          SET status = $1,
+              pagar_operation_id = COALESCE($2, pagar_operation_id),
+              receipt_number = COALESCE($3, receipt_number),
+              receipt_url = COALESCE($4, receipt_url),
+              confirmed_at = CASE WHEN $1 = 'PAID' THEN COALESCE(confirmed_at, now()) ELSE confirmed_at END
+        WHERE internal_id = $5
+        RETURNING *`,
+      [
+        nextStatus,
+        operationId || null,
+        typeof receipt.number === "string" ? receipt.number : null,
+        typeof receipt.url === "string" ? receipt.url : null,
+        localTransactionId,
+      ],
+    );
+    await client.query("COMMIT");
+    return updated.rows[0];
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function listPagarPayments(query: { status?: string; cursor?: string; limit?: string }) {
@@ -307,13 +428,23 @@ export async function processPagarWebhook(eventId: string, eventType: string, ra
       );
       const local = current.rows[0];
       const eventAmount = typeof data.amountMzn === "number" ? data.amountMzn : undefined;
-      const acceptedStatus = !status || ["PAID", "FAILED", "CANCELLED", "REFUNDED", "PENDING", "PROCESSING", "RECONCILIATION_REQUIRED"].includes(status);
       const identifiersMatch = Boolean(local && (operationId || reference));
-      if (local && identifiersMatch && acceptedStatus && (eventAmount === undefined || eventAmount === local.amount_mzn)) {
-        const nextStatus = eventType === "payment.succeeded" ? "PAID" : status || "FAILED";
+      const providerStatus = normalizePaymentStatus(status);
+      const nextStatus = eventType === "payment.succeeded"
+        ? "PAID"
+        : eventType === "payment.failed" && (!providerStatus || ["FAILED", "CANCELLED", "REFUNDED"].includes(providerStatus))
+          ? providerStatus || "FAILED"
+          : undefined;
+      if (local && identifiersMatch && nextStatus && (eventAmount === undefined || eventAmount === local.amount_mzn)) {
         const receipt = (data.receipt || {}) as Record<string, unknown>;
         await client.query(
-          "UPDATE pagar_operations SET status = $1, pagar_operation_id = COALESCE($2,pagar_operation_id), receipt_number = COALESCE($3,receipt_number), receipt_url = COALESCE($4,receipt_url), confirmed_at = CASE WHEN $1 = 'PAID' THEN now() ELSE confirmed_at END WHERE internal_id = $5",
+          `UPDATE pagar_operations
+              SET status = CASE WHEN status = 'PAID' AND $1 <> 'PAID' THEN status ELSE $1 END,
+                  pagar_operation_id = COALESCE($2,pagar_operation_id),
+                  receipt_number = COALESCE($3,receipt_number),
+                  receipt_url = COALESCE($4,receipt_url),
+                  confirmed_at = CASE WHEN $1 = 'PAID' THEN COALESCE(confirmed_at, now()) ELSE confirmed_at END
+            WHERE internal_id = $5`,
           [nextStatus, operationId || null, typeof receipt.number === "string" ? receipt.number : null, typeof receipt.url === "string" ? receipt.url : null, local.internal_id],
         );
       }

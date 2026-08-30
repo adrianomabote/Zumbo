@@ -6,6 +6,7 @@ import {
   listPagarPayments,
   listPagarWebhookEvents,
   processPagarWebhook,
+  reconcilePagarPayment,
   retryPagarWebhookForwarding,
   verifyPagarWebhook,
 } from "../services/pagar";
@@ -40,6 +41,22 @@ router.post("/pagar/internal/payments", async (req, res) => {
     return res.status(202).json({ paymentId: payment.pagar_operation_id, status: payment.status, reference: payment.pagar_reference });
   } catch (error) {
     return res.status(400).json({ error: error instanceof Error ? error.message : "Pagamento inválido." });
+  }
+});
+
+router.post("/pagar/internal/payments/:localTransactionId/reconcile", async (req, res) => {
+  if (!process.env.SESSION_SECRET || req.header("x-internal-payment-key") !== process.env.SESSION_SECRET) {
+    return res.status(401).json({ error: "Origem não autorizada." });
+  }
+  try {
+    const payment = await reconcilePagarPayment(req.params.localTransactionId);
+    return res.json({
+      paymentId: payment.pagar_operation_id,
+      status: payment.status,
+      reference: payment.pagar_reference,
+    });
+  } catch (error) {
+    return res.status(502).json({ error: error instanceof Error ? error.message : "Não foi possível reconciliar o pagamento." });
   }
 });
 
