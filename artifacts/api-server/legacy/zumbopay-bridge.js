@@ -3510,7 +3510,20 @@ function adminDashboard(filter = 'all', requestedPage = 1) {
   ]
   const allNavItems = navSections.flatMap(s=>s.items)
 
-  const sidebarLinks = navSections.map(s=>
+  const maintenanceSidebarControl = `<div class="sidebar-maintenance-control ${maintenanceEnabled ? 'is-on' : 'is-off'}">
+    <div class="sidebar-maintenance-heading">
+      <span class="sidebar-maintenance-dot"></span>
+      <div>
+        <strong>Manutenção</strong>
+        <small>${maintenanceEnabled ? 'Loja bloqueada' : 'Loja online'}</small>
+      </div>
+    </div>
+    <button class="sidebar-maintenance-button ${maintenanceEnabled ? 'turn-off' : 'turn-on'}" onclick="toggleMaintenance(${!maintenanceEnabled})">
+      ${maintenanceEnabled ? 'Desactivar manutenção' : 'Activar manutenção'}
+    </button>
+  </div>`
+
+  const sidebarLinks = maintenanceSidebarControl + navSections.map(s=>
     `<div class="sidebar-section">${s.label}</div>` +
     s.items.map(n=>`
     <a href="/admin/office?filter=${n.f}" class="nav-link${filter===n.f?' active':''}">
@@ -3518,13 +3531,7 @@ function adminDashboard(filter = 'all', requestedPage = 1) {
       <span>${n.label}</span>
       <span class="nav-count">${filterMap[n.f]?.length||0}</span>
     </a>`).join('')
-  ).join('') +
-  `<div class="sidebar-section">Operações</div>
-   <a href="#maintenance-panel" class="nav-link maintenance-nav-link">
-     <svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
-     <span>Manutenção</span>
-     <span class="maintenance-nav-status">${maintenanceEnabled ? 'ACTIVA' : 'OFF'}</span>
-   </a>`
+  ).join('')
 
   const pageTitle = allNavItems.find(n=>n.f===filter)?.label || 'Pagamentos Megabyte'
 
@@ -3896,6 +3903,17 @@ body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:1
 .stat-lbl{font-size:12px;color:#636366;font-weight:600;margin-top:4px;}
 
 /* ── Manutenção ── */
+.sidebar-maintenance-control{margin:0 12px 20px;padding:13px 12px;border:1px solid #e5e7eb;border-radius:13px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.05);}
+.sidebar-maintenance-control.is-on{border-color:#fecaca;background:#fff8f8;}
+.sidebar-maintenance-heading{display:flex;align-items:center;gap:9px;margin-bottom:11px;}
+.sidebar-maintenance-heading strong{display:block;color:#1c1c1e;font-size:12px;font-weight:800;}
+.sidebar-maintenance-heading small{display:block;margin-top:2px;color:#8e8e93;font-size:10px;}
+.sidebar-maintenance-dot{width:9px;height:9px;flex:0 0 9px;border-radius:50%;background:#10b981;box-shadow:0 0 0 3px #d1fae5;}
+.sidebar-maintenance-control.is-on .sidebar-maintenance-dot{background:#dc2626;box-shadow:0 0 0 3px #fee2e2;}
+.sidebar-maintenance-button{width:100%;padding:9px 8px;border:0;border-radius:9px;color:#fff;font:700 11px 'Segoe UI',system-ui,sans-serif;cursor:pointer;white-space:nowrap;}
+.sidebar-maintenance-button.turn-on{background:#cc0000;}
+.sidebar-maintenance-button.turn-off{background:#047857;}
+.sidebar-maintenance-button:disabled{opacity:.55;cursor:not-allowed;}
 .maintenance-panel{display:flex;align-items:center;gap:14px;margin:-8px 0 28px;padding:15px 16px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 1px 5px rgba(0,0,0,.05);}
 .maintenance-panel.is-on{background:#fff8f8;border-color:#fecaca;}
 .maintenance-panel-icon{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:10px;background:#ecfdf5;color:#047857;font-size:18px;font-weight:900;flex-shrink:0;}
@@ -3907,10 +3925,6 @@ body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:1
 .maintenance-toggle.turn-on{background:#cc0000;}
 .maintenance-toggle.turn-off{background:#047857;}
 .maintenance-toggle:disabled{opacity:.55;cursor:not-allowed;}
-.maintenance-nav-link{margin-top:2px;}
-.maintenance-nav-status{margin-left:auto;font-size:9px;font-weight:800;letter-spacing:.04em;color:#047857;background:#ecfdf5;border-radius:10px;padding:3px 6px;}
-.maintenance-nav-link:hover .maintenance-nav-status{color:#fff;background:#047857;}
-.maintenance-panel.is-on ~ * .maintenance-nav-status{color:#b91c1c;background:#fee2e2;}
 @media(max-width:640px){.maintenance-panel{align-items:flex-start;flex-wrap:wrap}.maintenance-panel-copy{flex-basis:calc(100% - 52px)}.maintenance-toggle{width:100%;margin-left:48px;}}
 
 /* ── Section header ── */
