@@ -1022,7 +1022,7 @@ async function router(req, res) {
     } catch { res.writeHead(404); return res.end() }
   }
   if (method === 'GET' && path === '/static/icon.svg') {
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><image href="/api/legacy/static/icon-512.png?v=4" width="512" height="512"/></svg>`
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><image href="/api/legacy/static/icon-512.png?v=6" width="512" height="512"/></svg>`
     res.writeHead(200,{'Content-Type':'image/svg+xml','Cache-Control':'max-age=86400'}); return res.end(svg)
   }
   if (method === 'GET' && path === '/manifest.json') {
@@ -1032,9 +1032,9 @@ async function router(req, res) {
        start_url:'/',scope:'/',display:'standalone',
       background_color:'#f2f2f7',theme_color:'#cc0000',orientation:'portrait-primary',
       icons:[
-         {src:'/api/legacy/static/icon-192.png?v=4',sizes:'192x192',type:'image/png',purpose:'any'},
-         {src:'/api/legacy/static/icon-512.png?v=4',sizes:'512x512',type:'image/png',purpose:'any'},
-         {src:'/api/legacy/static/icon-maskable-512.png?v=4',sizes:'512x512',type:'image/png',purpose:'maskable'}
+         {src:'/api/legacy/static/icon-192.png?v=6',sizes:'192x192',type:'image/png',purpose:'any'},
+         {src:'/api/legacy/static/icon-512.png?v=6',sizes:'512x512',type:'image/png',purpose:'any'},
+         {src:'/api/legacy/static/icon-maskable-512.png?v=6',sizes:'512x512',type:'image/png',purpose:'maskable'}
       ]
     })
     res.writeHead(200,{'Content-Type':'application/manifest+json','Cache-Control':'max-age=3600'}); return res.end(manifest)
@@ -1042,7 +1042,7 @@ async function router(req, res) {
   if (method === 'GET' && path === '/sw.js') {
     const sw = `
 const CACHE='ns-v6';
-const PRECACHE=['/api/legacy/manifest.json','/api/legacy/static/icon-192.png?v=4','/api/legacy/static/icon-512.png?v=4','/api/legacy/static/icon-maskable-512.png?v=4','/api/legacy/static/vodafone-logo.jpg','/api/legacy/static/coins.png'];
+ const PRECACHE=['/api/legacy/manifest.json','/api/legacy/static/icon-192.png?v=6','/api/legacy/static/icon-512.png?v=6','/api/legacy/static/icon-maskable-512.png?v=6','/api/legacy/static/vodafone-logo.jpg','/api/legacy/static/coins.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(PRECACHE)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
 self.addEventListener('fetch',e=>{
@@ -1922,7 +1922,7 @@ function megasPage(pageConfig = null) {
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Megabyte">
-<link rel="apple-touch-icon" href="/static/icon-192.png?v=4">
+<link rel="apple-touch-icon" href="/static/icon-192.png?v=6">
 <script>(function(){document.addEventListener('contextmenu',e=>e.preventDefault());document.addEventListener('keydown',function(e){const c=e.ctrlKey||e.metaKey;if(e.key==='F12'){e.preventDefault();return false}if(c&&e.shiftKey&&['I','J','C','K'].includes(e.key.toUpperCase())){e.preventDefault();return false}if(c&&['u','U','s','S','a','A','c','C','x','X'].includes(e.key)){e.preventDefault();return false}},true);['copy','cut','selectstart','dragstart'].forEach(ev=>document.addEventListener(ev,e=>e.preventDefault(),true))})()
 </script>
 <style>
@@ -3469,7 +3469,7 @@ function adminDashboard(filter = 'all', requestedPage = 1) {
        <div class="stat-card s-conf"><div class="stat-num">${counts.succeeded}</div><div class="stat-lbl">Pagamentos Confirmados</div></div>
        <div class="stat-card s-act"><div class="stat-num">${counts.activated}</div><div class="stat-lbl">Activações Concluídas</div></div>
        <div class="stat-card s-pend"><div class="stat-num">${counts.pending}</div><div class="stat-lbl">A aguardar Pagamento</div></div>`
-  const maintenancePanel = `<section class="maintenance-panel ${maintenanceEnabled ? 'is-on' : 'is-off'}">
+  const maintenancePanel = `<section id="maintenance-panel" class="maintenance-panel ${maintenanceEnabled ? 'is-on' : 'is-off'}">
     <div class="maintenance-panel-icon">${maintenanceEnabled ? '!' : '✓'}</div>
     <div class="maintenance-panel-copy">
       <strong>${maintenanceEnabled ? 'Manutenção activa' : 'Loja online'}</strong>
@@ -3518,7 +3518,13 @@ function adminDashboard(filter = 'all', requestedPage = 1) {
       <span>${n.label}</span>
       <span class="nav-count">${filterMap[n.f]?.length||0}</span>
     </a>`).join('')
-  ).join('')
+  ).join('') +
+  `<div class="sidebar-section">Operações</div>
+   <a href="#maintenance-panel" class="nav-link maintenance-nav-link">
+     <svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
+     <span>Manutenção</span>
+     <span class="maintenance-nav-status">${maintenanceEnabled ? 'ACTIVA' : 'OFF'}</span>
+   </a>`
 
   const pageTitle = allNavItems.find(n=>n.f===filter)?.label || 'Pagamentos Megabyte'
 
@@ -3901,6 +3907,10 @@ body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:1
 .maintenance-toggle.turn-on{background:#cc0000;}
 .maintenance-toggle.turn-off{background:#047857;}
 .maintenance-toggle:disabled{opacity:.55;cursor:not-allowed;}
+.maintenance-nav-link{margin-top:2px;}
+.maintenance-nav-status{margin-left:auto;font-size:9px;font-weight:800;letter-spacing:.04em;color:#047857;background:#ecfdf5;border-radius:10px;padding:3px 6px;}
+.maintenance-nav-link:hover .maintenance-nav-status{color:#fff;background:#047857;}
+.maintenance-panel.is-on ~ * .maintenance-nav-status{color:#b91c1c;background:#fee2e2;}
 @media(max-width:640px){.maintenance-panel{align-items:flex-start;flex-wrap:wrap}.maintenance-panel-copy{flex-basis:calc(100% - 52px)}.maintenance-toggle{width:100%;margin-left:48px;}}
 
 /* ── Section header ── */

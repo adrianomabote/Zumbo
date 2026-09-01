@@ -473,7 +473,9 @@ function App() {
       />
       {installVisible && (
         <div className="pwa-install-notice" role="region" aria-label="Instalar aplicação Megabyte">
-          <div className="pwa-install-notice-icon" aria-hidden="true">M</div>
+          <div className="pwa-install-notice-icon" aria-hidden="true">
+            <img src={`${import.meta.env.BASE_URL}api/legacy/static/icon-192.png?v=6`} alt="" />
+          </div>
           <div className="pwa-install-notice-copy">
             <strong>Instala a app Megabyte</strong>
             <span>
