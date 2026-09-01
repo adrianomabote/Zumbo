@@ -226,6 +226,28 @@ function updateMeta(selector: string, attribute: string, value: string) {
   if (element) element.setAttribute(attribute, value);
 }
 
+function MaintenanceScreen() {
+  return (
+    <main className="maintenance-screen" role="status" aria-live="polite">
+      <section className="maintenance-card">
+        <div className="maintenance-brand">
+          <span className="maintenance-brand-mark" aria-hidden="true">M</span>
+          Megabyte
+        </div>
+        <div className="maintenance-icon" aria-hidden="true">!</div>
+        <h1>Estamos em manutenção</h1>
+        <p>
+          Estamos a fazer uma manutenção rápida para melhorar a loja.
+          Voltamos em breve.
+        </p>
+        <div className="maintenance-notice">
+          Por favor, volte a tentar dentro de alguns minutos.
+        </div>
+      </section>
+    </main>
+  );
+}
+
 function SeoLandingPage({ page }: { page: SeoPage }) {
   useEffect(() => {
     document.title = page.title;
@@ -305,6 +327,7 @@ function App() {
   const deferredPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
   const [installVisible, setInstallVisible] = useState(false);
   const [installHelp, setInstallHelp] = useState(false);
+  const [maintenance, setMaintenance] = useState<boolean | null>(null);
   const installDismissKey = "pwa-install-notice-dismissed-v2";
   const publicPath = normalizedPathname(window.location.pathname);
   const publicPage = PUBLIC_SEO_PAGES[publicPath];
@@ -315,7 +338,15 @@ function App() {
     if (window.location.pathname.startsWith("/admin")) {
       const target = `/api/legacy${window.location.pathname}${window.location.search}`;
       window.location.replace(target);
+      return;
     }
+
+    fetch(`${import.meta.env.BASE_URL}api/legacy/api/maintenance-status`, {
+      cache: "no-store",
+    })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error("maintenance status unavailable")))
+      .then((data: { enabled?: boolean }) => setMaintenance(data.enabled === true))
+      .catch(() => setMaintenance(false));
 
     if (publicPage) {
       document.title = publicPage.title;
@@ -406,6 +437,14 @@ function App() {
 
   if (window.location.pathname.startsWith("/admin")) {
     return null;
+  }
+
+  if (maintenance === true) {
+    return <MaintenanceScreen />;
+  }
+
+  if (maintenance === null) {
+    return <div className="maintenance-loading" aria-busy="true">A carregar…</div>;
   }
 
   const seoPage = SEO_PAGES[publicPath];

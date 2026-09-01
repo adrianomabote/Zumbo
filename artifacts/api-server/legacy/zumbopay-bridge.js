@@ -26,7 +26,9 @@ const isTestMode           = PAYMENT_MODE === 'mock' || PAYMENT_MODE === 'test'
 const ORDERS_FILE          = './orders.json'
 const USERS_FILE           = './users.json'
 const RECHARGE_CREDITS_FILE = './recharge-credits.json'
+const MAINTENANCE_FILE = './maintenance.json'
 const SHARE_DESCRIPTION = 'Aproveite os nossos pacotes de megas a partir de 10 MT, incluindo 1024 MB por apenas 25 MT. Compre facilmente para o seu próprio número ou para outro número à sua escolha.'
+const MAINTENANCE_MESSAGE = 'Estamos a fazer uma manutenção rápida para melhorar a loja. Voltamos em breve.'
 
 function adminToken() {
   return createHmac('sha256', (process.env.PAGAR_WEBHOOK_SECRET || '') + ADMIN_PASS).update('netservicos:admin').digest('hex')
@@ -35,6 +37,18 @@ function checkAdminCookie(req) {
   const cookies = req.headers.cookie || ''
   const m = cookies.match(/(?:^|;\s*)nsa=([^;]*)/)
   return m ? m[1] === adminToken() : false
+}
+
+function isMaintenanceBypassPath(path) {
+  return path === '/ping' ||
+    path === '/api/maintenance-status' ||
+    path === '/internal/pagar-event' ||
+    path === '/webhook' ||
+    path === '/favicon.ico' ||
+    path === '/manifest.json' ||
+    path === '/sw.js' ||
+    path.startsWith('/admin') ||
+    path.startsWith('/static/')
 }
 
 // ── Catálogo de pacotes ───────────────────────────────────────────────────────
@@ -226,6 +240,7 @@ const sseClients    = new Map()
 const pagarReconciliationTimers = new Map()
 let   orders        = []           // persiste em ORDERS_FILE
 let   rechargeCredits = []         // diário de créditos de saldo recuperável
+let   maintenanceEnabled = false
 let   rechargeCreditQueue = Promise.resolve()
 
 // ── Anti-brute-force: login ───────────────────────────────────────────────────
@@ -380,6 +395,16 @@ async function loadRechargeCredits() {
   if (Array.isArray(d)) rechargeCredits = d
 }
 async function saveRechargeCredits() { await writeJsonAtomic(RECHARGE_CREDITS_FILE, rechargeCredits) }
+async function loadMaintenance() {
+  const d = await storeLoad('maintenance', MAINTENANCE_FILE)
+  maintenanceEnabled = d === true || d?.enabled === true
+}
+async function saveMaintenance() {
+  await writeJsonAtomic(MAINTENANCE_FILE, {
+    enabled: maintenanceEnabled,
+    updatedAt: new Date().toISOString(),
+  })
+}
 function trackOrder(tx, extra = {}) {
   const rec = {
     txId: tx.id, type: tx.type || 'bundle', phone: tx.phone,
@@ -603,6 +628,54 @@ async function refreshPagarForwardingStates() {
 function json(res, data, status = 200, extraHeaders = {}) {
   const body = JSON.stringify(data)
   res.writeHead(status, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body), ...extraHeaders })
+  res.end(body)
+}
+function maintenancePage() {
+  return `<!DOCTYPE html><html lang="pt"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Megabyte — Em manutenção</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box}
+  html,body{margin:0;min-height:100%;background:#f4f5f7}
+  body{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;font-family:Inter,'Segoe UI',system-ui,-apple-system,sans-serif;color:#17181a}
+  .maintenance-card{width:min(100%,460px);background:#fff;border:1px solid #e5e7eb;border-radius:28px;padding:42px 30px 34px;text-align:center;box-shadow:0 18px 55px rgba(16,24,40,.08)}
+  .brand{display:inline-flex;align-items:center;gap:10px;font-size:19px;font-weight:800;letter-spacing:-.03em}
+  .brand-mark{width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;border-radius:11px;background:#cc0000;color:#fff;font-size:20px;font-weight:900}
+  .status-icon{width:76px;height:76px;display:flex;align-items:center;justify-content:center;margin:34px auto 24px;border-radius:50%;background:#fff1f1;color:#cc0000}
+  .status-icon svg{width:38px;height:38px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  h1{margin:0 auto 12px;font-size:28px;line-height:1.15;letter-spacing:-.04em}
+  .message{max-width:350px;margin:0 auto;color:#667085;font-size:16px;line-height:1.6}
+  .notice{margin-top:26px;padding:13px 16px;border-radius:13px;background:#f8f9fb;color:#475467;font-size:13px;line-height:1.5}
+  @media(max-width:420px){.maintenance-card{padding:34px 22px 28px;border-radius:22px}h1{font-size:25px}.status-icon{margin-top:28px}}
+</style></head><body>
+<main class="maintenance-card" role="status" aria-live="polite">
+  <div class="brand"><span class="brand-mark" aria-hidden="true">M</span>Megabyte</div>
+  <div class="status-icon" aria-hidden="true">
+    <svg viewBox="0 0 24 24"><path d="M14.7 6.3a4.8 4.8 0 0 0-6.4 6.4L3 18v3h3l5.3-5.3a4.8 4.8 0 0 0 6.4-6.4l-2.2 2.2-2.1-.5-.5-2.1 2.2-2.2Z"/><path d="m14 10 4 4m1-8 3-3m-1 7h3"/></svg>
+  </div>
+  <h1>Estamos em manutenção</h1>
+  <p class="message">${MAINTENANCE_MESSAGE}</p>
+  <div class="notice">Por favor, volte a tentar dentro de alguns minutos.</div>
+</main>
+</body></html>`
+}
+function sendMaintenanceResponse(req, res, path) {
+  if (path.startsWith('/api/')) {
+    return json(res, { error: 'A loja está temporariamente em manutenção.' }, 503, {
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+      'Retry-After': '300',
+    })
+  }
+  const body = maintenancePage()
+  res.writeHead(503, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Content-Length': Buffer.byteLength(body),
+    'Cache-Control': 'no-store, no-cache, must-revalidate',
+    Pragma: 'no-cache',
+    'Retry-After': '300',
+    'X-Robots-Tag': 'noindex, nofollow',
+  })
   res.end(body)
 }
 function csvCell(value) {
@@ -898,7 +971,7 @@ async function router(req, res) {
   const staticPath = path.startsWith('/static/')
   const readOnlyPath = [
     '/', '/megas', '/ping', '/favicon.ico', '/manifest.json', '/sw.js',
-    '/api/config', '/api/bundles', '/api/auth/me', '/api/auth/logout',
+    '/api/config', '/api/bundles', '/api/auth/me', '/api/auth/logout', '/api/maintenance-status',
   ].includes(path) || staticPath || PUBLIC_CATEGORY_PATHS.includes(path) || PUBLIC_INFO_PATHS_WITH_SLASH.includes(path)
   const accountSetupPath = ['/api/auth/register', '/api/auth/login'].includes(path)
   const adminLoginPath = path === '/admin/office'
@@ -906,6 +979,14 @@ async function router(req, res) {
     return json(res, {
       error: 'Operações temporariamente indisponíveis enquanto a configuração segura do serviço não é concluída.',
     }, 503)
+  }
+
+  if (maintenanceEnabled && !isMaintenanceBypassPath(path)) {
+    return sendMaintenanceResponse(req, res, path)
+  }
+
+  if (method === 'GET' && path === '/api/maintenance-status') {
+    return json(res, { enabled: maintenanceEnabled }, 200, { 'Cache-Control': 'no-store' })
   }
 
   // ── Páginas públicas ──────────────────────────────────────────────────────
@@ -1384,6 +1465,31 @@ NOTAS
   }
 
   // ── Admin panel ───────────────────────────────────────────────────────────
+  if (path === '/admin/maintenance') {
+    if (!checkAdminCookie(req)) return json(res, { error:'Não autorizado.' }, 401)
+    if (method === 'GET') {
+      return json(res, { ok:true, enabled: maintenanceEnabled }, 200, { 'Cache-Control': 'no-store' })
+    }
+    if (method === 'POST') {
+      let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
+      if (typeof body.enabled !== 'boolean') {
+        return json(res, { error:'Indique enabled como true ou false.' }, 400)
+      }
+      const previous = maintenanceEnabled
+      maintenanceEnabled = body.enabled
+      try {
+        await saveMaintenance()
+      } catch (e) {
+        maintenanceEnabled = previous
+        console.error('[Admin] Falha ao guardar estado de manutenção:', e.message)
+        return json(res, { error:'Não foi possível guardar o estado de manutenção.' }, 500)
+      }
+      console.log(`[Admin] Manutenção ${maintenanceEnabled ? 'activada' : 'desactivada'}`)
+      return json(res, { ok:true, enabled: maintenanceEnabled })
+    }
+    return json(res, { error:'Método não permitido.' }, 405)
+  }
+
   if (path === '/admin/office') {
     if (method === 'GET') {
       if (!checkAdminCookie(req)) return html(res, adminLoginPage())
@@ -3363,6 +3469,18 @@ function adminDashboard(filter = 'all', requestedPage = 1) {
        <div class="stat-card s-conf"><div class="stat-num">${counts.succeeded}</div><div class="stat-lbl">Pagamentos Confirmados</div></div>
        <div class="stat-card s-act"><div class="stat-num">${counts.activated}</div><div class="stat-lbl">Activações Concluídas</div></div>
        <div class="stat-card s-pend"><div class="stat-num">${counts.pending}</div><div class="stat-lbl">A aguardar Pagamento</div></div>`
+  const maintenancePanel = `<section class="maintenance-panel ${maintenanceEnabled ? 'is-on' : 'is-off'}">
+    <div class="maintenance-panel-icon">${maintenanceEnabled ? '!' : '✓'}</div>
+    <div class="maintenance-panel-copy">
+      <strong>${maintenanceEnabled ? 'Manutenção activa' : 'Loja online'}</strong>
+      <span>${maintenanceEnabled
+        ? 'A loja pública está bloqueada. Esta tela continua activa mesmo depois de actualizar a página.'
+        : 'Os clientes conseguem abrir a loja e fazer compras normalmente.'}</span>
+    </div>
+    <button id="maintenance-toggle" class="maintenance-toggle ${maintenanceEnabled ? 'turn-off' : 'turn-on'}" onclick="toggleMaintenance(${!maintenanceEnabled})">
+      ${maintenanceEnabled ? 'Desactivar manutenção' : 'Activar manutenção'}
+    </button>
+  </section>`
 
   const SL = { pending:'A aguardar pagamento', succeeded:'Pagamento confirmado', activated:'Activado', failed:'Falhado' }
   const SC = { pending:'#92400e', succeeded:'#065f46', activated:'#1e3a8a', failed:'#991b1b' }
@@ -3771,6 +3889,20 @@ body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:1
 .stat-num{font-size:28px;font-weight:800;color:#1c1c1e;line-height:1;}
 .stat-lbl{font-size:12px;color:#636366;font-weight:600;margin-top:4px;}
 
+/* ── Manutenção ── */
+.maintenance-panel{display:flex;align-items:center;gap:14px;margin:-8px 0 28px;padding:15px 16px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 1px 5px rgba(0,0,0,.05);}
+.maintenance-panel.is-on{background:#fff8f8;border-color:#fecaca;}
+.maintenance-panel-icon{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:10px;background:#ecfdf5;color:#047857;font-size:18px;font-weight:900;flex-shrink:0;}
+.maintenance-panel.is-on .maintenance-panel-icon{background:#fee2e2;color:#b91c1c;}
+.maintenance-panel-copy{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1;}
+.maintenance-panel-copy strong{font-size:14px;color:#1c1c1e;}
+.maintenance-panel-copy span{font-size:12px;line-height:1.4;color:#636366;}
+.maintenance-toggle{border:0;border-radius:10px;padding:10px 14px;color:#fff;font:700 12px 'Segoe UI',system-ui,sans-serif;cursor:pointer;white-space:nowrap;transition:opacity .15s;}
+.maintenance-toggle.turn-on{background:#cc0000;}
+.maintenance-toggle.turn-off{background:#047857;}
+.maintenance-toggle:disabled{opacity:.55;cursor:not-allowed;}
+@media(max-width:640px){.maintenance-panel{align-items:flex-start;flex-wrap:wrap}.maintenance-panel-copy{flex-basis:calc(100% - 52px)}.maintenance-toggle{width:100%;margin-left:48px;}}
+
 /* ── Section header ── */
 .section-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
 .section-title{font-size:13px;font-weight:700;color:#636366;text-transform:uppercase;letter-spacing:.07em;}
@@ -3905,6 +4037,7 @@ body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:1
       <div class="stats-grid">
         ${statsCards}
       </div>
+      ${maintenancePanel}
 
       <!-- Orders -->
       <div class="section-hd">
@@ -3931,6 +4064,21 @@ function showToast(msg,ok=true){
   const t=document.getElementById('toast')
   t.textContent=msg; t.style.background=ok?'#1c1c1e':'#cc0000'
   t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500)
+}
+async function toggleMaintenance(enabled){
+  if(enabled && !confirm('Activar a manutenção? A loja pública ficará bloqueada até ser desactivada neste painel.')) return
+  const btn=document.getElementById('maintenance-toggle')
+  if(btn){btn.disabled=true;btn.textContent=enabled?'A activar…':'A desactivar…'}
+  try{
+    const r=await fetch('/admin/maintenance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled})})
+    const d=await r.json().catch(()=>({}))
+    if(!r.ok){showToast(d.error||'Não foi possível alterar a manutenção.',false);if(btn){btn.disabled=false;btn.textContent=enabled?'Activar manutenção':'Desactivar manutenção'};return}
+    showToast(enabled?'Manutenção activada.':'Loja reaberta.')
+    setTimeout(()=>location.reload(),500)
+  }catch{
+    showToast('Erro de ligação.',false)
+    if(btn){btn.disabled=false;btn.textContent=enabled?'Activar manutenção':'Desactivar manutenção'}
+  }
 }
 function copyNum(num,btn){
   navigator.clipboard.writeText(num).then(()=>{
@@ -4119,6 +4267,7 @@ await dbInit()
 await loadOrders()
 await loadUsers()
 await loadRechargeCredits()
+await loadMaintenance()
 await recoverRechargeCredits()
 await loadGwKeys()
 restorePendingPagarReconciliations()
