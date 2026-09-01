@@ -559,17 +559,12 @@
   letter-spacing: -0.03em;
 }
 
-.maintenance-brand-mark {
-  display: inline-flex;
-  width: 34px;
+.maintenance-brand-logo {
+  display: inline-block;
+  width: 42px;
   height: 34px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 11px;
-  background: #cc0000;
-  color: #ffffff;
-  font-size: 20px;
-  font-weight: 900;
+  object-fit: contain;
+  border-radius: 9px;
 }
 
 .maintenance-icon {

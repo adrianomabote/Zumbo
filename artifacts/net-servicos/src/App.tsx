@@ -231,7 +231,11 @@ function MaintenanceScreen() {
     <main className="maintenance-screen" role="status" aria-live="polite">
       <section className="maintenance-card">
         <div className="maintenance-brand">
-          <span className="maintenance-brand-mark" aria-hidden="true">M</span>
+          <img
+            className="maintenance-brand-logo"
+            src={`${import.meta.env.BASE_URL}api/legacy/static/vodacom.webp`}
+            alt="Vodacom"
+          />
           Megabyte
         </div>
         <div className="maintenance-icon" aria-hidden="true">!</div>

@@ -641,7 +641,7 @@ function maintenancePage() {
   body{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;font-family:Inter,'Segoe UI',system-ui,-apple-system,sans-serif;color:#17181a}
   .maintenance-card{width:min(100%,460px);background:#fff;border:1px solid #e5e7eb;border-radius:28px;padding:42px 30px 34px;text-align:center;box-shadow:0 18px 55px rgba(16,24,40,.08)}
   .brand{display:inline-flex;align-items:center;gap:10px;font-size:19px;font-weight:800;letter-spacing:-.03em}
-  .brand-mark{width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;border-radius:11px;background:#cc0000;color:#fff;font-size:20px;font-weight:900}
+  .brand-logo{width:42px;height:34px;display:inline-block;object-fit:contain;border-radius:9px}
   .status-icon{width:76px;height:76px;display:flex;align-items:center;justify-content:center;margin:34px auto 24px;border-radius:50%;background:#fff1f1;color:#cc0000}
   .status-icon svg{width:38px;height:38px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
   h1{margin:0 auto 12px;font-size:28px;line-height:1.15;letter-spacing:-.04em}
@@ -650,7 +650,7 @@ function maintenancePage() {
   @media(max-width:420px){.maintenance-card{padding:34px 22px 28px;border-radius:22px}h1{font-size:25px}.status-icon{margin-top:28px}}
 </style></head><body>
 <main class="maintenance-card" role="status" aria-live="polite">
-  <div class="brand"><span class="brand-mark" aria-hidden="true">M</span>Megabyte</div>
+  <div class="brand"><img class="brand-logo" src="/static/vodacom.webp" alt="Vodacom">Megabyte</div>
   <div class="status-icon" aria-hidden="true">
     <svg viewBox="0 0 24 24"><path d="M14.7 6.3a4.8 4.8 0 0 0-6.4 6.4L3 18v3h3l5.3-5.3a4.8 4.8 0 0 0 6.4-6.4l-2.2 2.2-2.1-.5-.5-2.1 2.2-2.2Z"/><path d="m14 10 4 4m1-8 3-3m-1 7h3"/></svg>
   </div>
