@@ -13,7 +13,15 @@ description: Configuração da VPS MozServe, portas, domínio e outros projectos
 ## Portas
 - **80/443:** Nginx (site público megabyte.live com SSL)
 - **3004:** API Node.js (interna, PM2, nome: net-servicos-api)
+- **8099:** bridge legado iniciado pela API
 - **3003:** porta alternativa Nginx (ainda activa no nginx.conf)
+
+## Bridge legado
+O bridge usa a porta fixa 8099. Um processo Node antigo pode continuar a ocupar essa porta mesmo depois de reiniciar o PM2, fazendo a API responder com rotas antigas. Confirmar o processo com `ss`/`fuser` antes de encerrar apenas o bridge confirmado; depois reiniciar `net-servicos-api`.
+
+**Why:** um `pm2 restart` da API não substitui um processo legado independente que já esteja a escutar na porta 8099.
+
+**How to apply:** quando o código fonte contém uma rota nova mas 8099 devolve 404, verificar o dono da porta, terminar somente o bridge antigo e validar directamente 8099 antes de testar o proxy em 3004.
 
 ## Domínio
 - **megabyte.live** — SSL Let's Encrypt a configurar/renovar no novo domínio
