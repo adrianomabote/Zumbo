@@ -7,6 +7,7 @@ import { createServer }                              from 'http'
 import { createHmac, timingSafeEqual, randomBytes, randomUUID }  from 'crypto'
 import { mkdir, readFile, writeFile, rename }        from 'fs/promises'
 import { join }                                      from 'path'
+import pg                                             from 'pg'
 
 // ── Configuração ──────────────────────────────────────────────────────────────
 const PORT                 = process.env.PORT || 5000
@@ -31,6 +32,7 @@ const RECHARGE_CREDITS_FILE = join(DATA_DIR, 'recharge-credits.json')
 const MAINTENANCE_FILE = join(DATA_DIR, 'maintenance.json')
 const SHARE_DESCRIPTION = 'Aproveite os nossos pacotes de megas a partir de 10 MT, incluindo 1024 MB por apenas 25 MT. Compre facilmente para o seu próprio número ou para outro número à sua escolha.'
 const MAINTENANCE_MESSAGE = 'Estamos a fazer uma manutenção rápida para melhorar a loja. Voltamos em breve.'
+const { Pool } = pg
 
 function adminToken() {
   return createHmac('sha256', (process.env.PAGAR_WEBHOOK_SECRET || '') + ADMIN_PASS).update('netservicos:admin').digest('hex')
@@ -279,9 +281,44 @@ const PUBLIC_INFO_PATHS_WITH_SLASH = [
 ]
 
 // ── Armazenamento local persistente na VPS ─────────────────────────────────────
+let databasePool = null
+
 async function dbInit() {
   await mkdir(DATA_DIR, { recursive: true })
-  console.log('[DB] sem PostgreSQL externo — a usar ficheiros locais na VPS')
+  if (!process.env.DATABASE_URL) {
+    console.log('[DB] sem PostgreSQL externo — a usar ficheiros locais na VPS')
+    return
+  }
+  try {
+    databasePool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      max: 3,
+      connectionTimeoutMillis: 5000,
+    })
+    await databasePool.query(`
+      CREATE TABLE IF NOT EXISTS gateway_api_keys (
+        id text PRIMARY KEY,
+        name text NOT NULL,
+        api_key text NOT NULL UNIQUE,
+        api_secret text NOT NULL,
+        active boolean NOT NULL DEFAULT true,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        tx_count integer NOT NULL DEFAULT 0,
+        total_amount integer NOT NULL DEFAULT 0,
+        builtin boolean NOT NULL DEFAULT false
+      );
+      CREATE TABLE IF NOT EXISTS gateway_transactions (
+        tx_id text PRIMARY KEY,
+        payload jsonb NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now()
+      );
+    `)
+    console.log('[DB] PostgreSQL activo — chaves e transacções do Gateway persistentes')
+  } catch (error) {
+    console.error('[DB] PostgreSQL indisponível — a usar ficheiros locais:', error.message)
+    await databasePool.end().catch(() => {})
+    databasePool = null
+  }
 }
 async function storeLoad(k, file) {
   try { return JSON.parse(await readFile(file, 'utf8')) } catch { return null }
@@ -369,14 +406,66 @@ const GW_BUILTIN = {
   active: true, createdAt: '2026-08-08T00:00:00.000Z', txCount: 0, totalAmount: 0, builtin: true,
 }
 async function loadGwKeys() {
-  const d = await storeLoad('gwkeys', GWKEYS_FILE); if (d) gwKeys = d
+  const d = await storeLoad('gwkeys', GWKEYS_FILE)
+  if (databasePool) {
+    try {
+      const result = await databasePool.query(`
+        SELECT id, name, api_key AS key, api_secret AS secret, active,
+               created_at AS "createdAt", tx_count AS "txCount",
+               total_amount AS "totalAmount", builtin
+        FROM gateway_api_keys
+        ORDER BY created_at ASC
+      `)
+      // The first boot after this change imports existing JSON keys. Once the
+      // table has data, PostgreSQL is authoritative across new deployments.
+      gwKeys = result.rows.length > 0 ? result.rows : (Array.isArray(d) ? d : [])
+    } catch (error) {
+      console.error('[DB] Falha ao carregar chaves do Gateway:', error.message)
+      if (Array.isArray(d)) gwKeys = d
+    }
+  } else if (Array.isArray(d)) {
+    gwKeys = d
+  }
   const builtinConfigured = typeof GW_BUILTIN.key === 'string' && GW_BUILTIN.key.length > 0 &&
     typeof GW_BUILTIN.secret === 'string' && GW_BUILTIN.secret.length > 0
   gwKeys = gwKeys.filter(g => g && (g.id !== GW_BUILTIN.id || builtinConfigured))
   if (builtinConfigured && !gwKeys.some(g => g.id === GW_BUILTIN.id)) gwKeys.unshift(GW_BUILTIN)
-  if (d && Array.isArray(d) && gwKeys.length !== d.length) await saveGwKeys()
+  await saveGwKeys()
 }
-async function saveGwKeys() { await storeSave('gwkeys', gwKeys, GWKEYS_FILE) }
+async function saveGwKeys() {
+  await storeSave('gwkeys', gwKeys, GWKEYS_FILE)
+  if (!databasePool) return
+  try {
+    const ids = gwKeys.map(g => g.id)
+    if (ids.length) {
+      await databasePool.query('DELETE FROM gateway_api_keys WHERE NOT (id = ANY($1::text[]))', [ids])
+    } else {
+      await databasePool.query('DELETE FROM gateway_api_keys')
+    }
+    for (const key of gwKeys) {
+      await databasePool.query(`
+        INSERT INTO gateway_api_keys
+          (id, name, api_key, api_secret, active, created_at, tx_count, total_amount, builtin)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        ON CONFLICT (id) DO UPDATE SET
+          name = EXCLUDED.name,
+          api_key = EXCLUDED.api_key,
+          api_secret = EXCLUDED.api_secret,
+          active = EXCLUDED.active,
+          created_at = EXCLUDED.created_at,
+          tx_count = EXCLUDED.tx_count,
+          total_amount = EXCLUDED.total_amount,
+          builtin = EXCLUDED.builtin
+      `, [
+        key.id, key.name, key.key, key.secret, key.active !== false,
+        key.createdAt || new Date().toISOString(), key.txCount || 0,
+        key.totalAmount || 0, Boolean(key.builtin),
+      ])
+    }
+  } catch (error) {
+    console.error('[DB] Falha ao guardar chaves do Gateway:', error.message)
+  }
+}
 function findGwKey(k) {
   if (!k) return null
   const rec = gwKeys.find(g => g.key === k)
@@ -455,8 +544,57 @@ async function gwForwardCallback(tx) {
 }
 
 // ── Persistência de encomendas ────────────────────────────────────────────────
-async function loadOrders() { const d = await storeLoad('orders', ORDERS_FILE); if (d) orders = d }
-async function saveOrders() { await storeSave('orders', orders, ORDERS_FILE) }
+async function loadOrders() {
+  const d = await storeLoad('orders', ORDERS_FILE)
+  const localOrders = Array.isArray(d) ? d : []
+  if (!databasePool) {
+    orders = localOrders
+    return
+  }
+  try {
+    // Import gateway records written before PostgreSQL persistence was added.
+    for (const order of localOrders.filter(item => item?.type === 'gateway' && item.txId)) {
+      await databasePool.query(`
+        INSERT INTO gateway_transactions (tx_id, payload)
+        VALUES ($1, $2::jsonb)
+        ON CONFLICT (tx_id) DO NOTHING
+      `, [order.txId, JSON.stringify(order)])
+    }
+    const result = await databasePool.query(
+      'SELECT payload FROM gateway_transactions ORDER BY created_at ASC',
+    )
+    const gatewayOrders = result.rows.map(row => row.payload).filter(Boolean)
+    orders = [
+      ...gatewayOrders,
+      ...localOrders.filter(item => item?.type !== 'gateway'),
+    ]
+  } catch (error) {
+    console.error('[DB] Falha ao carregar transacções do Gateway:', error.message)
+    orders = localOrders
+  }
+}
+async function saveOrders() {
+  await storeSave('orders', orders, ORDERS_FILE)
+  if (!databasePool) return
+  try {
+    const gatewayOrders = orders.filter(order => order?.type === 'gateway' && order.txId)
+    const ids = gatewayOrders.map(order => order.txId)
+    if (ids.length) {
+      await databasePool.query('DELETE FROM gateway_transactions WHERE NOT (tx_id = ANY($1::text[]))', [ids])
+    } else {
+      await databasePool.query('DELETE FROM gateway_transactions')
+    }
+    for (const order of gatewayOrders) {
+      await databasePool.query(`
+        INSERT INTO gateway_transactions (tx_id, payload)
+        VALUES ($1, $2::jsonb)
+        ON CONFLICT (tx_id) DO UPDATE SET payload = EXCLUDED.payload
+      `, [order.txId, JSON.stringify(order)])
+    }
+  } catch (error) {
+    console.error('[DB] Falha ao guardar transacções do Gateway:', error.message)
+  }
+}
 async function loadRechargeCredits() {
   const d = await storeLoad('recharge-credits', RECHARGE_CREDITS_FILE)
   if (Array.isArray(d)) rechargeCredits = d
