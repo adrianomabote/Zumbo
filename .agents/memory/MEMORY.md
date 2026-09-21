@@ -11,3 +11,4 @@
 - [Isolamento do teste de restart](api-restart-test-isolation.md) — testes de subprocessos não devem assumir que a porta legada fixa está livre
 - [Páginas SEO no preview](seo-static-preview-paths.md) — páginas estáticas em rotas profundas devem usar assets relativos para respeitar o prefixo do artefacto
 - [SEO da loja pública](public-storefront-seo.md) — novas páginas públicas precisam de rota no bridge, reescrita no proxy e URL correspondente no shell React
+- [Persistência do Gateway](gateway-persistence.md) — chaves e transacções devem sobreviver a deploys via PostgreSQL; JSON fica como migração e fallback
