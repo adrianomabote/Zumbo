@@ -1573,6 +1573,17 @@ NOTAS
   }
 
   // ── Admin panel ───────────────────────────────────────────────────────────
+  if (path === '/admin/gateway') {
+    if (!checkAdminCookie(req)) return html(res, adminLoginPage())
+    if (method === 'GET') {
+      await refreshPagarForwardingStates()
+      await refreshDeliveryStates()
+      const q = parseQuery(req)
+      const gatewayFilter = q.view === 'keys' ? 'gateway' : 'gateway-transactions'
+      return html(res, adminDashboard(gatewayFilter, q.page, true))
+    }
+  }
+
   if (path === '/admin/maintenance') {
     if (!checkAdminCookie(req)) return json(res, { error:'Não autorizado.' }, 401)
     if (method === 'GET') {
@@ -3533,7 +3544,7 @@ function handleLogin(e){
 // ── Admin: Dashboard ──────────────────────────────────────────────────────────
 const ADMIN_HISTORY_PAGE_SIZE = 50
 
-function adminDashboard(filter = 'all', requestedPage = 1) {
+function adminDashboard(filter = 'all', requestedPage = 1, gatewayMode = false) {
   const megabyteTransactions = orders.filter(o => o.type !== 'gateway')
   const gatewayTransactions = orders.filter(o => o.type === 'gateway')
   const counts = { all:0, pending:0, succeeded:0, activated:0, failed:0 }
@@ -3563,7 +3574,7 @@ function adminDashboard(filter = 'all', requestedPage = 1) {
     failed:    megabyteTransactions.filter(o=>o.status==='failed'),
   }
   const filtered = filterMap[filter] ?? megabyteTransactions
-  const isGatewayView = filter === 'gateway' || filter === 'gateway-transactions'
+  const isGatewayView = gatewayMode || filter === 'gateway' || filter === 'gateway-transactions'
   const isHistoryView = filter !== 'users' && filter !== 'gateway' && filter !== 'manual-credit'
   const totalPages = Math.max(1, Math.ceil(filtered.length / ADMIN_HISTORY_PAGE_SIZE))
   const parsedPage = Number.parseInt(requestedPage, 10)
