@@ -41,14 +41,14 @@ app.use("/api", (req, res, next) => {
   return next();
 });
 app.use("/api/legacy", proxyLegacyBridge);
+// Keep the public gateway proxy before body parsers. The legacy bridge reads
+// the raw request stream; parsing it here would leave the upstream request
+// waiting forever for a body that was already consumed.
+app.use("/gateway", proxyLegacyBridgeWithPrefix("/gateway"));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
-
-// Public gateway alias used by third-party projects and Render. The existing
-// /api/legacy mount remains available for the Replit/VPS storefront proxy.
-app.use("/gateway", proxyLegacyBridgeWithPrefix("/gateway"));
 
 // Render can run the API and storefront as one web service. On the VPS Nginx
 // still serves these files directly, so this is also safe there.
