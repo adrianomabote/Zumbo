@@ -116,24 +116,22 @@ function referencePart(value) {
 }
 
 function pagarReferenceFor(tx) {
-  const mega = tx.megabytes || megaDetailsForAmount(tx.amount).megabytes
+  const amount = Math.round(Number(tx.amount) || 0)
   const prefix = tx.type === 'gateway'
-    ? `gateway-megas-${mega}mb-${Math.round(Number(tx.amount) || 0)}mt`
-    : `megabyte-${referencePart(tx.bundleLabel || `${mega} MB`)}`
+    ? `recarga-${amount}mt`
+    : `megabyte-${referencePart(tx.bundleLabel || `${amount} MT`)}`
   return `${prefix}-${tx.id}`.slice(0, 120)
 }
 
 function pagarTitleFor(tx, customerName) {
-  if (tx.type === 'gateway') return `Compra de ${tx.megabytes || megaDetailsForAmount(tx.amount).megabytes} MB`
+  if (tx.type === 'gateway') return `Recarga de ${Math.round(Number(tx.amount) || 0)} MT`
   return String(customerName || `Compra de ${tx.bundleLabel || 'megas'}`).slice(0, 120)
 }
 
 function pagarDescriptionFor(tx, customerName) {
   const mega = tx.megabytes || megaDetailsForAmount(tx.amount).megabytes
   if (tx.type === 'gateway') {
-    const channel = tx.gatewayName ? ` via ${tx.gatewayName}` : ''
-    const external = customerName ? ` — ${String(customerName).slice(0, 60)}` : ''
-    return `Cliente compra ${mega} MB por ${tx.amount} MT${channel}${external}`.slice(0, 240)
+    return `Recarga de ${Math.round(Number(tx.amount) || 0)} MT`
   }
   return `Compra de ${mega} MB por ${tx.amount} MT`.slice(0, 240)
 }
