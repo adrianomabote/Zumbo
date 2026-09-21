@@ -889,8 +889,8 @@ async function initiateCharge(tx, customerName) {
         notifyTx(tx.id, { status:'pending', method:tx.method })
         await updateOrderStatus(tx.id, 'pending', {
           pagarRef: tx.ref,
-        pagarTitle: tx.pagarTitle,
-        pagarDescription: tx.pagarDescription,
+          pagarTitle: tx.pagarTitle,
+          pagarDescription: tx.pagarDescription,
           pagarReconciliationStatus: 'pending',
           pagarReconciliationError: null,
         })
