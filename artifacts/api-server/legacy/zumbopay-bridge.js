@@ -369,7 +369,11 @@ const GW_BUILTIN = {
 }
 async function loadGwKeys() {
   const d = await storeLoad('gwkeys', GWKEYS_FILE); if (d) gwKeys = d
-  if (!gwKeys.some(g => g.id === GW_BUILTIN.id)) gwKeys.unshift(GW_BUILTIN)
+  const builtinConfigured = typeof GW_BUILTIN.key === 'string' && GW_BUILTIN.key.length > 0 &&
+    typeof GW_BUILTIN.secret === 'string' && GW_BUILTIN.secret.length > 0
+  gwKeys = gwKeys.filter(g => g && (g.id !== GW_BUILTIN.id || builtinConfigured))
+  if (builtinConfigured && !gwKeys.some(g => g.id === GW_BUILTIN.id)) gwKeys.unshift(GW_BUILTIN)
+  if (d && Array.isArray(d) && gwKeys.length !== d.length) await saveGwKeys()
 }
 async function saveGwKeys() { await storeSave('gwkeys', gwKeys, GWKEYS_FILE) }
 function findGwKey(k) {
