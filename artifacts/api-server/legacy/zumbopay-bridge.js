@@ -3651,10 +3651,13 @@ function adminDashboard(filter = 'all', requestedPage = 1, gatewayMode = false) 
     </button>
   </div>`
 
-  const sidebarLinks = maintenanceSidebarControl + navSections.map(s=>
+  const gatewayEntry = gatewayMode
+    ? `<a class="gateway-entry gateway-back" href="/admin/office"><span class="gateway-entry-icon">←</span><span><strong>Voltar ao painel</strong><small>Área Megabyte</small></span></a>`
+    : `<a class="gateway-entry" href="/admin/gateway"><span class="gateway-entry-icon">◎</span><span><strong>Entrar no Gateway</strong><small>Transacções e chaves de API</small></span><span class="gateway-entry-arrow">→</span></a>`
+  const sidebarLinks = (gatewayMode ? '' : maintenanceSidebarControl) + gatewayEntry + navSections.map(s=>
     `<div class="sidebar-section">${s.label}</div>` +
     s.items.map(n=>`
-    <a href="/admin/office?filter=${n.f}" class="nav-link${filter===n.f?' active':''}">
+    <a href="${gatewayMode ? `/admin/gateway?view=${n.f === 'gateway' ? 'keys' : 'transactions'}` : `/admin/office?filter=${n.f}`}" class="nav-link${filter===n.f?' active':''}">
       <svg viewBox="0 0 24 24"><path d="${n.icon}" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
       <span>${n.label}</span>
       <span class="nav-count">${filterMap[n.f]?.length||0}</span>
@@ -4013,6 +4016,14 @@ body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:1
 .sidebar-footer{margin-top:auto;padding:16px;}
 .sidebar-logout{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:11px;text-decoration:none;color:#cc0000;font-size:14px;font-weight:600;border:1.5px solid #ffcdd2;justify-content:center;}
 .sidebar-logout:active{background:#fff0f0;}
+.gateway-entry{display:flex;align-items:center;gap:10px;margin:0 12px 12px;padding:12px;border-radius:13px;text-decoration:none;color:#115e59;background:linear-gradient(135deg,#f0fdfa,#ecfeff);border:1px solid #99f6e4;}
+.gateway-entry.gateway-back{color:#3a3a3c;background:#f9f9fb;border-color:#e5e5ea;}
+.gateway-entry-icon{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9px;background:#0f766e;color:#fff;font-size:20px;line-height:1;flex-shrink:0;}
+.gateway-back .gateway-entry-icon{background:#fff;color:#636366;border:1px solid #e5e5ea;}
+.gateway-entry strong{display:block;font-size:12px;font-weight:800;}
+.gateway-entry small{display:block;margin-top:2px;color:#0f766e;font-size:10px;line-height:1.25;}
+.gateway-back small{color:#8e8e93;}
+.gateway-entry-arrow{margin-left:auto;font-size:18px;font-weight:700;color:#0f766e;}
 
 /* ── Main ── */
 .main{flex:1;min-width:0;overflow-x:hidden;}
@@ -4153,8 +4164,9 @@ body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:1
     <button class="menu-btn" onclick="toggleSidebar()" aria-label="Menu">
       <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
+    ${gatewayMode ? '<a class="topbar-back" href="/admin/office">← Voltar</a>' : ''}
     <img src="/static/vodacom.webp" alt="logo" style="width:30px;height:30px;object-fit:contain;border-radius:6px;">
-    <span style="font-size:11px;font-weight:700;color:#fff;background:#cc0000;border-radius:6px;padding:2px 8px;">Admin</span>
+    <span style="font-size:11px;font-weight:700;color:#fff;background:${gatewayMode ? '#0f766e' : '#cc0000'};border-radius:6px;padding:2px 8px;">${gatewayMode ? 'Gateway' : 'Admin'}</span>
   </div>
   <div class="topbar-right">
     <div class="topbar-revenue">
@@ -4189,7 +4201,7 @@ body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:1
       <div class="stats-grid">
         ${statsCards}
       </div>
-      ${maintenancePanel}
+      ${gatewayMode ? '' : maintenancePanel}
 
       <!-- Orders -->
       <div class="section-hd">
