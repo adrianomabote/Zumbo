@@ -52,3 +52,6 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+
+# User-provided deployment screenshots are not application assets.
+/attached_assets/Screenshot_20260921_201626_Chrome_1790014726398.jpg
