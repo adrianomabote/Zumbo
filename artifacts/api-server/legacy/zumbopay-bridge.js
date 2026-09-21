@@ -80,6 +80,62 @@ const BUNDLES = new Map([
   ['d05',{label:'50 GB',  price:1490, cat:'diamante'}],
 ])
 
+function bundleMegabytes(label) {
+  const value = String(label || '').trim().toUpperCase()
+  const mb = value.match(/^(\d+(?:\.\d+)?)\s*MB$/)
+  if (mb) return Math.max(1, Math.round(Number(mb[1])))
+  const gb = value.match(/^(\d+(?:\.\d+)?)\s*GB$/)
+  if (gb) return Math.max(1, Math.round(Number(gb[1]) * 1024))
+  return null
+}
+
+function megaDetailsForAmount(amount) {
+  const numericAmount = Math.max(1, Math.round(Number(amount) || 0))
+  const catalogBundle = Array.from(BUNDLES.values()).find(bundle => (
+    bundle.price === numericAmount && bundleMegabytes(bundle.label)
+  ))
+  const megabytes = catalogBundle
+    ? bundleMegabytes(catalogBundle.label)
+    : Math.max(1, numericAmount * 40)
+  return {
+    megabytes,
+    label: `${megabytes} MB`,
+    catalogLabel: catalogBundle?.label || null,
+  }
+}
+
+function referencePart(value) {
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Za-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase()
+}
+
+function pagarReferenceFor(tx) {
+  const mega = tx.megabytes || megaDetailsForAmount(tx.amount).megabytes
+  const prefix = tx.type === 'gateway'
+    ? `gateway-megas-${mega}mb-${Math.round(Number(tx.amount) || 0)}mt`
+    : `megabyte-${referencePart(tx.bundleLabel || `${mega} MB`)}`
+  return `${prefix}-${tx.id}`.slice(0, 120)
+}
+
+function pagarTitleFor(tx, customerName) {
+  if (tx.type === 'gateway') return `Compra de ${tx.megabytes || megaDetailsForAmount(tx.amount).megabytes} MB`
+  return String(customerName || `Compra de ${tx.bundleLabel || 'megas'}`).slice(0, 120)
+}
+
+function pagarDescriptionFor(tx, customerName) {
+  const mega = tx.megabytes || megaDetailsForAmount(tx.amount).megabytes
+  if (tx.type === 'gateway') {
+    const channel = tx.gatewayName ? ` via ${tx.gatewayName}` : ''
+    const external = customerName ? ` — ${String(customerName).slice(0, 60)}` : ''
+    return `Cliente compra ${mega} MB por ${tx.amount} MT${channel}${external}`.slice(0, 240)
+  }
+  return `Compra de ${mega} MB por ${tx.amount} MT`.slice(0, 240)
+}
+
 // URLs públicas de aquisição. Os dados apresentados nestas páginas são
 // sempre derivados do catálogo acima; não há preços SEO separados.
 const PUBLIC_CATEGORY_PAGES = {
