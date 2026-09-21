@@ -44,15 +44,22 @@ devem ser endereços HTTPS públicos; endereços privados ou locais são recusad
 
 ## Armazenamento e segredos
 
-O disco persistente é necessário porque o bridge grava encomendas, utilizadores,
-estado de manutenção e chaves do gateway em ficheiros JSON. Não use o plano
-sem disco para produção: o filesystem efémero pode perder esses dados após
-reinício ou substituição da instância.
+O PostgreSQL é a fonte persistente das chaves e transacções do Gateway. Os
+ficheiros JSON continuam a ser mantidos para compatibilidade, migração inicial
+e fallback local; o bridge importa os registos existentes para PostgreSQL e
+sincroniza alterações futuras. As tabelas do Gateway são criadas
+automaticamente na inicialização.
+
+O disco persistente continua recomendado para encomendas antigas, utilizadores,
+estado de manutenção e para o fallback JSON. Não use o plano sem disco em
+produção se esses dados legados ainda forem necessários: o filesystem efémero
+pode perder os ficheiros após reinício ou substituição da instância.
 
 Não coloque valores reais de chaves, segredos, passwords ou URLs privadas no
 repositório. Use as variáveis de ambiente do Render. A chave principal
 `GW_MASTER_KEY`/`GW_MASTER_SECRET` é opcional; as chaves criadas no painel são
-guardadas no disco persistente.
+guardadas no PostgreSQL e também no disco persistente quando este estiver
+disponível.
 
 ## Atualizações
 
