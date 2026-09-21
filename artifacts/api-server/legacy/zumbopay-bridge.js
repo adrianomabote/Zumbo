@@ -328,6 +328,7 @@ function recordFailedLogin(ip) {
 }
 function clearLoginAttempts(ip) { loginAttempts.delete(ip) }
 function safeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || !b) return false
   const ha = createHmac('sha256', 'cmp').update(a).digest()
   const hb = createHmac('sha256', 'cmp').update(b).digest()
   return timingSafeEqual(ha, hb)
@@ -1606,6 +1607,10 @@ NOTAS
       return html(res, adminDashboard(q.filter || 'all', q.page))
     }
     if (method === 'POST') {
+      if (!ADMIN_PASS) {
+        console.error('[Admin] ADMIN_PASS não está configurada no ambiente do servidor.')
+        return html(res, adminLoginPage('O acesso admin ainda não está configurado no servidor. Defina ADMIN_PASS no Render.'))
+      }
       const ip = (req.headers['x-forwarded-for']||'').split(',')[0].trim() || req.socket?.remoteAddress || 'unknown'
       const lockMsg = checkBruteForce(ip)
       if (lockMsg) return html(res, adminLoginPage(lockMsg))
