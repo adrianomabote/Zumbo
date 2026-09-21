@@ -5,11 +5,12 @@
 
 import { createServer }                              from 'http'
 import { createHmac, timingSafeEqual, randomBytes, randomUUID }  from 'crypto'
-import { readFile, writeFile, rename }               from 'fs/promises'
+import { mkdir, readFile, writeFile, rename }        from 'fs/promises'
+import { join }                                      from 'path'
 
 // ── Configuração ──────────────────────────────────────────────────────────────
 const PORT                 = process.env.PORT || 5000
-const SITE_URL             = process.env.SITE_URL || 'https://megabyte.live'
+const SITE_URL             = process.env.SITE_URL || process.env.RENDER_EXTERNAL_URL || 'https://megabyte.live'
 const UUID_RE              = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const WALLET_MPESA         = UUID_RE.test(String(process.env.WALLET_MPESA || ''))
   ? process.env.WALLET_MPESA
@@ -23,10 +24,11 @@ const PAYMENT_MODE         = String(
   (process.env.NODE_ENV === 'production' ? 'live' : 'mock')
 ).toLowerCase()
 const isTestMode           = PAYMENT_MODE === 'mock' || PAYMENT_MODE === 'test'
-const ORDERS_FILE          = './orders.json'
-const USERS_FILE           = './users.json'
-const RECHARGE_CREDITS_FILE = './recharge-credits.json'
-const MAINTENANCE_FILE = './maintenance.json'
+const DATA_DIR             = process.env.NET_SERVICOS_DATA_DIR || '.'
+const ORDERS_FILE          = join(DATA_DIR, 'orders.json')
+const USERS_FILE           = join(DATA_DIR, 'users.json')
+const RECHARGE_CREDITS_FILE = join(DATA_DIR, 'recharge-credits.json')
+const MAINTENANCE_FILE = join(DATA_DIR, 'maintenance.json')
 const SHARE_DESCRIPTION = 'Aproveite os nossos pacotes de megas a partir de 10 MT, incluindo 1024 MB por apenas 25 MT. Compre facilmente para o seu próprio número ou para outro número à sua escolha.'
 const MAINTENANCE_MESSAGE = 'Estamos a fazer uma manutenção rápida para melhorar a loja. Voltamos em breve.'
 

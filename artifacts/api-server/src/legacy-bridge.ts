@@ -173,3 +173,12 @@ export function proxyLegacyBridge(req: Request, res: Response) {
 
   req.pipe(upstream);
 }
+
+export function proxyLegacyBridgeWithPrefix(prefix: string) {
+  return (req: Request, res: Response) => {
+    const originalUrl = req.url;
+    const suffix = originalUrl.startsWith("/") ? originalUrl : `/${originalUrl}`;
+    req.url = `${prefix}${suffix}`;
+    proxyLegacyBridge(req, res);
+  };
+}

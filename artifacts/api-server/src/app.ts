@@ -1,9 +1,11 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import router from "./routes";
 import { logger } from "./lib/logger";
-import { proxyLegacyBridge } from "./legacy-bridge";
+import { proxyLegacyBridge, proxyLegacyBridgeWithPrefix } from "./legacy-bridge";
 import pagarRouter from "./routes/pagar";
 
 const app: Express = express();
@@ -43,5 +45,20 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
+
+// Public gateway alias used by third-party projects and Render. The existing
+// /api/legacy mount remains available for the Replit/VPS storefront proxy.
+app.use("/gateway", proxyLegacyBridgeWithPrefix("/gateway"));
+
+// Render can run the API and storefront as one web service. On the VPS Nginx
+// still serves these files directly, so this is also safe there.
+const frontendPublicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../net-servicos/dist/public");
+app.use(express.static(frontendPublicDir, { index: false, redirect: false }));
+app.use((req, res, next) => {
+  if (req.method !== "GET" || req.path.startsWith("/api/") || req.path.startsWith("/gateway/")) return next();
+  res.sendFile(path.join(frontendPublicDir, "index.html"), (error) => {
+    if (error) next();
+  });
+});
 
 export default app;
