@@ -3610,7 +3610,12 @@ function adminDashboard(filter = 'all', requestedPage = 1, gatewayMode = false) 
   const SBG= { pending:'#fef3c7', succeeded:'#d1fae5', activated:'#dbeafe', failed:'#fee2e2' }
   const ML = { mpesa:'M-Pesa', emola:'e-Mola' }
 
-  const navSections = [
+  const navSections = gatewayMode ? [
+    { label: 'Gateway', items: [
+      { f:'gateway-transactions', label:'Transacções', icon:'M3 12h18M12 3v18M5 5l14 14M19 5L5 19' },
+      { f:'gateway', label:'Chaves de API', icon:'M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4' },
+    ]},
+  ] : [
     { label: 'Megabyte', items: [
       { f:'all',       label:'Pagamentos Megabyte',   icon:'M3 7h18M3 12h18M3 17h18' },
       { f:'succeeded', label:'Pendentes de Activação', icon:'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
