@@ -1752,10 +1752,11 @@ NOTAS
     })
     console.log(`[Gateway] cobrança ${txId} (${amount} MT, ${meth}) via ${gk.name}`)
     await initiateCharge(tx, tx.extDesc || tx.extRef || 'Pagamento Megabyte')
+    const publicStatus = tx.status === 'failed' ? 'failed' : 'pending'
     return json(res, {
       ok: true,
       txId,
-      status: tx.status,
+      status: publicStatus,
       method: meth,
       statusUrl: `${SITE_URL}/gateway/api/status/${txId}`,
       ...(tx.error ? { error: tx.error } : {}),
