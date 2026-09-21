@@ -3984,6 +3984,8 @@ body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:1
 .menu-btn{background:none;border:none;cursor:pointer;padding:8px;border-radius:8px;color:#1c1c1e;display:flex;align-items:center;}
 .menu-btn:active{background:#f2f2f7;}
 .menu-btn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;}
+.topbar-back{font-size:13px;font-weight:700;color:#0f766e;text-decoration:none;padding:7px 10px;border:1px solid #99f6e4;border-radius:9px;background:#f0fdfa;white-space:nowrap;}
+.topbar-back:hover{background:#ccfbf1;}
 .topbar-brand{display:flex;align-items:center;gap:8px;}
 .topbar-brand img{width:30px;height:30px;object-fit:contain;border-radius:6px;}
 .topbar-brand-name{font-size:15px;font-weight:800;color:#1c1c1e;}
@@ -4236,6 +4238,11 @@ async function toggleMaintenance(enabled){
   try{
     const r=await fetch('/admin/maintenance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled})})
     const d=await r.json().catch(()=>({}))
+    if(r.status===401){
+      showToast('A sessão expirou. A abrir o login…',false)
+      setTimeout(()=>location.href='/admin/office',700)
+      return
+    }
     if(!r.ok){showToast(d.error||'Não foi possível alterar a manutenção.',false);if(btn){btn.disabled=false;btn.textContent=enabled?'Activar manutenção':'Desactivar manutenção'};return}
     showToast(enabled?'Manutenção activada.':'Loja reaberta.')
     setTimeout(()=>location.reload(),500)
