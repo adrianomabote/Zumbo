@@ -92,6 +92,7 @@ function bundleMegabytes(label) {
 function megaDetailsForAmount(amount) {
   const numericAmount = Math.max(1, Math.round(Number(amount) || 0))
   const catalogBundle = Array.from(BUNDLES.values()).find(bundle => (
+    bundle.cat === 'normal' &&
     bundle.price === numericAmount && bundleMegabytes(bundle.label)
   ))
   const megabytes = catalogBundle
@@ -278,6 +279,7 @@ const PUBLIC_INFO_PATHS_WITH_SLASH = [
 
 // ── Armazenamento local persistente na VPS ─────────────────────────────────────
 async function dbInit() {
+  await mkdir(DATA_DIR, { recursive: true })
   console.log('[DB] sem PostgreSQL externo — a usar ficheiros locais na VPS')
 }
 async function storeLoad(k, file) {
@@ -354,7 +356,7 @@ function userCookieHeader(u) {
 }
 
 // ── Gateway: chaves de API para terceiros ─────────────────────────────────────
-const GWKEYS_FILE = './gateway-keys.json'
+const GWKEYS_FILE = join(DATA_DIR, 'gateway-keys.json')
 let gwKeys = []   // [{ id, name, key, secret, active, createdAt, txCount, totalAmount }]
 // Chave principal fixa — sobrevive a deploys (o disco do Render é efémero)
 const GW_BUILTIN = {
@@ -430,7 +432,8 @@ async function gwForwardCallback(tx) {
   const payload = JSON.stringify({
     event: tx.status === 'succeeded' ? 'payment.succeeded' : 'payment.failed',
     txId: tx.id, reference: tx.extRef || null,
-    amount: tx.amount, phone: tx.phone, method: tx.method,
+    amount: tx.amount, megabytes: tx.megabytes || megaDetailsForAmount(tx.amount).megabytes,
+    phone: tx.phone, method: tx.method,
     error: tx.error || null, ts: new Date().toISOString(),
   })
   const headers = { 'Content-Type':'application/json' }
@@ -468,8 +471,12 @@ function trackOrder(tx, extra = {}) {
     txId: tx.id, type: tx.type || 'bundle', phone: tx.phone,
     beneficiaryPhone: tx.beneficiaryPhone || null,
     bundleId: tx.bundleId || null, bundleLabel: tx.bundleLabel || null,
+    gatewayName: tx.gatewayName || null, megabytes: tx.megabytes || null,
     amount: tx.amount, method: tx.method, status: 'pending',
     sourceId: tx.sourceId || null,
+    pagarRef: tx.pagarRef || pagarReferenceFor(tx),
+    pagarTitle: tx.pagarTitle || null,
+    pagarDescription: tx.pagarDescription || null,
     ts: tx.ts, activatedAt: null, userId: tx.userId || null, ...extra,
   }
   orders.unshift(rec)
@@ -833,12 +840,20 @@ function notifyTx(txId, data) {
 }
 
 async function initiateCharge(tx, customerName) {
-  tx.pagarTitle = customerName
+  const pagarReference = tx.pagarRef || pagarReferenceFor(tx)
+  tx.pagarRef = pagarReference
+  tx.pagarTitle = pagarTitleFor(tx, customerName)
+  tx.pagarDescription = pagarDescriptionFor(tx, customerName)
   if (isTestMode) {
     tx.ref = `test-${tx.sourceId || tx.id}`
     tx.status = 'succeeded'
     console.log(`[ZumboPay] TEST charge simulated for ${tx.id}`)
-    await updateOrderStatus(tx.id, 'succeeded', { zumboRef: tx.ref })
+    await updateOrderStatus(tx.id, 'succeeded', {
+      zumboRef: tx.ref,
+      pagarRef: tx.pagarRef,
+      pagarTitle: tx.pagarTitle,
+      pagarDescription: tx.pagarDescription,
+    })
     await creditRechargeOnce(tx)
     notifyTx(tx.id, { status:'succeeded', method:tx.method, testMode:true })
     gwFinalize(tx)
@@ -851,9 +866,9 @@ async function initiateCharge(tx, customerName) {
       body: JSON.stringify({
         localTransactionId: tx.id,
         sourceId: tx.sourceId,
-        reference: `net-${tx.id}`,
-        title: customerName,
-        description: customerName,
+        reference: pagarReference,
+        title: tx.pagarTitle,
+        description: tx.pagarDescription,
         amountMzn: tx.amount,
         method: tx.method === 'mpesa' ? 'MPESA' : 'EMOLA',
         payerPhone: tx.phone,
@@ -863,7 +878,7 @@ async function initiateCharge(tx, customerName) {
     const data = await resp.json().catch(()=>({}))
     console.log(`[Pagar] POST /payments → ${resp.status}`, JSON.stringify({ status:data.status, reference:data.reference }))
     if (resp.status === 202) {
-      tx.ref = data.reference || tx.ref || `net-${tx.id}`
+      tx.ref = data.reference || tx.ref || pagarReference
       const providerStatus = String(data.status || 'PENDING').toUpperCase()
       if (providerStatus === 'PAID') {
         await applyPagarProviderStatus(tx, providerStatus, { reference: tx.ref })
@@ -874,6 +889,8 @@ async function initiateCharge(tx, customerName) {
         notifyTx(tx.id, { status:'pending', method:tx.method })
         await updateOrderStatus(tx.id, 'pending', {
           pagarRef: tx.ref,
+        pagarTitle: tx.pagarTitle,
+        pagarDescription: tx.pagarDescription,
           pagarReconciliationStatus: 'pending',
           pagarReconciliationError: null,
         })
@@ -887,12 +904,14 @@ async function initiateCharge(tx, customerName) {
     await updateOrderStatus(tx.id, 'failed'); gwFinalize(tx)
   } catch (err) {
     console.error('[Pagar]', err.message)
-    tx.ref = tx.ref || `net-${tx.id}`
+    tx.ref = tx.ref || pagarReference
     tx.status = 'pending'
     tx.error = 'A confirmar o pagamento com o Pagar.'
     notifyTx(tx.id, { status:'pending', method:tx.method })
     await updateOrderStatus(tx.id, 'pending', {
       pagarRef: tx.ref,
+      pagarTitle: tx.pagarTitle,
+      pagarDescription: tx.pagarDescription,
       pagarReconciliationStatus: 'pending',
       pagarReconciliationError: tx.error,
     })
@@ -905,10 +924,12 @@ async function applyPagarProviderStatus(tx, providerStatus, details = {}) {
   if (status === 'PAID') {
     const duplicate = tx.status === 'succeeded'
     tx.status = 'succeeded'
-    tx.ref = details.reference || tx.ref || `net-${tx.id}`
+    tx.ref = details.reference || tx.ref || tx.pagarRef || pagarReferenceFor(tx)
     tx.error = null
     await updateOrderStatus(tx.id, 'succeeded', {
       pagarRef: tx.ref,
+      pagarTitle: tx.pagarTitle,
+      pagarDescription: tx.pagarDescription,
       pagarReconciliationStatus: 'confirmed',
       pagarReconciliationError: null,
     })
@@ -923,10 +944,12 @@ async function applyPagarProviderStatus(tx, providerStatus, details = {}) {
     if (tx.status === 'succeeded') return 'succeeded'
     const duplicate = tx.status === 'failed'
     tx.status = 'failed'
-    tx.ref = details.reference || tx.ref || `net-${tx.id}`
+    tx.ref = details.reference || tx.ref || tx.pagarRef || pagarReferenceFor(tx)
     tx.error = details.error || (status === 'FAILED' ? 'Pagamento recusado.' : `Pagamento ${status.toLowerCase()}.`)
     await updateOrderStatus(tx.id, 'failed', {
       pagarRef: tx.ref,
+      pagarTitle: tx.pagarTitle,
+      pagarDescription: tx.pagarDescription,
       pagarReconciliationStatus: 'failed',
       pagarReconciliationError: tx.error,
     })
@@ -960,7 +983,9 @@ async function reconcilePagarTransaction(tx) {
     tx.status = 'pending'
     tx.error = null
     await updateOrderStatus(tx.id, 'pending', {
-      pagarRef: data.reference || tx.ref || `net-${tx.id}`,
+      pagarRef: data.reference || tx.ref || tx.pagarRef || pagarReferenceFor(tx),
+      pagarTitle: tx.pagarTitle,
+      pagarDescription: tx.pagarDescription,
       pagarReconciliationStatus: 'pending',
       pagarReconciliationError: null,
     })
@@ -968,7 +993,9 @@ async function reconcilePagarTransaction(tx) {
   } catch (error) {
     console.error('[Pagar] Falha na reconciliação:', error.message)
     await updateOrderStatus(tx.id, 'pending', {
-      pagarRef: tx.ref || `net-${tx.id}`,
+      pagarRef: tx.ref || tx.pagarRef || pagarReferenceFor(tx),
+      pagarTitle: tx.pagarTitle,
+      pagarDescription: tx.pagarDescription,
       pagarReconciliationStatus: 'pending',
       pagarReconciliationError: 'A confirmação continua pendente.',
     })
@@ -1001,19 +1028,24 @@ function restorePendingPagarReconciliations() {
       type: order.type || 'bundle',
       bundleId: order.bundleId,
       bundleLabel: order.bundleLabel,
+      gatewayName: order.gatewayName,
+      megabytes: order.megabytes || megaDetailsForAmount(order.amount).megabytes,
       phone: order.phone,
       beneficiaryPhone: order.beneficiaryPhone,
       amount: order.amount,
       method: order.method,
       status: 'pending',
-      ref: order.pagarRef || `net-${order.txId}`,
+      ref: order.pagarRef || pagarReferenceFor(order),
+      pagarRef: order.pagarRef || pagarReferenceFor(order),
       sourceId: order.sourceId,
       ts: order.ts,
       userId: order.userId,
       gwKeyId: order.gwKeyId,
       extRef: order.extRef,
       callbackUrl: order.callbackUrl,
-      pagarTitle: order.extDesc || order.extRef || 'Pagamento Megabyte',
+      extDesc: order.extDesc,
+      pagarTitle: order.pagarTitle || null,
+      pagarDescription: order.pagarDescription || null,
     }
     transactions.set(tx.id, tx)
     schedulePagarReconciliation(tx, 1_000)
@@ -1361,9 +1393,9 @@ Headers:
 Corpo JSON:
   {
     "phone": "84xxxxxxx",             // obrigatório, número M-Pesa (84/85) ou e-Mola (86/87)
-    "amount": 100,                    // obrigatório, valor inteiro em MT (meticais)
+    "amount": 100,                    // obrigatório, valor inteiro em MT (meticais); convertido em megas
     "reference": "pedido-123",        // opcional, a sua referência interna (máx 64 chars)
-    "description": "Compra na loja",  // opcional, guardada apenas nos registos internos (máx 120 chars)
+   "description": "Compra na loja",  // opcional, contexto adicional (máx 120 chars)
     "callback_url": "https://seusite.com/api/pagamento-confirmado"  // opcional, HTTPS público
   }
 Resposta 202:
@@ -1375,6 +1407,11 @@ Resposta 202:
     "statusUrl": "${SITE_URL}/gateway/api/status/a1b2c3d4e5f6"
   }
 Erros: 400 (dados inválidos), 401 (chave inválida/inactiva).
+
+O pagamento é sempre registado como compra de megas. Quando o valor coincide com
+um pacote normal do catálogo, é usada a quantidade exacta desse pacote. Para
+outros valores, a quantidade determinística é amount x 40 MB. Por exemplo:
+25 MT = 1024 MB e 100 MT = 4096 MB; 777 MT = 31080 MB.
 
 2) CONSULTAR ESTADO (polling)
 -----------------------------
@@ -1451,11 +1488,23 @@ NOTAS
       if (!callbackUrl) return json(res, { error:'callback_url inválido. Use um endereço HTTPS público.' }, 400)
     }
     const txId = randomBytes(6).toString('hex')
-    const tx = { id:txId, type:'gateway', bundleId:null, bundleLabel:`Gateway: ${gk.name}`, phone:String(body.phone), beneficiaryPhone:null, msisdn, amount, method:meth, status:'pending', ref:null, error:null, sourceId:randomUUID(), ts:new Date().toISOString(), gwKeyId:gk.id, extRef: body.reference ? String(body.reference).slice(0,64) : null, callbackUrl }
+    const mega = megaDetailsForAmount(amount)
+    const tx = {
+      id:txId, type:'gateway', bundleId:null, bundleLabel:`Gateway: ${gk.name}`,
+      gatewayName:gk.name, megabytes:mega.megabytes,
+      phone:String(body.phone), beneficiaryPhone:null, msisdn, amount, method:meth,
+      status:'pending', ref:null, error:null, sourceId:randomUUID(),
+      ts:new Date().toISOString(), gwKeyId:gk.id,
+      extRef: body.reference ? String(body.reference).slice(0,64) : null,
+      extDesc: body.description ? String(body.description).slice(0,120) : null,
+      callbackUrl,
+    }
     transactions.set(txId, tx)
-    trackOrder(tx, { gwKey: gk.name, gwKeyId: gk.id, extRef: tx.extRef, callbackUrl })
+    trackOrder(tx, {
+      gwKey: gk.name, gwKeyId: gk.id, gatewayName: tx.gatewayName,
+      megabytes: tx.megabytes, extRef: tx.extRef, extDesc: tx.extDesc, callbackUrl,
+    })
     json(res, { ok:true, txId, status:'pending', method:meth, statusUrl:`${SITE_URL}/gateway/api/status/${txId}` }, 202)
-    if (body.description) tx.extDesc = String(body.description).slice(0,120)
     initiateCharge(tx, tx.extDesc || tx.extRef || 'Pagamento Megabyte')
     return
   }
@@ -1467,11 +1516,11 @@ NOTAS
     if (!gk) return json(res, { error:'Chave de API inválida ou inactiva. Use o header X-API-Key.' }, 401)
     const tx = transactions.get(gwStP.txId)
     if (tx && tx.type === 'gateway' && tx.gwKeyId === gk.id)
-      return json(res, { ok:true, txId:tx.id, status:tx.status, amount:tx.amount, phone:tx.phone, method:tx.method, reference:tx.extRef, error:tx.error||null, ts:tx.ts })
+      return json(res, { ok:true, txId:tx.id, status:tx.status, amount:tx.amount, megabytes:tx.megabytes || megaDetailsForAmount(tx.amount).megabytes, phone:tx.phone, method:tx.method, reference:tx.extRef, error:tx.error||null, ts:tx.ts })
     // fallback: após reinício do servidor, procura no registo persistente
     const rec = orders.find(o => o.txId === gwStP.txId && o.type === 'gateway' && o.gwKeyId === gk.id)
     if (!rec) return json(res, { error:'Transacção não encontrada.' }, 404)
-    return json(res, { ok:true, txId:rec.txId, status:rec.status, amount:rec.amount, phone:rec.phone, method:rec.method, reference:rec.extRef||null, error:null, ts:rec.ts })
+    return json(res, { ok:true, txId:rec.txId, status:rec.status, amount:rec.amount, megabytes:rec.megabytes || megaDetailsForAmount(rec.amount).megabytes, phone:rec.phone, method:rec.method, reference:rec.extRef||null, error:null, ts:rec.ts })
   }
 
   // ── Admin: gestão de chaves do gateway ────────────────────────────────────
