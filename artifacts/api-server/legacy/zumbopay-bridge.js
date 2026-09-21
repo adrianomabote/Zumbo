@@ -601,8 +601,10 @@ async function loadRechargeCredits() {
 }
 async function saveRechargeCredits() { await writeJsonAtomic(RECHARGE_CREDITS_FILE, rechargeCredits) }
 async function loadMaintenance() {
-  const d = await storeLoad('maintenance', MAINTENANCE_FILE)
-  maintenanceEnabled = d === true || d?.enabled === true
+  // Maintenance is an emergency runtime switch, not a deployment setting.
+  // Always start a fresh process with the public service enabled.
+  await storeLoad('maintenance', MAINTENANCE_FILE)
+  maintenanceEnabled = false
 }
 async function saveMaintenance() {
   await writeJsonAtomic(MAINTENANCE_FILE, {
@@ -1720,8 +1722,10 @@ NOTAS
     let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
     const gk = gwAuth(req, body)
     if (!gk) return json(res, { error:'Chave de API inválida ou inactiva. Use o header X-API-Key.' }, 401)
-    const amount = Math.round(Number(body.amount))
-    if (!amount || amount < 1) return json(res, { error:'Valor (amount) inválido.' }, 400)
+    const amountNumber = Number(body.amount)
+    const amount = Math.round(amountNumber)
+    if (!Number.isInteger(amountNumber) || amount < 20 || amount > 40000)
+      return json(res, { error:'O valor (amount) deve ser um número inteiro entre 20 e 40000 MT.' }, 400)
     const msisdn = normalizeMsisdn(body.phone), meth = detectMethod(msisdn)
     if (!meth) return json(res, { error:'Número inválido. Use M-Pesa 84/85 ou e-Mola 86/87.' }, 400)
     let callbackUrl = null
@@ -1746,9 +1750,16 @@ NOTAS
       gwKey: gk.name, gwKeyId: gk.id, gatewayName: tx.gatewayName,
       megabytes: tx.megabytes, extRef: tx.extRef, extDesc: tx.extDesc, callbackUrl,
     })
-    json(res, { ok:true, txId, status:'pending', method:meth, statusUrl:`${SITE_URL}/gateway/api/status/${txId}` }, 202)
-    initiateCharge(tx, tx.extDesc || tx.extRef || 'Pagamento Megabyte')
-    return
+    console.log(`[Gateway] cobrança ${txId} (${amount} MT, ${meth}) via ${gk.name}`)
+    await initiateCharge(tx, tx.extDesc || tx.extRef || 'Pagamento Megabyte')
+    return json(res, {
+      ok: true,
+      txId,
+      status: tx.status,
+      method: meth,
+      statusUrl: `${SITE_URL}/gateway/api/status/${txId}`,
+      ...(tx.error ? { error: tx.error } : {}),
+    }, 202)
   }
 
   // ── Gateway: consultar estado ─────────────────────────────────────────────
