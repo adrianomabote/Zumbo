@@ -7,7 +7,6 @@ import { createServer }                              from 'http'
 import { createHmac, timingSafeEqual, randomBytes, randomUUID }  from 'crypto'
 import { mkdir, readFile, writeFile, rename }        from 'fs/promises'
 import { join }                                      from 'path'
-import pg                                             from 'pg'
 
 // ── Configuração ──────────────────────────────────────────────────────────────
 const PORT                 = process.env.PORT || 5000
@@ -32,7 +31,6 @@ const RECHARGE_CREDITS_FILE = join(DATA_DIR, 'recharge-credits.json')
 const MAINTENANCE_FILE = join(DATA_DIR, 'maintenance.json')
 const SHARE_DESCRIPTION = 'Aproveite os nossos pacotes de megas a partir de 10 MT, incluindo 1024 MB por apenas 25 MT. Compre facilmente para o seu próprio número ou para outro número à sua escolha.'
 const MAINTENANCE_MESSAGE = 'Estamos a fazer uma manutenção rápida para melhorar a loja. Voltamos em breve.'
-const { Pool } = pg
 
 function adminToken() {
   return createHmac('sha256', (process.env.PAGAR_WEBHOOK_SECRET || '') + ADMIN_PASS).update('netservicos:admin').digest('hex')
@@ -290,6 +288,8 @@ async function dbInit() {
     return
   }
   try {
+    const pgModule = await import('pg')
+    const Pool = pgModule.default?.Pool || pgModule.Pool
     databasePool = new Pool({
       connectionString: process.env.DATABASE_URL,
       max: 3,
@@ -316,7 +316,7 @@ async function dbInit() {
     console.log('[DB] PostgreSQL activo — chaves e transacções do Gateway persistentes')
   } catch (error) {
     console.error('[DB] PostgreSQL indisponível — a usar ficheiros locais:', error.message)
-    await databasePool.end().catch(() => {})
+    await databasePool?.end().catch(() => {})
     databasePool = null
   }
 }
