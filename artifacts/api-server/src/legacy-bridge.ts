@@ -158,7 +158,11 @@ export function proxyLegacyBridge(req: Request, res: Response) {
       const chunks: Buffer[] = [];
       upstreamResponse.on("data", (chunk: Buffer) => chunks.push(chunk));
       upstreamResponse.on("end", () => {
-        const body = rewriteLegacyHtml(Buffer.concat(chunks).toString("utf8"));
+        const rawBody = Buffer.concat(chunks).toString("utf8");
+        const legacyPath = req.url.split("?")[0];
+        const body = legacyPath === "/gateway/docs"
+          ? rawBody
+          : rewriteLegacyHtml(rawBody);
         delete headers["content-length"];
         res.writeHead(upstreamResponse.statusCode ?? 502, headers);
         res.end(body);
