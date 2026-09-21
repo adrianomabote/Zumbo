@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: net-servicos
+    runtime: node
+    plan: starter
+    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @workspace/net-servicos run build && pnpm --filter @workspace/api-server run build
+    startCommand: node --enable-source-maps artifacts/api-server/dist/index.mjs
+    healthCheckPath: /api/healthz
+    disk:
+      name: net-servicos-data
+      mountPath: /var/data/net-servicos
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NET_SERVICOS_PAYMENT_MODE
+        value: live
+      - key: NET_SERVICOS_DATA_DIR
+        value: /var/data/net-servicos
+      - key: DATABASE_URL
+        sync: false
+      - key: SITE_URL
+        sync: false
+      - key: PAGAR_API_BASE_URL
+        value: https://api.pagar.co.mz/api/v1
+      - key: PAGAR_API_KEY
+        sync: false
+      - key: PAGAR_SIGNING_SECRET
+        sync: false
+      - key: PAGAR_WEBHOOK_SECRET
+        sync: false
+      - key: PAGAR_WEBHOOK_URL
+        sync: false
+      - key: ADMIN_PASS
+        sync: false
+      - key: SESSION_SECRET
+        sync: false

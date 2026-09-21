@@ -3691,7 +3691,7 @@ function adminDashboard(filter = 'all', requestedPage = 1) {
     ? `<div class="zumbo-panel">
   <div class="zumbo-info">
     <svg viewBox="0 0 24 24" style="width:15px;height:15px;stroke:#065f46;fill:none;stroke-width:2;stroke-linecap:round;flex-shrink:0"><path d="M12 2a10 10 0 100 20A10 10 0 0012 2zm0 9v4m0-7h.01"/></svg>
-    <div>Crie chaves para outros sites cobrarem via M-Pesa através deste gateway.<br>
+    <div>Crie chaves para outros sites cobrarem via M-Pesa através deste gateway. Cada valor é convertido numa compra de megas: usa o pacote normal exacto quando existe; caso contrário, usa <code>valor × 40 MB</code>.<br>
     <strong>Iniciar pagamento:</strong> <code>POST ${SITE_URL}/gateway/api/pay</code> com header <code>X-API-Key: &lt;chave&gt;</code> e corpo JSON <code>{"phone":"84xxxxxxx","amount":100,"reference":"pedido-123","callback_url":"https://seusite.com/confirmar"}</code><br>
     <strong>Consultar estado:</strong> <code>GET ${SITE_URL}/gateway/api/status/&lt;txId&gt;</code> com o mesmo header. Estados: <code>pending</code>, <code>succeeded</code>, <code>failed</code>.<br>
     Se enviar <code>callback_url</code>, o site de terceiros recebe um POST com o resultado, assinado com HMAC-SHA256 do segredo no header <code>X-Gateway-Signature</code>.</div>
