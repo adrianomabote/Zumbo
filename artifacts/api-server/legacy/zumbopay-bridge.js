@@ -45,6 +45,7 @@ function isMaintenanceBypassPath(path) {
   return path === '/ping' ||
     path === '/api/maintenance-status' ||
     path === '/internal/pagar-event' ||
+    path === '/gateway/docs' ||
     path === '/webhook' ||
     path === '/favicon.ico' ||
     path === '/manifest.json' ||
@@ -793,6 +794,100 @@ function html(res, body, extraHeaders = {}) {
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', ...extraHeaders })
   res.end(body)
 }
+function gatewayDocsPage() {
+  const baseUrl = escapeHtml(SITE_URL)
+  return `<!doctype html><html lang="pt-MZ"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gateway de pagamentos — Megabyte</title>
+<meta name="description" content="Documentação da API Gateway Megabyte para receber pagamentos M-Pesa e e-Mola em projectos externos.">
+<meta property="og:title" content="Gateway de pagamentos — Megabyte">
+<meta property="og:description" content="Integre pagamentos M-Pesa e e-Mola através da API Gateway Megabyte.">
+<style>
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#f6f8fa;color:#17202a;font:15px/1.6 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+a{color:#0f766e}.wrap{width:min(1120px,calc(100% - 36px));margin:auto}.hero{background:#102a2b;color:#fff;padding:54px 0 48px}.hero-grid{display:grid;grid-template-columns:1fr auto;gap:30px;align-items:end}.brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:-.03em}.brand-mark{width:34px;height:34px;border-radius:10px;background:#14b8a6;color:#062b2b;display:grid;place-items:center;font-size:20px}.eyebrow{margin:38px 0 10px;color:#7ee7d8;font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}.hero h1{max-width:760px;margin:0;font-size:clamp(30px,5vw,56px);line-height:1.02;letter-spacing:-.055em}.hero p{max-width:680px;margin:18px 0 0;color:#c3d8d8;font-size:17px}.base{padding:15px 18px;border:1px solid #3c6665;border-radius:14px;background:#183b3b;min-width:290px}.base small{display:block;color:#9fc3c0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}.base code{display:block;margin-top:4px;color:#fff;font-size:13px;overflow-wrap:anywhere}.layout{display:grid;grid-template-columns:210px 1fr;gap:42px;padding:42px 0 70px}.toc{position:sticky;top:20px;align-self:start}.toc strong{display:block;margin-bottom:10px;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#667085}.toc a{display:block;padding:7px 0;color:#475467;text-decoration:none;font-size:13px}.toc a:hover{color:#0f766e}.intro{margin:0 0 28px;color:#52606d}.callout{padding:17px 18px;margin:20px 0;border:1px solid #99f6e4;border-radius:14px;background:#ecfdfb;color:#134e4a}.callout strong{color:#115e59}.section{scroll-margin-top:20px;margin:0 0 38px}.section h2{margin:0 0 14px;font-size:26px;letter-spacing:-.035em;color:#17202a}.section h3{margin:22px 0 8px;font-size:17px}.endpoint{overflow:hidden;margin:16px 0;border:1px solid #e1e7eb;border-radius:16px;background:#fff;box-shadow:0 2px 8px rgba(15,23,42,.035)}.endpoint-head{display:flex;gap:12px;align-items:center;padding:15px 18px;border-bottom:1px solid #edf0f2}.method{padding:4px 8px;border-radius:6px;color:#fff;background:#0f766e;font:800 11px ui-monospace,SFMono-Regular,Menlo,monospace}.method.get{background:#2563eb}.endpoint-head code{font-weight:700;color:#334155;overflow-wrap:anywhere}.endpoint-body{padding:18px}.endpoint-body p{margin:0 0 12px;color:#52606d}pre{overflow:auto;margin:12px 0;padding:16px;border-radius:11px;background:#111827;color:#d1fae5;font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace}code.inline{padding:2px 5px;border-radius:5px;background:#eef2f4;color:#164e63;font:12px ui-monospace,SFMono-Regular,Menlo,monospace}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}.card{padding:17px;border:1px solid #e1e7eb;border-radius:14px;background:#fff}.card h3{margin:0 0 7px;font-size:15px}.card p{margin:0;color:#667085;font-size:13px}.table-wrap{overflow:auto;border:1px solid #e1e7eb;border-radius:14px;background:#fff}.table{width:100%;border-collapse:collapse;min-width:520px}.table th,.table td{padding:12px 14px;text-align:left;border-bottom:1px solid #edf0f2;font-size:13px}.table th{color:#475467;background:#f8fafb;font-size:11px;text-transform:uppercase;letter-spacing:.05em}.table tr:last-child td{border-bottom:0}.pill{display:inline-block;padding:3px 8px;border-radius:99px;background:#e6fffa;color:#0f766e;font-size:11px;font-weight:800}.footer{padding:30px 0;border-top:1px solid #e1e7eb;color:#667085;font-size:13px}@media(max-width:760px){.hero{padding:34px 0}.hero-grid,.layout,.grid2{grid-template-columns:1fr}.base{min-width:0}.layout{padding-top:28px;gap:22px}.toc{position:static;padding:14px 16px;border:1px solid #e1e7eb;border-radius:14px;background:#fff}.toc a{display:inline-block;margin-right:14px}.hero h1{font-size:38px}.wrap{width:min(100% - 26px,1120px)}}
+</style></head><body>
+<header class="hero"><div class="wrap">
+  <div class="brand"><span class="brand-mark">◎</span><span>megabyte.live</span></div>
+  <div class="eyebrow">Documentação para programadores</div>
+  <div class="hero-grid"><div><h1>Receba pagamentos no seu projecto.</h1><p>Use uma única API para iniciar cobranças M-Pesa e e-Mola, acompanhar o resultado e confirmar callbacks assinados.</p></div><div class="base"><small>Base URL</small><code>${baseUrl}</code></div></div>
+</div></header>
+<main class="wrap layout">
+  <nav class="toc" aria-label="Nesta página"><strong>Nesta página</strong><a href="#inicio">Visão geral</a><a href="#autenticacao">Autenticação</a><a href="#criar">Criar pagamento</a><a href="#estado">Consultar estado</a><a href="#callback">Callback</a><a href="#erros">Erros</a></nav>
+  <div>
+    <section class="section" id="inicio"><h2>Começar em 3 passos</h2><p class="intro">Crie uma chave no painel Gateway, guarde-a no seu servidor e use o fluxo abaixo. O Gateway regista cada cobrança como uma compra de megas na rede móvel.</p><div class="grid2"><div class="card"><h3>1. Obter credenciais</h3><p>No painel admin, abra <strong>Gateway → Chaves de API</strong>. Copie a chave e o segredo para as variáveis privadas do seu servidor.</p></div><div class="card"><h3>2. Iniciar cobrança</h3><p>Envie o número do cliente e o valor em MT para receber o pedido de PIN no telemóvel.</p></div><div class="card"><h3>3. Confirmar resultado</h3><p>Use o callback assinado e confirme o estado com o endpoint de consulta antes de entregar o produto.</p></div><div class="card"><h3>Ambiente</h3><p>Esta documentação aponta para produção. Use sempre HTTPS e nunca exponha credenciais no browser.</p></div></div><div class="callout"><strong>Importante:</strong> a chave <code class="inline">gw_live_...</code> autentica os pedidos. O segredo <code class="inline">gwsec_...</code> serve apenas para verificar callbacks no seu backend.</div></section>
+    <section class="section" id="autenticacao"><h2>Autenticação</h2><p>Envie a chave em todos os pedidos de pagamento e de consulta:</p><pre>X-API-Key: gw_live_SUA_CHAVE</pre><p>Guarde ambos os valores em variáveis de ambiente. Não os coloque em aplicações mobile, JavaScript do frontend, páginas HTML ou repositórios públicos.</p></section>
+    <section class="section" id="criar"><h2>Criar um pagamento</h2><div class="endpoint"><div class="endpoint-head"><span class="method">POST</span><code>/gateway/api/pay</code></div><div class="endpoint-body"><p>Cria uma cobrança e inicia o pedido no M-Pesa ou e-Mola. O método é detectado pelo prefixo do número.</p><h3>Pedido</h3><pre>curl -X POST ${baseUrl}/gateway/api/pay \\
+  -H "Content-Type: application/json" \\
+  -H "X-API-Key: gw_live_SUA_CHAVE" \\
+  -d '{
+    "phone": "84xxxxxxx",
+    "amount": 100,
+    "reference": "pedido-123",
+    "description": "Compra na minha loja",
+    "callback_url": "https://seusite.com/api/gateway/callback"
+  }'</pre><p><code class="inline">phone</code> e <code class="inline">amount</code> são obrigatórios. <code class="inline">reference</code> tem no máximo 64 caracteres. <code class="inline">description</code> tem no máximo 120. O <code class="inline">callback_url</code> é opcional, mas deve ser HTTPS público.</p><h3>Resposta <span class="pill">202 Accepted</span></h3><pre>{
+  "ok": true,
+  "txId": "a1b2c3d4e5f6",
+  "status": "pending",
+  "method": "mpesa",
+  "statusUrl": "${baseUrl}/gateway/api/status/a1b2c3d4e5f6"
+}</pre></div></div><div class="callout"><strong>Conversão em megas:</strong> valores iguais aos pacotes normais usam a quantidade exacta do catálogo. Outros valores usam <code class="inline">amount × 40 MB</code>. Por exemplo: 25 MT = 1024 MB; 100 MT = 4096 MB.</div></section>
+    <section class="section" id="estado"><h2>Consultar o estado</h2><div class="endpoint"><div class="endpoint-head"><span class="method get">GET</span><code>/gateway/api/status/&lt;txId&gt;</code></div><div class="endpoint-body"><pre>curl ${baseUrl}/gateway/api/status/a1b2c3d4e5f6 \\
+  -H "X-API-Key: gw_live_SUA_CHAVE"</pre><h3>Resposta</h3><pre>{
+  "ok": true,
+  "txId": "a1b2c3d4e5f6",
+  "status": "pending",
+  "amount": 100,
+  "megabytes": 4096,
+  "phone": "84xxxxxxx",
+  "method": "mpesa",
+  "reference": "pedido-123",
+  "error": null,
+  "ts": "2026-09-21T12:00:00.000Z"
+}</pre><p>Consulte a cada 3–5 segundos enquanto o estado for <code class="inline">pending</code>. Pare quando chegar a <code class="inline">succeeded</code> ou <code class="inline">failed</code>.</p></div></div></section>
+    <section class="section" id="callback"><h2>Callback assinado</h2><p>Se enviar <code class="inline">callback_url</code>, o Gateway fará um POST quando o pagamento terminar.</p><pre>Content-Type: application/json
+X-Gateway-Signature: assinatura_hmac_sha256</pre><pre>{
+  "event": "payment.succeeded",
+  "txId": "a1b2c3d4e5f6",
+  "reference": "pedido-123",
+  "amount": 100,
+  "phone": "84xxxxxxx",
+  "method": "mpesa",
+  "error": null,
+  "ts": "2026-09-21T12:02:10.000Z"
+}</pre><p>Valide a assinatura sobre o corpo bruto, antes de fazer JSON parse. O segredo usado é o <code class="inline">gwsec_...</code> da mesma chave.</p><pre>import crypto from "node:crypto";
+
+const rawBody = req.body; // Buffer ou string original, sem reformatar
+const expected = crypto
+  .createHmac("sha256", process.env.GATEWAY_SECRET)
+  .update(rawBody)
+  .digest("hex");
+const received = req.headers["x-gateway-signature"] || "";
+const valid = received.length === expected.length &&
+  crypto.timingSafeEqual(Buffer.from(received), Buffer.from(expected));
+
+if (!valid) return res.status(401).json({ error: "Assinatura inválida" });</pre><div class="callout"><strong>Idempotência:</strong> o callback pode ser repetido. Guarde o <code class="inline">txId</code> e processe cada transacção apenas uma vez. Confirme o estado no endpoint antes de entregar o produto. O Gateway tenta entregar o callback até 3 vezes.</div></section>
+    <section class="section" id="erros"><h2>Estados e erros</h2><div class="table-wrap"><table class="table"><thead><tr><th>Estado / código</th><th>Significado</th><th>Acção recomendada</th></tr></thead><tbody><tr><td><code class="inline">pending</code></td><td>A cobrança ainda está a ser processada.</td><td>Consultar novamente ou aguardar callback.</td></tr><tr><td><code class="inline">succeeded</code></td><td>Pagamento confirmado.</td><td>Entregar o produto uma única vez.</td></tr><tr><td><code class="inline">failed</code></td><td>Pagamento recusado ou expirado.</td><td>Não entregar; informar o cliente.</td></tr><tr><td>400</td><td>Dados inválidos ou callback inseguro.</td><td>Corrigir o pedido.</td></tr><tr><td>401</td><td>Chave ausente, inválida ou desactivada.</td><td>Confirmar o header e o estado da chave.</td></tr><tr><td>404</td><td>Transacção inexistente ou pertencente a outra chave.</td><td>Confirmar o txId e a chave usada.</td></tr></tbody></table></div></section>
+    <section class="section"><h2>Exemplo rápido em JavaScript</h2><pre>const baseUrl = "https://megabyte.live";
+const response = await fetch(baseUrl + "/gateway/api/pay", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "X-API-Key": process.env.GATEWAY_API_KEY
+  },
+  body: JSON.stringify({
+    phone: "84xxxxxxx",
+    amount: 25,
+    reference: "pedido-123"
+  })
+});
+
+const payment = await response.json();
+console.log(payment.txId, payment.status);</pre></section>
+  </div>
+</main><footer class="footer"><div class="wrap">Gateway Megabyte · M-Pesa e e-Mola · <a href="${baseUrl}/megas">Voltar à loja</a></div></footer>
+</body></html>`
+}
 function redirect(res, url, headers = {}) {
   res.writeHead(302, { Location: url, ...headers }); res.end()
 }
@@ -1066,7 +1161,7 @@ async function router(req, res) {
   const staticPath = path.startsWith('/static/')
   const readOnlyPath = [
     '/', '/megas', '/ping', '/favicon.ico', '/manifest.json', '/sw.js',
-    '/api/config', '/api/bundles', '/api/auth/me', '/api/auth/logout', '/api/maintenance-status',
+    '/api/config', '/api/bundles', '/api/auth/me', '/api/auth/logout', '/api/maintenance-status', '/gateway/docs',
   ].includes(path) || staticPath || PUBLIC_CATEGORY_PATHS.includes(path) || PUBLIC_INFO_PATHS_WITH_SLASH.includes(path)
   const accountSetupPath = ['/api/auth/register', '/api/auth/login'].includes(path)
   const adminPath = path.startsWith('/admin')
@@ -1375,6 +1470,10 @@ self.addEventListener('fetch',e=>{
   }
 
   // ── Gateway: documentação para programadores ──────────────────────────────
+  if (method === 'GET' && path === '/gateway/docs') {
+    return html(res, gatewayDocsPage(), { 'Cache-Control': 'public, max-age=300' })
+  }
+
   if (method === 'GET' && path === '/gateway/docs') {
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' })
     return res.end(`GATEWAY DE PAGAMENTOS M-PESA — NET SERVIÇOS
