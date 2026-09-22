@@ -71,7 +71,7 @@ router.post(["/pagar/internal/payments/:localTransactionId/reconcile", "/debitop
     return res.status(401).json({ error: "Origem não autorizada." });
   }
   try {
-    const payment = await reconcilePagarPayment(req.params.localTransactionId);
+    const payment = await reconcilePagarPayment(String(req.params.localTransactionId));
     return res.json({
       paymentId: payment.pagar_operation_id,
       status: payment.status,
@@ -84,7 +84,7 @@ router.post(["/pagar/internal/payments/:localTransactionId/reconcile", "/debitop
 });
 
 router.get(["/pagar/payments/:id", "/debitopay/payments/:id"], async (req, res) => {
-  try { return res.json(await getPagarPayment({ id: req.params.id })); } catch { return res.status(502).json({ error: "Não foi possível consultar o pagamento." }); }
+  try { return res.json(await getPagarPayment({ id: String(req.params.id) })); } catch { return res.status(502).json({ error: "Não foi possível consultar o pagamento." }); }
 });
 
 router.get(["/pagar/payments", "/debitopay/payments"], async (req, res) => {
@@ -107,7 +107,7 @@ router.post(["/pagar/admin/webhook-deliveries/:eventId/retry", "/debitopay/admin
     return res.status(401).json({ error: "Acção administrativa não autorizada." });
   }
   try {
-    return res.json({ event: await retryPagarWebhookForwarding(req.params.eventId) });
+    return res.json({ event: await retryPagarWebhookForwarding(String(req.params.eventId)) });
   } catch (error) {
     return res.status(400).json({ error: error instanceof Error ? error.message : "Nova tentativa recusada." });
   }
