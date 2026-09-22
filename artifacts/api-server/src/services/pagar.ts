@@ -31,8 +31,8 @@ function normalizeDebitoPhone(phone: string) {
 }
 
 function debitoAmountMultiplier() {
-  const value = Number(process.env.DEBITO_AMOUNT_MULTIPLIER || "100");
-  return Number.isInteger(value) && value > 0 ? value : 100;
+  const value = Number(process.env.DEBITO_AMOUNT_MULTIPLIER || "1");
+  return Number.isInteger(value) && value > 0 ? value : 1;
 }
 
 function debitoProviderAmount(amountMzn: number) {
