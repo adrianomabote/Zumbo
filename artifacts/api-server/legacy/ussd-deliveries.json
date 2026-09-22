@@ -144,6 +144,29 @@
       "updatedAt": "2026-08-21T06:25:51.940Z",
       "deviceId": "device_24bdf6e3b6cd598d925c6514",
       "leaseExpiresAt": "2026-08-21T06:28:51.940Z"
+    },
+    {
+      "id": "delivery_53943afa633fc272bae21147",
+      "idempotencyKey": "order-2dca857b6e3d",
+      "paymentId": "2dca857b6e3d",
+      "beneficiaryPhone": "848060353",
+      "packageLabel": "780 MB",
+      "ussdSequence": [
+        "*111#",
+        "Enviar pacote 780 MB para 848060353"
+      ],
+      "status": "queued",
+      "attempts": 0,
+      "maxAttempts": 2,
+      "events": [
+        {
+          "at": "2026-09-22T21:34:23.117Z",
+          "status": "queued",
+          "detail": "Pagamento confirmado; entrega enfileirada."
+        }
+      ],
+      "createdAt": "2026-09-22T21:34:22.969Z",
+      "updatedAt": "2026-09-22T21:34:23.117Z"
     }
   ],
   "devices": [
