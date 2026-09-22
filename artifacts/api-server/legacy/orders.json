@@ -19,7 +19,7 @@
     "activatedAt": null,
     "userId": "842540b5cf36",
     "pagarReconciliationStatus": "pending",
-    "pagarReconciliationError": "A confirmação continua pendente."
+    "pagarReconciliationError": null
   },
   {
     "txId": "3020b97946c4",
@@ -41,7 +41,7 @@
     "activatedAt": null,
     "userId": "842540b5cf36",
     "pagarReconciliationStatus": "pending",
-    "pagarReconciliationError": "A confirmação continua pendente."
+    "pagarReconciliationError": null
   },
   {
     "txId": "27135e7eeee3",
@@ -63,7 +63,7 @@
     "activatedAt": null,
     "userId": "842540b5cf36",
     "pagarReconciliationStatus": "pending",
-    "pagarReconciliationError": "A confirmação continua pendente."
+    "pagarReconciliationError": null
   },
   {
     "txId": "1aabfc0ef832",
@@ -85,7 +85,7 @@
     "activatedAt": null,
     "userId": "842540b5cf36",
     "pagarReconciliationStatus": "pending",
-    "pagarReconciliationError": "A confirmação continua pendente."
+    "pagarReconciliationError": null
   },
   {
     "txId": "90d2ac642a74",
@@ -107,7 +107,7 @@
     "activatedAt": null,
     "userId": "842540b5cf36",
     "pagarReconciliationStatus": "pending",
-    "pagarReconciliationError": "A confirmação continua pendente."
+    "pagarReconciliationError": null
   },
   {
     "txId": "f5d0350533d6",
@@ -129,7 +129,7 @@
     "activatedAt": null,
     "userId": "842540b5cf36",
     "pagarReconciliationStatus": "pending",
-    "pagarReconciliationError": "A confirmação continua pendente."
+    "pagarReconciliationError": null
   },
   {
     "txId": "ebc47dbff34a",
@@ -151,7 +151,7 @@
     "activatedAt": null,
     "userId": "842540b5cf36",
     "pagarReconciliationStatus": "pending",
-    "pagarReconciliationError": "A confirmação continua pendente."
+    "pagarReconciliationError": null
   },
   {
     "txId": "c3269296f0b1",
@@ -173,7 +173,7 @@
     "activatedAt": null,
     "userId": "842540b5cf36",
     "pagarReconciliationStatus": "pending",
-    "pagarReconciliationError": "A confirmação continua pendente."
+    "pagarReconciliationError": null
   },
   {
     "txId": "4dbbf38640b6",
