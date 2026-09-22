@@ -305,6 +305,7 @@ export async function createPagarPayment(input: PagarPaymentInput) {
   const isDebitoPay = activeProvider() === "debitopay";
   const body = isDebitoPay
     ? {
+         action: "process",
         merchant_id: process.env.DEBITO_MERCHANT_ID,
         wallet_code: process.env.DEBITO_WALLET_CODE,
         amount: debitoProviderAmount(input.amountMzn),
