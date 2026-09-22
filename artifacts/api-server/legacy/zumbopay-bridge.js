@@ -1249,7 +1249,16 @@ function schedulePagarReconciliation(tx, delayMs = 30_000) {
     const result = await reconcilePagarTransaction(tx)
     if (tx.status !== 'pending') return
     if (result === 'missing') {
-      await initiateCharge(tx, tx.pagarTitle || tx.extDesc || 'Pagamento Megabyte')
+      const message = 'Pagamento não localizado no Debito Pay; não foi criada uma nova cobrança automaticamente.'
+      tx.error = message
+      await updateOrderStatus(tx.id, 'pending', {
+        pagarRef: tx.ref || tx.pagarRef || pagarReferenceFor(tx),
+        pagarTitle: tx.pagarTitle,
+        pagarDescription: tx.pagarDescription,
+        pagarReconciliationStatus: 'manual_required',
+        pagarReconciliationError: message,
+      })
+      notifyTx(tx.id, { status: 'pending', method: tx.method, error: message })
     } else {
       schedulePagarReconciliation(tx)
     }
