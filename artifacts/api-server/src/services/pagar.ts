@@ -356,15 +356,13 @@ export async function createPagarPayment(input: PagarPaymentInput) {
 
 export async function getPagarPayment(identifier: { id?: string; reference?: string }) {
   if (activeProvider() === "debitopay") {
-    const idEndpoint = identifier.id
-      ? `/payment-orchestrator/${encodeURIComponent(identifier.id)}`
-      : `/payment-orchestrator?reference=${encodeURIComponent(identifier.reference || "")}`;
-    try {
-      return await request("GET", idEndpoint);
-    } catch (error) {
-      if (!identifier.id || errorStatus(error) !== 404) throw error;
-      return request("GET", `/payment-orchestrator?payment_id=${encodeURIComponent(identifier.id)}`);
-    }
+    return request(
+      "POST",
+      "/payment-orchestrator",
+      identifier.id
+        ? { action: "check-status", payment_id: identifier.id }
+        : { action: "check-status", reference: identifier.reference || "" },
+    );
   }
   const endpoint = identifier.id
     ? `/payments/${encodeURIComponent(identifier.id)}`
