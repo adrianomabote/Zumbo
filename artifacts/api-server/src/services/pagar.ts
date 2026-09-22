@@ -150,9 +150,23 @@ function safeMessage(status: number, data: unknown) {
 }
 
 async function parseResponse(response: Response) {
-  const data: unknown = await response.json().catch(() => ({}));
+  const rawText = await response.text();
+  let data: unknown = {};
+  if (rawText.trim()) {
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      data = { message: rawText.slice(0, 500) };
+    }
+  }
   if (!response.ok) {
     const failure = safeMessage(response.status, data);
+    console.error(`[${providerName()}] resposta recusada`, JSON.stringify({
+      status: failure.status,
+      message: failure.message,
+      error: failure.error,
+      requestId: failure.requestId,
+    }));
     const error = new Error(failure.message);
     Object.assign(error, failure);
     throw error;
