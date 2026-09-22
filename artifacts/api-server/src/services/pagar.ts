@@ -356,12 +356,14 @@ export async function createPagarPayment(input: PagarPaymentInput) {
 
 export async function getPagarPayment(identifier: { id?: string; reference?: string }) {
   if (activeProvider() === "debitopay") {
+    const paymentId = identifier.id || identifier.reference;
+    if (!paymentId) {
+      throw new Error("Identificador Debito Pay em falta.");
+    }
     return request(
       "POST",
       "/payment-orchestrator",
-      identifier.id
-        ? { action: "check-status", payment_id: identifier.id }
-        : { action: "check-status", reference: identifier.reference || "" },
+      { action: "check-status", payment_id: paymentId },
     );
   }
   const endpoint = identifier.id
