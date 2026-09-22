@@ -804,7 +804,7 @@ async function refreshPagarForwardingStates() {
   const secret = process.env.SESSION_SECRET
   if (!mainPort || !secret) return
   try {
-    const res = await fetch(`http://localhost:${mainPort}/api/pagar/admin/webhook-deliveries`, {
+    const res = await fetch(`http://localhost:${mainPort}/api/debitopay/admin/webhook-deliveries`, {
       headers: { 'x-internal-payment-key': secret },
       signal: AbortSignal.timeout(5000),
     })
@@ -1098,7 +1098,7 @@ async function initiateCharge(tx, customerName) {
     return
   }
   try {
-    const resp = await fetch(`http://localhost:${process.env.MAIN_API_PORT}/api/pagar/internal/payments`, {
+    const resp = await fetch(`http://localhost:${process.env.MAIN_API_PORT}/api/debitopay/internal/payments`, {
       method: 'POST',
       headers: { 'Content-Type':'application/json', 'x-internal-payment-key':process.env.SESSION_SECRET },
       body: JSON.stringify({
@@ -1110,7 +1110,7 @@ async function initiateCharge(tx, customerName) {
         amountMzn: tx.amount,
         method: tx.method === 'mpesa' ? 'MPESA' : 'EMOLA',
         payerPhone: tx.phone,
-        idempotencyKey: `pagar-${tx.id}`,
+         idempotencyKey: `debitopay-${tx.id}`,
       }),
     })
     const data = await resp.json().catch(()=>({}))
@@ -1204,7 +1204,7 @@ async function reconcilePagarTransaction(tx) {
   if (!mainPort || !secret) return 'pending'
   try {
     const res = await fetch(
-      `http://localhost:${mainPort}/api/pagar/internal/payments/${encodeURIComponent(tx.id)}/reconcile`,
+      `http://localhost:${mainPort}/api/debitopay/internal/payments/${encodeURIComponent(tx.id)}/reconcile`,
       {
         method: 'POST',
         headers: { 'x-internal-payment-key': secret },
@@ -1935,7 +1935,7 @@ NOTAS
     const secret = process.env.SESSION_SECRET
     if (!eventId || !mainPort || !secret) return json(res, { error:'Encaminhamento Pagar não configurado.' }, 400)
     try {
-      const upstream = await fetch(`http://localhost:${mainPort}/api/pagar/admin/webhook-deliveries/${encodeURIComponent(eventId)}/retry`, {
+      const upstream = await fetch(`http://localhost:${mainPort}/api/debitopay/admin/webhook-deliveries/${encodeURIComponent(eventId)}/retry`, {
         method: 'POST',
         headers: { 'x-internal-payment-key': secret },
         signal: AbortSignal.timeout(5000),

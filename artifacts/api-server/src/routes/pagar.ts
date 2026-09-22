@@ -54,7 +54,7 @@ router.post("/debitopay/webhook", async (req, res) => {
   }
 });
 
-router.post("/pagar/internal/payments", async (req, res) => {
+router.post(["/pagar/internal/payments", "/debitopay/internal/payments"], async (req, res) => {
   if (!process.env.SESSION_SECRET || req.header("x-internal-payment-key") !== process.env.SESSION_SECRET) {
     return res.status(401).json({ error: "Origem não autorizada." });
   }
@@ -66,7 +66,7 @@ router.post("/pagar/internal/payments", async (req, res) => {
   }
 });
 
-router.post("/pagar/internal/payments/:localTransactionId/reconcile", async (req, res) => {
+router.post(["/pagar/internal/payments/:localTransactionId/reconcile", "/debitopay/internal/payments/:localTransactionId/reconcile"], async (req, res) => {
   if (!process.env.SESSION_SECRET || req.header("x-internal-payment-key") !== process.env.SESSION_SECRET) {
     return res.status(401).json({ error: "Origem não autorizada." });
   }
@@ -83,15 +83,15 @@ router.post("/pagar/internal/payments/:localTransactionId/reconcile", async (req
   }
 });
 
-router.get("/pagar/payments/:id", async (req, res) => {
+router.get(["/pagar/payments/:id", "/debitopay/payments/:id"], async (req, res) => {
   try { return res.json(await getPagarPayment({ id: req.params.id })); } catch { return res.status(502).json({ error: "Não foi possível consultar o pagamento." }); }
 });
 
-router.get("/pagar/payments", async (req, res) => {
+router.get(["/pagar/payments", "/debitopay/payments"], async (req, res) => {
   try { return res.json(await listPagarPayments({ status: String(req.query.status || ""), cursor: String(req.query.cursor || ""), limit: String(req.query.limit || "") })); } catch { return res.status(502).json({ error: "Não foi possível consultar os pagamentos." }); }
 });
 
-router.get("/pagar/admin/webhook-deliveries", async (req, res) => {
+router.get(["/pagar/admin/webhook-deliveries", "/debitopay/admin/webhook-deliveries"], async (req, res) => {
   if (!process.env.SESSION_SECRET || req.header("x-internal-payment-key") !== process.env.SESSION_SECRET) {
     return res.status(401).json({ error: "Acção administrativa não autorizada." });
   }
@@ -102,7 +102,7 @@ router.get("/pagar/admin/webhook-deliveries", async (req, res) => {
   }
 });
 
-router.post("/pagar/admin/webhook-deliveries/:eventId/retry", async (req, res) => {
+router.post(["/pagar/admin/webhook-deliveries/:eventId/retry", "/debitopay/admin/webhook-deliveries/:eventId/retry"], async (req, res) => {
   if (!process.env.SESSION_SECRET || req.header("x-internal-payment-key") !== process.env.SESSION_SECRET) {
     return res.status(401).json({ error: "Acção administrativa não autorizada." });
   }
