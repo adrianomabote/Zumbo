@@ -8,6 +8,8 @@ import {
   processPagarWebhook,
   reconcilePagarPayment,
   retryPagarWebhookForwarding,
+  processDebitoPayWebhook,
+  verifyDebitoPayWebhook,
   verifyPagarWebhook,
 } from "../services/pagar";
 
@@ -29,6 +31,26 @@ router.post("/pagar/webhook", async (req, res) => {
     return res.sendStatus(204);
   } catch {
     return res.status(500).json({ error: "Webhook não processado." });
+  }
+});
+
+router.post("/debitopay/webhook", async (req, res) => {
+  const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from("");
+  const signature = req.header("x-webhook-signature")
+    || req.header("x-debitopay-signature")
+    || req.header("x-signature")
+    || "";
+  if (!verifyDebitoPayWebhook(rawBody, signature)) {
+    return res.status(401).json({ error: "Webhook Debito Pay inválido." });
+  }
+  try {
+    const result = await processDebitoPayWebhook(rawBody);
+    if (result.forwardingStatus === "pending" || result.forwardingStatus === "failed") {
+      await forwardPagarWebhook(result, { force: result.duplicate });
+    }
+    return res.sendStatus(204);
+  } catch {
+    return res.status(500).json({ error: "Webhook Debito Pay não processado." });
   }
 });
 

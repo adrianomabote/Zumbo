@@ -15,6 +15,78 @@ const knownPaymentStates = new Set([
 const forwardableEventTypes = new Set(["payment.succeeded", "payment.failed"]);
 const forwardingStatuses = new Set(["pending", "forwarding", "failed", "delivered"]);
 
+type PaymentProvider = "pagar" | "debitopay";
+
+function activeProvider(): PaymentProvider {
+  return process.env.PAYMENT_PROVIDER === "debitopay" ? "debitopay" : "pagar";
+}
+
+function providerName() {
+  return activeProvider() === "debitopay" ? "Debito Pay" : "Pagar";
+}
+
+function normalizeDebitoPhone(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  return digits.startsWith("258") ? `+${digits}` : `+258${digits}`;
+}
+
+function debitoAmountMultiplier() {
+  const value = Number(process.env.DEBITO_AMOUNT_MULTIPLIER || "100");
+  return Number.isInteger(value) && value > 0 ? value : 100;
+}
+
+function debitoProviderAmount(amountMzn: number) {
+  return amountMzn * debitoAmountMultiplier();
+}
+
+function extractProviderOperation(data: Record<string, unknown>) {
+  const candidate = [data.payment, data.transaction, data.data, data].find(
+    (value): value is Record<string, unknown> => Boolean(value && typeof value === "object" && !Array.isArray(value)),
+  ) || data;
+  return candidate;
+}
+
+function providerOperationId(operation: Record<string, unknown>) {
+  for (const key of ["id", "payment_id", "paymentId", "transaction_id", "transactionId"]) {
+    if (typeof operation[key] === "string" && operation[key]) return operation[key] as string;
+  }
+  return undefined;
+}
+
+function providerReference(operation: Record<string, unknown>) {
+  for (const key of ["reference", "order_reference", "orderReference", "merchant_reference"]) {
+    if (typeof operation[key] === "string" && operation[key]) return operation[key] as string;
+  }
+  return undefined;
+}
+
+function providerStatus(operation: Record<string, unknown>) {
+  const raw = operation.status ?? operation.payment_status ?? operation.paymentStatus;
+  return typeof raw === "string" ? raw.trim().toUpperCase() : undefined;
+}
+
+function normalizeDebitoStatus(status: string | undefined) {
+  if (!status) return undefined;
+  if (["SUCCESS", "SUCCEEDED", "COMPLETED", "PAID", "CONFIRMED"].includes(status)) return "PAID";
+  if (["FAILED", "DECLINED", "EXPIRED", "CANCELLED", "CANCELED", "REFUNDED", "CHARGEBACK"].includes(status)) return status === "REFUNDED" ? "REFUNDED" : "FAILED";
+  if (["PENDING", "PROCESSING", "AUTHORIZED", "AWAITING_CUSTOMER"].includes(status)) return "PENDING";
+  return undefined;
+}
+
+function providerAmount(operation: Record<string, unknown>) {
+  for (const key of ["amountMzn", "amount", "value"]) {
+    if (typeof operation[key] === "number" && Number.isFinite(operation[key])) return operation[key] as number;
+  }
+  return undefined;
+}
+
+function providerAmountMatches(value: number | undefined, localAmountMzn: number) {
+  if (value === undefined) return true;
+  return activeProvider() === "debitopay"
+    ? value === localAmountMzn || value === debitoProviderAmount(localAmountMzn)
+    : value === localAmountMzn;
+}
+
 function requirePool() {
   if (!hasDatabase || !pool) {
     throw new Error("Pagamentos indisponíveis: PostgreSQL não configurado.");
@@ -38,12 +110,24 @@ export interface PagarPaymentInput {
 }
 
 function config() {
+  if (activeProvider() === "debitopay") {
+    const apiKey = process.env.DEBITO_API_KEY;
+    const baseUrl = process.env.DEBITO_API_BASE_URL;
+    const merchantId = process.env.DEBITO_MERCHANT_ID;
+    const walletCode = process.env.DEBITO_WALLET_CODE;
+    if (!apiKey || !baseUrl || !merchantId || !walletCode) {
+      throw new Error("Debito Pay API não está configurada no servidor.");
+    }
+    return { provider: "debitopay" as const, baseUrl, apiKey, merchantId, walletCode };
+  }
+
   const apiKey = process.env.PAGAR_API_KEY;
   const signingSecret = process.env.PAGAR_SIGNING_SECRET;
   if (!apiKey || !signingSecret) {
     throw new Error("Pagar API não está configurada no servidor.");
   }
   return {
+    provider: "pagar" as const,
     baseUrl: process.env.PAGAR_API_BASE_URL || DEFAULT_BASE_URL,
     apiKey,
     signingSecret,
@@ -56,7 +140,7 @@ function safeMessage(status: number, data: unknown) {
     ? body.safeMessage
     : typeof body?.message === "string"
       ? body.message
-      : "Pedido Pagar recusado.";
+      : `Pedido ${providerName()} recusado.`;
   return {
     message,
     requestId: typeof body?.requestId === "string" ? body.requestId : undefined,
@@ -77,14 +161,21 @@ async function parseResponse(response: Response) {
 }
 
 async function request(method: "GET" | "POST", endpoint: string, body?: Record<string, unknown>, idempotencyKey?: string) {
-  const { baseUrl, apiKey, signingSecret } = config();
+  const configuration = config();
+  const { baseUrl, apiKey } = configuration;
   const rawBody = body === undefined ? undefined : JSON.stringify(body);
   const url = new URL(`${baseUrl.replace(/\/$/, "")}${endpoint}`);
   const headers: Record<string, string> = {
     Authorization: `Bearer ${apiKey}`,
     Accept: "application/json",
   };
-  if (rawBody !== undefined) {
+  if (configuration.provider === "debitopay") {
+    Object.assign(headers, {
+      "Content-Type": "application/json",
+      "Idempotency-Key": idempotencyKey || "",
+    });
+  } else if (rawBody !== undefined) {
+    const { signingSecret } = configuration;
     const timestamp = Date.now().toString();
     const nonce = randomBytes(18).toString("base64url");
     const hash = createHash("sha256").update(rawBody).digest("hex");
@@ -120,10 +211,13 @@ function errorStatus(error: unknown) {
 }
 
 function isConfigurationError(error: unknown) {
-  return error instanceof Error && error.message === "Pagar API não está configurada no servidor.";
+  return error instanceof Error && (
+    error.message === "Pagar API não está configurada no servidor." ||
+    error.message === "Debito Pay API não está configurada no servidor."
+  );
 }
 
-function isUncertainPagarError(error: unknown) {
+function isUncertainProviderError(error: unknown) {
   if (isConfigurationError(error)) return false;
   const status = errorStatus(error);
   return status === undefined || status === 408 || status === 409 || status === 429 || status >= 500;
@@ -194,31 +288,46 @@ export async function createPagarPayment(input: PagarPaymentInput) {
      VALUES ($1,$2,'payment',$3,'PENDING',$4,$5,$6,$7,$8,$9) RETURNING *`,
     [input.localTransactionId, input.reference, input.amountMzn, input.idempotencyKey, input.sourceId, input.localTransactionId, input.title, input.method, input.payerPhone],
   );
-  const body = {
-    reference: input.reference,
-    title: input.title,
-    description: input.description,
-    amountMzn: input.amountMzn,
-    method: input.method,
-    payerPhone: input.payerPhone,
-  };
+  const isDebitoPay = activeProvider() === "debitopay";
+  const body = isDebitoPay
+    ? {
+        merchant_id: process.env.DEBITO_MERCHANT_ID,
+        wallet_code: process.env.DEBITO_WALLET_CODE,
+        amount: debitoProviderAmount(input.amountMzn),
+        currency: "MZN",
+        payment_method: input.method === "MPESA" ? "mpesa" : "emola",
+        phone: normalizeDebitoPhone(input.payerPhone),
+        reference: input.reference,
+        description: input.description,
+      }
+    : {
+        reference: input.reference,
+        title: input.title,
+        description: input.description,
+        amountMzn: input.amountMzn,
+        method: input.method,
+        payerPhone: input.payerPhone,
+      };
   try {
-    const data = await request("POST", "/payments", body, input.idempotencyKey);
-    const operation = (data.payment || data) as Record<string, unknown>;
+    const data = await request("POST", isDebitoPay ? "/payment-orchestrator" : "/payments", body, input.idempotencyKey);
+    const operation = extractProviderOperation(data);
+    const status = isDebitoPay
+      ? normalizeDebitoStatus(providerStatus(operation))
+      : normalizePaymentStatus(operation.status);
     const updated = await database.query(
       "UPDATE pagar_operations SET pagar_operation_id = $1, status = $2 WHERE internal_id = $3 RETURNING *",
       [
-        typeof operation.id === "string" && operation.id ? operation.id : null,
+         providerOperationId(operation) || null,
         (() => {
-          const status = normalizePaymentStatus(operation.status);
-          return status && knownPaymentStates.has(status) ? status : "RECONCILIATION_REQUIRED";
+           if (isDebitoPay) return status || "RECONCILIATION_REQUIRED";
+           return status && knownPaymentStates.has(status) ? status : "RECONCILIATION_REQUIRED";
         })(),
         input.localTransactionId,
       ],
     );
     return updated.rows[0] || inserted.rows[0];
   } catch (error) {
-    if (isUncertainPagarError(error)) {
+    if (isUncertainProviderError(error)) {
       const recovered = await database.query(
         "UPDATE pagar_operations SET status = 'RECONCILIATION_REQUIRED' WHERE internal_id = $1 RETURNING *",
         [input.localTransactionId],
@@ -231,6 +340,17 @@ export async function createPagarPayment(input: PagarPaymentInput) {
 }
 
 export async function getPagarPayment(identifier: { id?: string; reference?: string }) {
+  if (activeProvider() === "debitopay") {
+    const idEndpoint = identifier.id
+      ? `/payment-orchestrator/${encodeURIComponent(identifier.id)}`
+      : `/payment-orchestrator?reference=${encodeURIComponent(identifier.reference || "")}`;
+    try {
+      return await request("GET", idEndpoint);
+    } catch (error) {
+      if (!identifier.id || errorStatus(error) !== 404) throw error;
+      return request("GET", `/payment-orchestrator?payment_id=${encodeURIComponent(identifier.id)}`);
+    }
+  }
   const endpoint = identifier.id
     ? `/payments/${encodeURIComponent(identifier.id)}`
     : `/payments/by-reference/${encodeURIComponent(identifier.reference || "")}`;
@@ -255,29 +375,26 @@ export async function reconcilePagarPayment(localTransactionId: string) {
     id: local.pagar_operation_id || undefined,
     reference: local.pagar_reference,
   });
-  const operation = (data.payment || data) as Record<string, unknown>;
-  const providerStatus = normalizePaymentStatus(operation.status);
-  if (!providerStatus || !knownPaymentStates.has(providerStatus)) {
-    throw new Error("O Pagar devolveu um estado de pagamento desconhecido.");
+  const operation = extractProviderOperation(data);
+  const rawProviderStatus = providerStatus(operation);
+  const normalizedProviderStatus = activeProvider() === "debitopay"
+    ? normalizeDebitoStatus(rawProviderStatus)
+    : normalizePaymentStatus(rawProviderStatus);
+  if (!normalizedProviderStatus || (activeProvider() === "pagar" && !knownPaymentStates.has(normalizedProviderStatus))) {
+    throw new Error(`O ${providerName()} devolveu um estado de pagamento desconhecido.`);
   }
 
-  const operationId = typeof operation.id === "string" && operation.id ? operation.id : undefined;
-  const reference = typeof operation.reference === "string" && operation.reference
-    ? operation.reference
-    : undefined;
+  const operationId = providerOperationId(operation);
+  const reference = providerReference(operation);
   if (local.pagar_operation_id && operationId && local.pagar_operation_id !== operationId) {
     throw new Error("A operação devolvida pelo Pagar não corresponde ao pagamento local.");
   }
   if (local.pagar_reference && reference && local.pagar_reference !== reference) {
     throw new Error("A referência devolvida pelo Pagar não corresponde ao pagamento local.");
   }
-  const amount = typeof operation.amountMzn === "number"
-    ? operation.amountMzn
-    : typeof operation.amount === "number"
-      ? operation.amount
-      : undefined;
-  if (amount !== undefined && amount !== local.amount_mzn) {
-    throw new Error("O valor devolvido pelo Pagar não corresponde ao pagamento local.");
+  const amount = providerAmount(operation);
+  if (!providerAmountMatches(amount, local.amount_mzn)) {
+    throw new Error(`O valor devolvido pelo ${providerName()} não corresponde ao pagamento local.`);
   }
 
   const receipt = (operation.receipt || {}) as Record<string, unknown>;
@@ -297,9 +414,9 @@ export async function reconcilePagarPayment(localTransactionId: string) {
 
     // PAID is monotonic: a late or inconsistent failure response must not
     // undo a payment that the provider already confirmed.
-    const nextStatus = current.status === "PAID" && providerStatus !== "PAID"
+      const nextStatus = current.status === "PAID" && normalizedProviderStatus !== "PAID"
       ? "PAID"
-      : providerStatus;
+       : normalizedProviderStatus;
     const updated = await client.query(
       `UPDATE pagar_operations
           SET status = $1,
@@ -349,6 +466,59 @@ export function verifyPagarWebhook(rawBody: Buffer, signatureHeader: string) {
   const expected = createHmac("sha256", secret).update(`${timestamp}.${rawBody.toString("utf8")}`).digest();
   const received = Buffer.from(signature, "hex");
   return received.length === expected.length && timingSafeEqual(received, expected);
+}
+
+function timingSafeSignature(rawBody: Buffer, signatureHeader: string, secret: string) {
+  const normalized = signatureHeader.trim().replace(/^sha256=/i, "").replace(/^v1=/i, "");
+  if (!normalized) return false;
+  const expected = createHmac("sha256", secret).update(rawBody).digest();
+  const candidates = [
+    Buffer.from(normalized, "hex"),
+    Buffer.from(normalized, "base64"),
+  ];
+  return candidates.some((received) => received.length === expected.length && timingSafeEqual(received, expected));
+}
+
+export function verifyDebitoPayWebhook(rawBody: Buffer, signatureHeader: string) {
+  const secret = process.env.DEBITO_WEBHOOK_SECRET;
+  return Boolean(secret && timingSafeSignature(rawBody, signatureHeader, secret));
+}
+
+function debitoEventType(payload: Record<string, unknown>, operation: Record<string, unknown>) {
+  const raw = payload.event ?? payload.type ?? operation.event ?? operation.type ?? operation.status;
+  const event = typeof raw === "string" ? raw.toLowerCase() : "";
+  if (event.includes("completed") || event.includes("succeeded") || event === "success" || event === "paid") return "payment.succeeded";
+  if (event.includes("failed") || event.includes("declined") || event.includes("expired") || event.includes("cancelled") || event.includes("canceled") || event.includes("refunded") || event.includes("chargeback")) return "payment.failed";
+  return "payment.pending";
+}
+
+export async function processDebitoPayWebhook(rawBody: Buffer) {
+  const payload = JSON.parse(rawBody.toString("utf8")) as Record<string, unknown>;
+  const operation = extractProviderOperation(payload);
+  const eventType = debitoEventType(payload, operation);
+  const eventId = [
+    payload.event_id,
+    payload.eventId,
+    payload.id,
+    operation.event_id,
+    operation.eventId,
+    providerOperationId(operation),
+  ].find((value): value is string => typeof value === "string" && value.length > 0)
+    || createHash("sha256").update(rawBody).digest("hex");
+  const normalizedBody = {
+    data: {
+      id: providerOperationId(operation),
+      reference: providerReference(operation),
+      status: normalizeDebitoStatus(providerStatus(operation)) || providerStatus(operation),
+      amountMzn: providerAmount(operation),
+      receipt: operation.receipt,
+    },
+  };
+  return processPagarWebhook(
+    String(eventId),
+    eventType,
+    Buffer.from(JSON.stringify(normalizedBody)),
+  );
 }
 
 interface PagarWebhookRow {
@@ -446,7 +616,7 @@ export async function processPagarWebhook(eventId: string, eventType: string, ra
         : eventType === "payment.failed" && (!providerStatus || ["FAILED", "CANCELLED", "REFUNDED"].includes(providerStatus))
           ? providerStatus || "FAILED"
           : undefined;
-      if (local && identifiersMatch && nextStatus && (eventAmount === undefined || eventAmount === local.amount_mzn)) {
+      if (local && identifiersMatch && nextStatus && providerAmountMatches(eventAmount, local.amount_mzn)) {
         const receipt = (data.receipt || {}) as Record<string, unknown>;
         await client.query(
           `UPDATE pagar_operations

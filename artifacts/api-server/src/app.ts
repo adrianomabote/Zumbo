@@ -31,13 +31,13 @@ app.use(
 );
 app.use(cors());
 app.use("/api", (req, res, next) => {
-  if (req.path === "/pagar/webhook") {
+  if (req.path === "/pagar/webhook" || req.path === "/debitopay/webhook") {
     return express.raw({ type: "application/json", limit: "256kb" })(req, res, next);
   }
   return next();
 });
 app.use("/api", (req, res, next) => {
-  if (req.path === "/pagar/webhook") return pagarRouter(req, res, next);
+  if (req.path === "/pagar/webhook" || req.path === "/debitopay/webhook") return pagarRouter(req, res, next);
   return next();
 });
 app.use("/api/legacy", proxyLegacyBridge);
