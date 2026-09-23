@@ -1444,7 +1444,6 @@ self.addEventListener('fetch',e=>{
     const { phone, beneficiaryPhone, bundleId } = body
     const bundle = BUNDLES.get(bundleId)
     if (!bundle) return json(res, { error:'Pacote inválido.' }, 400)
-    if (bundle.price < 20) return json(res, { error:'Esta oferta abaixo de 20 MT só pode ser comprada com saldo de crédito.' }, 400)
     const purchaseFor = String(body.purchaseFor || '').toLowerCase()
     const isSelfPurchase = purchaseFor === 'self' || (!purchaseFor && !beneficiaryPhone)
     const payerPhone = normalizeLocalPhone(phone)
@@ -1504,7 +1503,7 @@ self.addEventListener('fetch',e=>{
     return json(res, {
       ok: true,
       paymentMode: isFreeMode ? 'free' : isTestMode ? 'test' : 'live',
-      minAmountMzn: 20,
+      minAmountMzn: 10,
       maxAmountMzn: 40000,
     })
   }
