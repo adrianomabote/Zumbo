@@ -13,3 +13,4 @@
 - [SEO da loja pública](public-storefront-seo.md) — novas páginas públicas precisam de rota no bridge, reescrita no proxy e URL correspondente no shell React
 - [Persistência do Gateway](gateway-persistence.md) — chaves e transacções devem sobreviver a deploys via PostgreSQL; JSON fica como migração e fallback
 - [Proxy público do Gateway](gateway-proxy-order.md) — o alias `/gateway` deve ficar antes dos parsers Express para preservar o corpo bruto dos POST
+- [Contrato Paysuite](paysuite-contract.md) — criar contacto E.164 antes do pagamento; consultar por ID e validar webhooks com HMAC em X-Signature
