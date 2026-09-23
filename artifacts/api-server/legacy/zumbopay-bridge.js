@@ -319,6 +319,11 @@ async function dbInit() {
         payload jsonb NOT NULL,
         created_at timestamptz NOT NULL DEFAULT now()
       );
+      CREATE TABLE IF NOT EXISTS customer_users (
+        id text PRIMARY KEY,
+        payload jsonb NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
     `)
     console.log('[DB] PostgreSQL activo — chaves e transacções do Gateway persistentes')
   } catch (error) {
@@ -381,8 +386,47 @@ function safeEqual(a, b) {
 
 // ── Utilizadores ──────────────────────────────────────────────────────────────
 let users = []
-async function loadUsers() { const d = await storeLoad('users', USERS_FILE); if (d) users = d }
-async function saveUsers() { await storeSave('users', users, USERS_FILE) }
+async function loadUsers() {
+  const d = await storeLoad('users', USERS_FILE)
+  if (databasePool) {
+    try {
+      const result = await databasePool.query('SELECT payload FROM customer_users ORDER BY updated_at ASC')
+      if (result.rows.length) {
+        users = result.rows.map(row => row.payload).filter(Boolean)
+        return
+      }
+      if (Array.isArray(d) && d.length) {
+        users = d
+        await saveUsers()
+        return
+      }
+    } catch (error) {
+      console.error('[DB] Falha ao carregar utilizadores:', error.message)
+    }
+  }
+  if (Array.isArray(d)) users = d
+}
+async function saveUsers() {
+  await storeSave('users', users, USERS_FILE)
+  if (!databasePool) return
+  try {
+    const ids = users.map(user => user.id)
+    if (ids.length) {
+      await databasePool.query('DELETE FROM customer_users WHERE NOT (id = ANY($1::text[]))', [ids])
+    } else {
+      await databasePool.query('DELETE FROM customer_users')
+    }
+    for (const user of users) {
+      await databasePool.query(`
+        INSERT INTO customer_users (id, payload, updated_at)
+        VALUES ($1, $2::jsonb, now())
+        ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = now()
+      `, [user.id, JSON.stringify(user)])
+    }
+  } catch (error) {
+    console.error('[DB] Falha ao guardar utilizadores:', error.message)
+  }
+}
 function findUserByPhone(p) { return users.find(u=>u.phone===p) }
 function findUserById(id)   { return users.find(u=>u.id===id) }
 function hashPwd(pass, salt){ return createHmac('sha256', salt + ADMIN_PASS).update(pass).digest('hex') }
@@ -3451,7 +3495,8 @@ async function submitRecharge() {
     const d=await r.json()
     if(!r.ok){err.textContent=d.error||'Erro ao processar.';err.style.display='block';btn.disabled=false;btn.textContent='Continuar';return}
     closeRechargeDialog()
-    document.getElementById('rech-method-lbl').textContent=paymentMethodLabel(d.method)
+     const rechargeMethodLabel = document.getElementById('rech-method-lbl')
+     if (rechargeMethodLabel) rechargeMethodLabel.textContent=paymentMethodLabel(d.method)
     document.getElementById('overlay').classList.add('open')
     setTimeout(()=>document.getElementById('sheet').classList.add('open'),10)
     shShow('recharging')
@@ -3676,7 +3721,8 @@ async function pay() {
       btn.textContent='Próximo'
       return
     }
-    document.getElementById('sh-method-lbl').textContent = paymentMethodLabel(d.method || phoneMethod(phone))
+    const orderMethodLabel = document.getElementById('sh-method-lbl')
+    if (orderMethodLabel) orderMethodLabel.textContent = paymentMethodLabel(d.method || phoneMethod(phone))
     document.getElementById('sh-ok-pkg').textContent = curPkg.name+' — '+curPkg.price+' MT'
     shShow('pending')
     if (isFreeMode) {
