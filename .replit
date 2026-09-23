@@ -26,7 +26,7 @@ packages = ["eas-cli"]
 [userenv]
 
 [userenv.development]
-NET_SERVICOS_PAYMENT_MODE = "live"
+NET_SERVICOS_PAYMENT_MODE = "free"
 SITE_URL = "https://megabyte.live"
 DEBITO_AMOUNT_MULTIPLIER = "1"
 DEBITO_API_BASE_URL = "https://gyqoaningqhurhvdugne.supabase.co/functions/v1"
@@ -37,7 +37,7 @@ PAYSUITE_API_BASE_URL = "https://paysuite.tech/api/v1"
 PAYSUITE_WEBHOOK_URL = "https://megabyte.live/api/paysuite/webhook"
 
 [userenv.production]
-NET_SERVICOS_PAYMENT_MODE = "live"
+NET_SERVICOS_PAYMENT_MODE = "free"
 PAGAR_WEBHOOK_URL = "https://megabyte.live/api/pagar/webhook"
 SITE_URL = "https://megabyte.live"
 DEBITO_API_BASE_URL = "https://gyqoaningqhurhvdugne.supabase.co/functions/v1"

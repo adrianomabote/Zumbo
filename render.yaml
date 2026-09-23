@@ -14,7 +14,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: NET_SERVICOS_PAYMENT_MODE
-        value: live
+        value: free
       - key: NET_SERVICOS_DATA_DIR
         value: /var/data/net-servicos
       - key: DATABASE_URL

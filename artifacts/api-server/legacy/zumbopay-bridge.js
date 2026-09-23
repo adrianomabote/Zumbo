@@ -24,6 +24,7 @@ const PAYMENT_MODE         = String(
   (process.env.NODE_ENV === 'production' ? 'live' : 'mock')
 ).toLowerCase()
 const isTestMode           = PAYMENT_MODE === 'mock' || PAYMENT_MODE === 'test'
+const isFreeMode           = PAYMENT_MODE === 'free'
 const PAYMENT_API_ROUTE    = process.env.PAYMENT_PROVIDER === 'paysuite'
   ? 'paysuite'
   : process.env.PAYMENT_PROVIDER === 'debitopay'
@@ -1092,10 +1093,10 @@ async function initiateCharge(tx, customerName) {
   tx.pagarRef = pagarReference
   tx.pagarTitle = pagarTitleFor(tx, customerName)
   tx.pagarDescription = pagarDescriptionFor(tx, customerName)
-  if (isTestMode) {
-    tx.ref = `test-${tx.sourceId || tx.id}`
+  if (isTestMode || isFreeMode) {
+    tx.ref = `${isFreeMode ? 'free' : 'test'}-${tx.sourceId || tx.id}`
     tx.status = 'succeeded'
-    console.log(`[ZumboPay] TEST charge simulated for ${tx.id}`)
+    console.log(`[ZumboPay] ${isFreeMode ? 'free offer' : 'TEST charge'} accepted for ${tx.id}`)
     await updateOrderStatus(tx.id, 'succeeded', {
       zumboRef: tx.ref,
       pagarRef: tx.pagarRef,
@@ -1103,7 +1104,7 @@ async function initiateCharge(tx, customerName) {
       pagarDescription: tx.pagarDescription,
     })
     await creditRechargeOnce(tx)
-    notifyTx(tx.id, { status:'succeeded', method:tx.method, testMode:true })
+    notifyTx(tx.id, { status:'succeeded', method:tx.method, testMode:isTestMode, freeMode:isFreeMode })
     gwFinalize(tx)
     return
   }
@@ -1502,7 +1503,7 @@ self.addEventListener('fetch',e=>{
   if (method === 'GET' && path === '/api/config') {
     return json(res, {
       ok: true,
-      paymentMode: isTestMode ? 'test' : 'live',
+      paymentMode: isFreeMode ? 'free' : isTestMode ? 'test' : 'live',
       minAmountMzn: 20,
       maxAmountMzn: 40000,
     })
@@ -2700,7 +2701,11 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
     </button>
   </div>
 </nav>
-${isTestMode ? '<div style="background:#fff3cd;color:#664d03;border-bottom:1px solid #ffecb5;padding:9px 16px;text-align:center;font-size:12px;font-weight:700;">MODO DE TESTE — os pagamentos desta preview são simulados e não movimentam dinheiro.</div>' : ''}
+${isFreeMode
+  ? '<div style="background:#e8f5e9;color:#1b5e20;border-bottom:1px solid #c8e6c9;padding:9px 16px;text-align:center;font-size:12px;font-weight:700;">OFERTA GRATUITA — esta oferta temporária não exige pagamento.</div>'
+  : isTestMode
+    ? '<div style="background:#fff3cd;color:#664d03;border-bottom:1px solid #ffecb5;padding:9px 16px;text-align:center;font-size:12px;font-weight:700;">MODO DE TESTE — os pagamentos desta preview são simulados e não movimentam dinheiro.</div>'
+    : ''}
 
 <!-- Search overlay -->
 <div class="search-overlay" id="search-overlay" onclick="closeSearch(event)">
@@ -3023,7 +3028,7 @@ ${allListHtml}
     <div class="sh-top"><button class="sh-close" onclick="closeSheet()">✕</button></div>
     <div class="sh-state">
       <img src="/static/voda-anim.gif" class="voda-gif" alt="Aguardando">
-      <p class="voda-pin-msg">Confirme a ativação da oferta introduzindo o PIN <span id="sh-method-lbl">M-Pesa</span> no seu telemóvel</p>
+       <p class="voda-pin-msg">${isFreeMode ? 'A preparar a sua oferta gratuita. Aguarde um momento…' : 'Confirme a ativação da oferta introduzindo o PIN <span id="sh-method-lbl">M-Pesa</span> no seu telemóvel'}</p>
     </div>
   </div>
 
@@ -3033,7 +3038,7 @@ ${allListHtml}
     <div class="sh-state">
       <div class="res-icon ok">✓</div>
       <div class="res-t">Pedido recebido!</div>
-      <p class="res-s">Pagamento confirmado. O seu pacote será activado em <strong style="color:#cc0000">1–5 minutos</strong>.</p>
+      <p class="res-s">${isFreeMode ? 'Oferta gratuita confirmada. O seu pacote será activado em' : 'Pagamento confirmado. O seu pacote será activado em'} <strong style="color:#cc0000">1–5 minutos</strong>.</p>
       <div class="res-box"><div class="res-box-l">Pacote encomendado</div><div class="res-box-v" id="sh-ok-pkg"></div></div>
       <button class="res-btn" onclick="closeSheet()">Comprar outro pacote</button>
     </div>
@@ -4710,7 +4715,7 @@ const requiredConfig = [
   'SESSION_SECRET',
 ]
 const missingConfig = requiredConfig.filter(key => !process.env[key])
-const isLiveConfiguration = isTestMode || missingConfig.length === 0
+const isLiveConfiguration = isTestMode || isFreeMode || missingConfig.length === 0
 
 await dbInit()
 await loadOrders()
