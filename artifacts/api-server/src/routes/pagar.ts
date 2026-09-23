@@ -9,7 +9,9 @@ import {
   reconcilePagarPayment,
   retryPagarWebhookForwarding,
   processDebitoPayWebhook,
+  processPaysuiteWebhook,
   verifyDebitoPayWebhook,
+  verifyPaysuiteWebhook,
   verifyPagarWebhook,
 } from "../services/pagar";
 
@@ -54,7 +56,24 @@ router.post("/debitopay/webhook", async (req, res) => {
   }
 });
 
-router.post(["/pagar/internal/payments", "/debitopay/internal/payments"], async (req, res) => {
+router.post("/paysuite/webhook", async (req, res) => {
+  const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from("");
+  const signature = req.header("x-signature") || "";
+  if (!verifyPaysuiteWebhook(rawBody, signature)) {
+    return res.status(401).json({ error: "Webhook Paysuite inválido." });
+  }
+  try {
+    const result = await processPaysuiteWebhook(rawBody);
+    if (result.forwardingStatus === "pending" || result.forwardingStatus === "failed") {
+      await forwardPagarWebhook(result, { force: result.duplicate });
+    }
+    return res.sendStatus(204);
+  } catch {
+    return res.status(500).json({ error: "Webhook Paysuite não processado." });
+  }
+});
+
+router.post(["/pagar/internal/payments", "/debitopay/internal/payments", "/paysuite/internal/payments"], async (req, res) => {
   if (!process.env.SESSION_SECRET || req.header("x-internal-payment-key") !== process.env.SESSION_SECRET) {
     return res.status(401).json({ error: "Origem não autorizada." });
   }
@@ -66,7 +85,7 @@ router.post(["/pagar/internal/payments", "/debitopay/internal/payments"], async 
   }
 });
 
-router.post(["/pagar/internal/payments/:localTransactionId/reconcile", "/debitopay/internal/payments/:localTransactionId/reconcile"], async (req, res) => {
+router.post(["/pagar/internal/payments/:localTransactionId/reconcile", "/debitopay/internal/payments/:localTransactionId/reconcile", "/paysuite/internal/payments/:localTransactionId/reconcile"], async (req, res) => {
   if (!process.env.SESSION_SECRET || req.header("x-internal-payment-key") !== process.env.SESSION_SECRET) {
     return res.status(401).json({ error: "Origem não autorizada." });
   }
@@ -83,15 +102,15 @@ router.post(["/pagar/internal/payments/:localTransactionId/reconcile", "/debitop
   }
 });
 
-router.get(["/pagar/payments/:id", "/debitopay/payments/:id"], async (req, res) => {
+router.get(["/pagar/payments/:id", "/debitopay/payments/:id", "/paysuite/payments/:id"], async (req, res) => {
   try { return res.json(await getPagarPayment({ id: String(req.params.id) })); } catch { return res.status(502).json({ error: "Não foi possível consultar o pagamento." }); }
 });
 
-router.get(["/pagar/payments", "/debitopay/payments"], async (req, res) => {
+router.get(["/pagar/payments", "/debitopay/payments", "/paysuite/payments"], async (req, res) => {
   try { return res.json(await listPagarPayments({ status: String(req.query.status || ""), cursor: String(req.query.cursor || ""), limit: String(req.query.limit || "") })); } catch { return res.status(502).json({ error: "Não foi possível consultar os pagamentos." }); }
 });
 
-router.get(["/pagar/admin/webhook-deliveries", "/debitopay/admin/webhook-deliveries"], async (req, res) => {
+router.get(["/pagar/admin/webhook-deliveries", "/debitopay/admin/webhook-deliveries", "/paysuite/admin/webhook-deliveries"], async (req, res) => {
   if (!process.env.SESSION_SECRET || req.header("x-internal-payment-key") !== process.env.SESSION_SECRET) {
     return res.status(401).json({ error: "Acção administrativa não autorizada." });
   }
@@ -102,7 +121,7 @@ router.get(["/pagar/admin/webhook-deliveries", "/debitopay/admin/webhook-deliver
   }
 });
 
-router.post(["/pagar/admin/webhook-deliveries/:eventId/retry", "/debitopay/admin/webhook-deliveries/:eventId/retry"], async (req, res) => {
+router.post(["/pagar/admin/webhook-deliveries/:eventId/retry", "/debitopay/admin/webhook-deliveries/:eventId/retry", "/paysuite/admin/webhook-deliveries/:eventId/retry"], async (req, res) => {
   if (!process.env.SESSION_SECRET || req.header("x-internal-payment-key") !== process.env.SESSION_SECRET) {
     return res.status(401).json({ error: "Acção administrativa não autorizada." });
   }
