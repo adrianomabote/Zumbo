@@ -15,19 +15,31 @@ const knownPaymentStates = new Set([
 const forwardableEventTypes = new Set(["payment.succeeded", "payment.failed"]);
 const forwardingStatuses = new Set(["pending", "forwarding", "failed", "delivered"]);
 
-type PaymentProvider = "pagar" | "debitopay";
+type PaymentProvider = "pagar" | "debitopay" | "paysuite";
 
 function activeProvider(): PaymentProvider {
+  if (process.env.PAYMENT_PROVIDER === "paysuite") return "paysuite";
   return process.env.PAYMENT_PROVIDER === "debitopay" ? "debitopay" : "pagar";
 }
 
 function providerName() {
+  if (activeProvider() === "paysuite") return "Paysuite";
   return activeProvider() === "debitopay" ? "Debito Pay" : "Pagar";
 }
 
 function normalizeDebitoPhone(phone: string) {
   const digits = phone.replace(/\D/g, "");
   return digits.startsWith("258") ? `+${digits}` : `+258${digits}`;
+}
+
+function normalizePaysuiteStatus(status: string | undefined) {
+  if (!status) return undefined;
+  if (["SUCCESS", "SUCCEEDED", "COMPLETED", "PAID", "CONFIRMED"].includes(status)) return "PAID";
+  if (["FAILED", "DECLINED", "EXPIRED", "CANCELLED", "CANCELED", "REFUNDED", "CHARGEBACK"].includes(status)) {
+    return status === "REFUNDED" ? "REFUNDED" : "FAILED";
+  }
+  if (["PENDING", "PROCESSING", "AUTHORIZED", "AWAITING_CUSTOMER"].includes(status)) return "PENDING";
+  return undefined;
 }
 
 function debitoAmountMultiplier() {
