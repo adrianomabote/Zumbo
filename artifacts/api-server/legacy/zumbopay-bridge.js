@@ -630,6 +630,7 @@ function trackOrder(tx, extra = {}) {
     pagarRef: tx.pagarRef || pagarReferenceFor(tx),
     pagarTitle: tx.pagarTitle || null,
     pagarDescription: tx.pagarDescription || null,
+     idempotencyKey: tx.idempotencyKey || null,
     ts: tx.ts, activatedAt: null, userId: tx.userId || null, ...extra,
   }
   orders.unshift(rec)
@@ -3572,6 +3573,9 @@ function openBuyDirect(id) {
   syncSelfPurchaseRecipient()
   document.getElementById('sh-err').style.display = 'none'
   const btn = document.getElementById('sh-btn'); btn.disabled=false; btn.textContent='Próximo'; btn.style.display='block'
+  activeOrderRequestKey = (window.crypto && typeof window.crypto.randomUUID === 'function')
+    ? window.crypto.randomUUID()
+    : `order-${Date.now()}-${Math.random().toString(16).slice(2)}`
   payVia = 'mobile-money'
   selectPayVia(payVia)
   updateCreditBtn()
@@ -3627,14 +3631,47 @@ async function pay() {
   if (error) { ee.textContent=error; ee.style.display='block'; return }
   const btn = document.getElementById('sh-btn'); btn.disabled=true; btn.textContent='A processar…'
   try {
-    const payload={phone,bundleId:curPkg.id,paymentMethod:phoneMethod(phone),purchaseFor}; if(beneficiaryPhone) payload.beneficiaryPhone=beneficiaryPhone
-    const r = await fetch('/api/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
-    const d = await r.json()
-    if (!r.ok) { ee.textContent=d.error||'Erro ao processar.'; ee.style.display='block'; btn.disabled=false; btn.textContent='Próximo'; return }
+    const payload={phone,bundleId:curPkg.id,paymentMethod:phoneMethod(phone),purchaseFor,idempotencyKey:activeOrderRequestKey}; if(beneficiaryPhone) payload.beneficiaryPhone=beneficiaryPhone
+    let r
+    let d
+    for (let attempt = 0; attempt < (isFreeMode ? 4 : 1); attempt++) {
+      try {
+        r = await fetch('/api/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+        d = await r.json().catch(()=>({}))
+        if (r.ok || !isFreeMode || r.status < 500) break
+      } catch (error) {
+        if (!isFreeMode || attempt === 3) throw error
+      }
+      await new Promise(resolve => setTimeout(resolve, 700))
+    }
+    if (!r?.ok) {
+      if (isFreeMode && (!r || r.status >= 500)) {
+        shShow('pending')
+        document.querySelector('#s-pending .voda-pin-msg').textContent='A confirmar a sua encomenda. Aguarde um momento…'
+        setTimeout(()=>pay(), 1200)
+        return
+      }
+      ee.textContent=d?.error||'Verifique os dados introduzidos.'
+      ee.style.display='block'
+      btn.disabled=false
+      btn.textContent='Próximo'
+      return
+    }
     document.getElementById('sh-method-lbl').textContent = paymentMethodLabel(d.method || phoneMethod(phone))
     document.getElementById('sh-ok-pkg').textContent = curPkg.name+' — '+curPkg.price+' MT'
     shShow('pending'); listenOrder(d.txId)
-  } catch { ee.textContent='Não foi possível concluir a encomenda. Tente novamente.'; ee.style.display='block'; btn.disabled=false; btn.textContent='Próximo' }
+  } catch {
+    if (isFreeMode) {
+      shShow('pending')
+      document.querySelector('#s-pending .voda-pin-msg').textContent='A confirmar a sua encomenda. Aguarde um momento…'
+      setTimeout(()=>pay(), 1200)
+      return
+    }
+    ee.textContent='Não foi possível concluir a encomenda. Tente novamente.'
+    ee.style.display='block'
+    btn.disabled=false
+    btn.textContent='Próximo'
+  }
 }
 
 function getCreditPurchaseFromSheet() {
@@ -3668,13 +3705,35 @@ async function payWithCredit() {
     if(!r.ok){showSheetError(d.error||'Erro.', /saldo insuficiente/i.test(d.error||''));selectPayVia('credit', true);return}
     authState.user.balance=d.newBalance; updateNavAuth()
     document.getElementById('sh-ok-pkg-credit').textContent=curPkg.name+' — '+curPkg.price+' MT'
+    document.getElementById('sh-credit-bal').textContent=(d.newBalance||0)+' MT'
     shShow('success-credit')
-  } catch{ee.textContent='Erro de ligação.';ee.style.display='block';selectPayVia('credit')}
+  } catch{
+    ee.textContent='Não foi possível concluir a encomenda. Tente novamente.'
+    ee.style.display='block'
+    selectPayVia('credit')
+  }
 }
 function listenOrder(txId) {
   if (evtSrc) evtSrc.close()
   evtSrc = new EventSource('/events/'+txId)
-  evtSrc.onmessage = e => { const d=JSON.parse(e.data); if(d.status==='succeeded'){evtSrc.close();shShow('success')} if(d.status==='failed'){evtSrc.close();document.getElementById('sh-fail-msg').textContent=d.error||'Tempo expirou.';shShow('failed')} }
+  evtSrc.onmessage = e => {
+    const d=JSON.parse(e.data)
+    if(d.status==='succeeded'){
+      evtSrc.close()
+      const showSuccess = () => shShow('success')
+      if (isFreeMode) setTimeout(showSuccess, 900)
+      else showSuccess()
+    }
+    if(d.status==='failed'){
+      evtSrc.close()
+      if (isFreeMode) {
+        setTimeout(()=>listenOrder(txId), 700)
+      } else {
+        document.getElementById('sh-fail-msg').textContent=d.error||'Tempo expirou.'
+        shShow('failed')
+      }
+    }
+  }
   evtSrc.onerror = () => { evtSrc.close(); setTimeout(()=>listenOrder(txId),3000) }
 }
 
