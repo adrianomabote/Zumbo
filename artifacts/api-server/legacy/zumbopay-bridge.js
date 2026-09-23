@@ -3076,6 +3076,7 @@ ${allListHtml}
       <div class="res-t">Pedido recebido!</div>
       <p class="res-s">Crédito debitado. O seu pacote será activado em <strong style="color:#cc0000">1–5 minutos</strong>.</p>
       <div class="res-box"><div class="res-box-l">Pacote encomendado</div><div class="res-box-v" id="sh-ok-pkg-credit"></div></div>
+       <div class="res-box"><div class="res-box-l">Saldo disponível</div><div class="res-box-v" id="sh-credit-bal">—</div></div>
       <button class="res-btn" onclick="closeSheet()">Comprar outro pacote</button>
     </div>
   </div>
@@ -3085,7 +3086,7 @@ ${allListHtml}
     <div class="sh-top"><button class="sh-close" onclick="closeSheet()">✕</button></div>
     <div class="sh-state">
       <img src="/static/voda-anim.gif" class="voda-gif" alt="Aguardando">
-      <p class="voda-pin-msg">Confirme o pagamento introduzindo o PIN <span id="rech-method-lbl">M-Pesa</span> no seu telemóvel</p>
+       <p class="voda-pin-msg">${isFreeMode ? 'A actualizar o seu saldo. Aguarde um momento…' : 'Confirme o pagamento introduzindo o PIN <span id="rech-method-lbl">M-Pesa</span> no seu telemóvel'}</p>
     </div>
   </div>
 
@@ -3255,6 +3256,7 @@ CATS_JS.forEach(cat => {
 
 // ── Auth state ──────────────────────────────────────────────────────────────
 const authState = { user: null, pendingPkg: null }
+let activeOrderRequestKey = null
 
 async function checkAuth() {
   try {
@@ -3461,11 +3463,25 @@ function listenRecharge(txId, amount) {
     const d=JSON.parse(e.data)
     if(d.status==='succeeded'){
       es.close()
-      fetch('/api/auth/me').then(r=>r.json()).then(u=>{authState.user=u;updateNavAuth()}).catch(()=>{})
-      document.getElementById('sh-rech-bal').textContent=(authState.user?.balance||0)+' MT (estimado)'
-      shShow('recharge-ok')
+      fetch('/api/auth/me')
+        .then(r=>r.ok ? r.json() : Promise.reject(new Error('auth refresh failed')))
+        .then(u=>{
+          authState.user=u
+          updateNavAuth()
+          document.getElementById('sh-rech-bal').textContent=(u.balance||0)+' MT'
+          shShow('recharge-ok')
+        })
+        .catch(()=>{
+          // The credit was already applied server-side; retry the refresh instead
+          // of showing a stale zero balance or exposing a transport error.
+          setTimeout(()=>listenRecharge(txId, amount), 700)
+        })
     }
-    if(d.status==='failed'){es.close();shShow('recharge-fail')}
+    if(d.status==='failed'){
+      es.close()
+      if (isFreeMode) setTimeout(()=>listenRecharge(txId, amount), 700)
+      else shShow('recharge-fail')
+    }
   }
   es.onerror=()=>{es.close();setTimeout(()=>listenRecharge(txId,amount),3000)}
 }
