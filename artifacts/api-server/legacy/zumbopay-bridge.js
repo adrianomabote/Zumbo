@@ -2295,15 +2295,15 @@ function megasPage(pageConfig = null) {
   ).join('')
 
   // Generate one slide card HTML
-  const slideHtml = (p, recommended = false) =>
+  const slideHtml = p =>
     `<div class="carousel-slide"><div class="vcard">` +
-    `<div class="vcard-header"><div>${recommended ? '<span class="vcard-recommended">Pacote recomendado</span>' : ''}` +
-    `<span class="vcard-name">${p.name}</span></div>` +
+    `<div class="vcard-header"><span class="vcard-name">${p.name}</span>` +
     `<button class="vcard-buy" onclick="openBuy('${p.id}');event.stopPropagation()">Activar</button></div>` +
-    `<div class="vcard-info">` +
-    `<div class="vi-metric"><span class="vi-metric-label">Megas</span><strong class="vi-metric-value">${p.size}</strong></div>` +
-    `<div class="vi-metric"><span class="vi-metric-label">Preço</span><strong class="vi-metric-value">${p.price} MT</strong></div>` +
-    `<div class="vi-metric"><span class="vi-metric-label">Validade</span><strong class="vi-metric-value">${p.dur}</strong></div></div>` +
+    `<div class="vcard-info"><div class="vi-price"><span>${p.price} MT</span></div>` +
+    `<div class="vi-dur"><span>${p.dur}</span></div></div>` +
+    `<div class="vcard-data"><div class="vdata-left">` +
+    `<div class="arrows"><span class="arr-up">▲</span><span class="arr-dn">▼</span></div>` +
+    `<span class="vdata-label">Dados</span></div><span class="vdata-size">${p.size}</span></div>` +
     (p.calls ? `<div class="vcard-extra"><div class="vextra-left"><span class="vextra-icon">📞</span>` +
       `<span class="vextra-label">Voz + SMS</span></div><span class="vextra-val">${p.calls}</span></div>` : '') +
     `<div class="vcard-footer"><button class="share-btn" onclick="event.stopPropagation()">⋮</button></div>` +
@@ -2325,7 +2325,7 @@ function megasPage(pageConfig = null) {
   // Generate one carousel section (no list — list is rendered separately below)
   const sectionHtml = (catId, visible) => {
     const {note, pkgs} = CAT_DATA[catId]
-    const slides = pkgs.map((pkg, index) => slideHtml(pkg, index === 0)).join('')
+     const slides = pkgs.map(slideHtml).join('')
     const dots   = pkgs.map((_,i) => `<div class="dot${i===0?' active':''}"></div>`).join('')
     const noteHtml = note ? `<div class="cat-note show">${note}</div>` : ''
     return `<div class="cat-section" id="cat-${catId}"${visible ? '' : ' style="display:none"'}>` +
@@ -2454,13 +2454,21 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .vcard-buy{background:transparent;border:2px solid #fff;border-radius:6px;padding:7px 18px;color:#fff;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;}
 .vcard-buy:active{background:rgba(255,255,255,.15);}
 
-/* Organized package summary */
-.vcard-info{display:grid;grid-template-columns:1.2fr 1fr 1fr;overflow:hidden;background:#fff;border-bottom:1px solid #e5e5ea;}
-.vi-metric{min-width:0;padding:14px 16px;display:flex;flex-direction:column;gap:4px;border-right:1px solid #e5e5ea;}
-.vi-metric:last-child{border-right:0;}
-.vi-metric-label{font-size:11px;color:#8e8e93;font-weight:700;text-transform:uppercase;letter-spacing:.06em;}
-.vi-metric-value{font-size:17px;color:#1c1c1e;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.vcard-recommended{display:block;width:max-content;margin-bottom:7px;padding:4px 8px;border-radius:999px;background:#fff;color:#a90000;font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;}
+/* Dark info row */
+.vcard-info{display:flex;overflow:hidden;}
+.vi-price{flex:1;background:#3a3a3c;padding:12px 16px;display:flex;align-items:center;}
+.vi-price span{font-size:17px;font-weight:700;color:#fff;}
+.vi-dur{background:#636366;padding:12px 16px;display:flex;align-items:center;}
+.vi-dur span{font-size:17px;font-weight:700;color:#fff;white-space:nowrap;}
+
+/* Data row */
+.vcard-data{padding:14px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e5e5ea;}
+.vdata-left{display:flex;align-items:center;gap:10px;}
+.arrows{display:flex;flex-direction:column;align-items:center;gap:1px;}
+.arr-up{font-size:13px;color:#8e8e93;line-height:1;}
+.arr-dn{font-size:13px;color:#cc0000;line-height:1;}
+.vdata-label{font-size:15px;color:#1c1c1e;font-weight:500;}
+.vdata-size{font-size:15px;color:#1c1c1e;font-weight:600;}
 
 /* Extra info (calls, SMS) */
 .vcard-extra{padding:10px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e5e5ea;}
@@ -3087,7 +3095,15 @@ ${allListHtml}
       <div class="res-icon ok">✓</div>
       <div class="res-t">Pedido recebido!</div>
        <p class="res-s">${isFreeMode ? 'Pedido concluído. O seu pacote será activado em' : 'Pagamento confirmado. O seu pacote será activado em'} <strong style="color:#cc0000">1–5 minutos</strong>.</p>
-      <div class="res-box"><div class="res-box-l">Pacote encomendado</div><div class="res-box-v" id="sh-ok-pkg"></div></div>
+      <div class="res-box res-package-box">
+        <div class="res-box-l">Detalhes do pacote</div>
+        <div class="res-package-grid">
+          <div><span>Pacote</span><strong id="sh-ok-name">—</strong></div>
+          <div><span>Megas</span><strong id="sh-ok-size">—</strong></div>
+          <div><span>Preço</span><strong id="sh-ok-price">—</strong></div>
+          <div><span>Validade</span><strong id="sh-ok-dur">—</strong></div>
+        </div>
+      </div>
       <button class="res-btn" onclick="closeSheet()">Comprar outro pacote</button>
     </div>
   </div>
@@ -3112,7 +3128,15 @@ ${allListHtml}
       <span class="credit-badge"><img src="/static/coins.png" style="width:14px;height:14px;vertical-align:middle;margin-right:4px" alt="">Pago com Crédito</span>
       <div class="res-t">Pedido recebido!</div>
       <p class="res-s">Crédito debitado. O seu pacote será activado em <strong style="color:#cc0000">1–5 minutos</strong>.</p>
-      <div class="res-box"><div class="res-box-l">Pacote encomendado</div><div class="res-box-v" id="sh-ok-pkg-credit"></div></div>
+       <div class="res-box res-package-box">
+         <div class="res-box-l">Detalhes do pacote</div>
+         <div class="res-package-grid">
+           <div><span>Pacote</span><strong id="sh-ok-name-credit">—</strong></div>
+           <div><span>Megas</span><strong id="sh-ok-size-credit">—</strong></div>
+           <div><span>Preço</span><strong id="sh-ok-price-credit">—</strong></div>
+           <div><span>Validade</span><strong id="sh-ok-dur-credit">—</strong></div>
+         </div>
+       </div>
        <div class="res-box"><div class="res-box-l">Saldo disponível</div><div class="res-box-v" id="sh-credit-bal">—</div></div>
       <button class="res-btn" onclick="closeSheet()">Comprar outro pacote</button>
     </div>
