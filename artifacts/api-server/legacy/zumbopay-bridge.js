@@ -125,7 +125,10 @@ function pagarReferenceFor(tx) {
   const prefix = tx.type === 'gateway'
     ? `recarga-${amount}mt`
     : `megabyte-${referencePart(tx.bundleLabel || `${amount} MT`)}`
-  return `${prefix}-${tx.id}`.slice(0, 120)
+  const reference = `${prefix}-${tx.id}`
+  return PAYMENT_API_ROUTE === 'paysuite'
+    ? reference.replace(/[^A-Za-z0-9]/g, '').slice(0, 50)
+    : reference.slice(0, 120)
 }
 
 function pagarTitleFor(tx, customerName) {
@@ -1083,7 +1086,9 @@ function notifyTx(txId, data) {
 }
 
 async function initiateCharge(tx, customerName) {
-  const pagarReference = tx.pagarRef || pagarReferenceFor(tx)
+  const pagarReference = PAYMENT_API_ROUTE === 'paysuite'
+    ? String(tx.pagarRef || pagarReferenceFor(tx)).replace(/[^A-Za-z0-9]/g, '').slice(0, 50)
+    : (tx.pagarRef || pagarReferenceFor(tx))
   tx.pagarRef = pagarReference
   tx.pagarTitle = pagarTitleFor(tx, customerName)
   tx.pagarDescription = pagarDescriptionFor(tx, customerName)

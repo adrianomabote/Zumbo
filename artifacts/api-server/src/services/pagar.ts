@@ -234,7 +234,14 @@ async function request(method: "GET" | "POST", endpoint: string, body?: Record<s
 }
 
 function validateInput(input: PagarPaymentInput) {
-  if (!/^[A-Za-z0-9._:-]{1,120}$/.test(input.reference)) throw new Error("Referência de pagamento inválida.");
+  const referencePattern = activeProvider() === "paysuite"
+    ? /^[A-Za-z0-9]{1,50}$/
+    : /^[A-Za-z0-9._:-]{1,120}$/;
+  if (!referencePattern.test(input.reference)) {
+    throw new Error(activeProvider() === "paysuite"
+      ? "A referência Paysuite deve conter apenas letras e números."
+      : "Referência de pagamento inválida.");
+  }
   if (input.title.length < 5 || input.title.length > 120) throw new Error("Título de pagamento inválido.");
   if (!Number.isInteger(input.amountMzn) || input.amountMzn < 20 || input.amountMzn > 40_000) {
     throw new Error("O valor deve ser um número inteiro entre 20 e 40000 MZN.");
