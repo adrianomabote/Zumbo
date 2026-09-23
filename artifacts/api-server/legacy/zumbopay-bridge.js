@@ -24,6 +24,11 @@ const PAYMENT_MODE         = String(
   (process.env.NODE_ENV === 'production' ? 'live' : 'mock')
 ).toLowerCase()
 const isTestMode           = PAYMENT_MODE === 'mock' || PAYMENT_MODE === 'test'
+const PAYMENT_API_ROUTE    = process.env.PAYMENT_PROVIDER === 'paysuite'
+  ? 'paysuite'
+  : process.env.PAYMENT_PROVIDER === 'debitopay'
+    ? 'debitopay'
+    : 'pagar'
 const DATA_DIR             = process.env.NET_SERVICOS_DATA_DIR || '.'
 const ORDERS_FILE          = join(DATA_DIR, 'orders.json')
 const USERS_FILE           = join(DATA_DIR, 'users.json')
@@ -804,7 +809,7 @@ async function refreshPagarForwardingStates() {
   const secret = process.env.SESSION_SECRET
   if (!mainPort || !secret) return
   try {
-    const res = await fetch(`http://localhost:${mainPort}/api/debitopay/admin/webhook-deliveries`, {
+    const res = await fetch(`http://localhost:${mainPort}/api/${PAYMENT_API_ROUTE}/admin/webhook-deliveries`, {
       headers: { 'x-internal-payment-key': secret },
       signal: AbortSignal.timeout(5000),
     })
@@ -1098,7 +1103,7 @@ async function initiateCharge(tx, customerName) {
     return
   }
   try {
-    const resp = await fetch(`http://localhost:${process.env.MAIN_API_PORT}/api/debitopay/internal/payments`, {
+    const resp = await fetch(`http://localhost:${process.env.MAIN_API_PORT}/api/${PAYMENT_API_ROUTE}/internal/payments`, {
       method: 'POST',
       headers: { 'Content-Type':'application/json', 'x-internal-payment-key':process.env.SESSION_SECRET },
       body: JSON.stringify({
@@ -1110,11 +1115,11 @@ async function initiateCharge(tx, customerName) {
         amountMzn: tx.amount,
         method: tx.method === 'mpesa' ? 'MPESA' : 'EMOLA',
         payerPhone: tx.phone,
-         idempotencyKey: `debitopay-${tx.id}`,
+          idempotencyKey: `${PAYMENT_API_ROUTE}-${tx.id}`,
       }),
     })
     const data = await resp.json().catch(()=>({}))
-    console.log(`[Pagar] POST /payments → ${resp.status}`, JSON.stringify({ status:data.status, reference:data.reference }))
+    console.log(`[${PAYMENT_API_ROUTE}] POST /payments → ${resp.status}`, JSON.stringify({ status:data.status, paymentId:data.paymentId, reference:data.reference }))
     if (resp.status === 202) {
       tx.ref = data.reference || tx.ref || pagarReference
       const providerStatus = String(data.status || 'PENDING').toUpperCase()
@@ -1141,10 +1146,10 @@ async function initiateCharge(tx, customerName) {
     notifyTx(tx.id, { status:'failed', error:msg, method:tx.method })
     await updateOrderStatus(tx.id, 'failed'); gwFinalize(tx)
   } catch (err) {
-    console.error('[Pagar]', err.message)
+    console.error(`[${PAYMENT_API_ROUTE}]`, err.message)
     tx.ref = tx.ref || pagarReference
     tx.status = 'pending'
-    tx.error = 'A confirmar o pagamento com o Pagar.'
+    tx.error = `A confirmar o pagamento com o ${PAYMENT_API_ROUTE}.`
     notifyTx(tx.id, { status:'pending', method:tx.method })
     await updateOrderStatus(tx.id, 'pending', {
       pagarRef: tx.ref,
