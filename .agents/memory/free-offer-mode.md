@@ -16,3 +16,9 @@ No modo gratuito, a experiência deve manter todas as telas e transições do pa
 **Why:** o utilizador precisa de ver exactamente o fluxo conhecido, sem ficar preso em “A processar” quando a encomenda gratuita já foi aceite.
 
 **How to apply:** preservar os estados HTML/CSS de compra e recarga; em `free`, avançar automaticamente depois da resposta aceite do servidor e continuar a usar SSE para pagamentos reais.
+
+O HTML da loja é gerado pelo bridge e precisa de receber explicitamente uma constante de modo para o JavaScript do browser. A constante `isFreeMode` do processo Node não fica automaticamente disponível no script cliente.
+
+**Why:** sem a constante injectada, o clique lança `ReferenceError` antes de iniciar o pedido e deixa o botão permanentemente em “A processar…”.
+
+**How to apply:** sempre que funções do storefront usarem flags de configuração do servidor, injectar o valor serializado no `<script>` gerado e validar o JavaScript efectivamente servido.
