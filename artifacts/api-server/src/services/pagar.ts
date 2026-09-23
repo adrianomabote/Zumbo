@@ -405,6 +405,12 @@ export async function createPagarPayment(input: PagarPaymentInput) {
 }
 
 export async function getPagarPayment(identifier: { id?: string; reference?: string }) {
+  if (activeProvider() === "paysuite") {
+    if (!identifier.id) {
+      throw new Error("Identificador Paysuite em falta para consultar o pagamento.");
+    }
+    return request("GET", `/payments/${encodeURIComponent(identifier.id)}`);
+  }
   if (activeProvider() === "debitopay") {
     const paymentId = identifier.id || identifier.reference;
     if (!paymentId) {
@@ -444,6 +450,8 @@ export async function reconcilePagarPayment(localTransactionId: string) {
   const rawProviderStatus = providerStatus(operation);
   const normalizedProviderStatus = activeProvider() === "debitopay"
     ? normalizeDebitoStatus(rawProviderStatus)
+    : activeProvider() === "paysuite"
+      ? normalizePaysuiteStatus(rawProviderStatus)
     : normalizePaymentStatus(rawProviderStatus);
   if (!normalizedProviderStatus || (activeProvider() === "pagar" && !knownPaymentStates.has(normalizedProviderStatus))) {
     throw new Error(`O ${providerName()} devolveu um estado de pagamento desconhecido.`);
@@ -547,6 +555,45 @@ function timingSafeSignature(rawBody: Buffer, signatureHeader: string, secret: s
 export function verifyDebitoPayWebhook(rawBody: Buffer, signatureHeader: string) {
   const secret = process.env.DEBITO_WEBHOOK_SECRET;
   return Boolean(secret && timingSafeSignature(rawBody, signatureHeader, secret));
+}
+
+export function verifyPaysuiteWebhook(rawBody: Buffer, signatureHeader: string) {
+  const secret = process.env.PAYSUITE_WEBHOOK_SECRET;
+  return Boolean(secret && timingSafeSignature(rawBody, signatureHeader, secret));
+}
+
+function paysuiteEventType(payload: Record<string, unknown>) {
+  const event = typeof payload.event === "string" ? payload.event.toLowerCase() : "";
+  if (event === "payment.success") return "payment.succeeded";
+  if (event === "payment.failed") return "payment.failed";
+  return "payment.pending";
+}
+
+export async function processPaysuiteWebhook(rawBody: Buffer) {
+  const payload = JSON.parse(rawBody.toString("utf8")) as Record<string, unknown>;
+  const data = payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)
+    ? payload.data as Record<string, unknown>
+    : {};
+  const event = typeof payload.event === "string" ? payload.event : "payment.pending";
+  const paymentId = providerOperationId(data);
+  const eventId = `${event}:${paymentId || providerReference(data) || createHash("sha256").update(rawBody).digest("hex")}`;
+  const normalizedBody = {
+    data: {
+      id: paymentId,
+      reference: providerReference(data),
+      status: event === "payment.success"
+        ? "PAID"
+        : event === "payment.failed"
+          ? "FAILED"
+          : providerStatus(data),
+      amountMzn: providerAmount(data),
+    },
+  };
+  return processPagarWebhook(
+    eventId,
+    paysuiteEventType(payload),
+    Buffer.from(JSON.stringify(normalizedBody)),
+  );
 }
 
 function debitoEventType(payload: Record<string, unknown>, operation: Record<string, unknown>) {
