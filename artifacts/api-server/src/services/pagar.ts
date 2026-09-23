@@ -330,6 +330,19 @@ export async function createPagarPayment(input: PagarPaymentInput) {
     [input.localTransactionId, input.reference, input.amountMzn, input.idempotencyKey, input.sourceId, input.localTransactionId, input.title, input.method, input.payerPhone],
   );
   const isDebitoPay = activeProvider() === "debitopay";
+  const isPaysuite = activeProvider() === "paysuite";
+  try {
+  let paysuiteContactId: string | undefined;
+  if (isPaysuite) {
+    const contactData = await request("POST", "/contacts", {
+      name: "Cliente Megabyte",
+      phone: normalizeDebitoPhone(input.payerPhone),
+    }, input.idempotencyKey);
+    paysuiteContactId = providerOperationId(extractProviderOperation(contactData));
+    if (!paysuiteContactId) {
+      throw new Error("A Paysuite não devolveu o identificador do contacto.");
+    }
+  }
   const body = isDebitoPay
     ? {
          action: "process",
@@ -342,6 +355,15 @@ export async function createPagarPayment(input: PagarPaymentInput) {
         reference: input.reference,
         description: input.description,
       }
+     : isPaysuite
+       ? {
+           amount: input.amountMzn,
+           method: input.method === "MPESA" ? "mpesa" : "emola",
+           reference: input.reference.slice(0, 50),
+           description: input.description.slice(0, 125),
+           webhook_url: process.env.PAYSUITE_WEBHOOK_URL || "https://megabyte.live/api/paysuite/webhook",
+           contact_id: paysuiteContactId,
+         }
     : {
         reference: input.reference,
         title: input.title,
@@ -350,18 +372,19 @@ export async function createPagarPayment(input: PagarPaymentInput) {
         method: input.method,
         payerPhone: input.payerPhone,
       };
-  try {
     const data = await request("POST", isDebitoPay ? "/payment-orchestrator" : "/payments", body, input.idempotencyKey);
     const operation = extractProviderOperation(data);
     const status = isDebitoPay
       ? normalizeDebitoStatus(providerStatus(operation))
-      : normalizePaymentStatus(operation.status);
+      : isPaysuite
+        ? normalizePaysuiteStatus(providerStatus(operation))
+        : normalizePaymentStatus(operation.status);
     const updated = await database.query(
       "UPDATE pagar_operations SET pagar_operation_id = $1, status = $2 WHERE internal_id = $3 RETURNING *",
       [
          providerOperationId(operation) || null,
         (() => {
-           if (isDebitoPay) return status || "RECONCILIATION_REQUIRED";
+           if (isDebitoPay || isPaysuite) return status || "RECONCILIATION_REQUIRED";
            return status && knownPaymentStates.has(status) ? status : "RECONCILIATION_REQUIRED";
         })(),
         input.localTransactionId,
