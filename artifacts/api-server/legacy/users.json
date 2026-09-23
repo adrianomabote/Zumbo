@@ -11,5 +11,14 @@
       "426d3bcb671d",
       "1041d5937258"
     ]
+  },
+  {
+    "id": "93d4bed6a91f",
+    "name": "Teste Fluxo",
+    "phone": "840171644",
+    "passwordHash": "6cf36831fefab41859b63edf68a57eb8b8091f8ffa4c3a23108840d4c6df9b09",
+    "salt": "54165a47bbafa1e4529b02048c3b9bc2",
+    "balance": 0,
+    "createdAt": "2026-09-23T13:54:04.158Z"
   }
 ]
