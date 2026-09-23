@@ -324,7 +324,13 @@ export async function ensurePagarTables() {
 
 export async function createPagarPayment(input: PagarPaymentInput) {
   const database = requirePool();
-  validateInput(input);
+  const normalizedInput = activeProvider() === "paysuite"
+    ? {
+        ...input,
+        reference: input.reference.replace(/[^A-Za-z0-9]/g, "").slice(0, 50),
+      }
+    : input;
+  validateInput(normalizedInput);
   const existing = await database.query(
     "SELECT internal_id, pagar_operation_id, pagar_reference, amount_mzn, status FROM pagar_operations WHERE local_transaction_id = $1 OR idempotency_key = $2",
     [input.localTransactionId, input.idempotencyKey],
@@ -334,7 +340,7 @@ export async function createPagarPayment(input: PagarPaymentInput) {
   const inserted = await database.query(
     `INSERT INTO pagar_operations (internal_id, pagar_reference, type, amount_mzn, status, idempotency_key, source_id, local_transaction_id, title, method, payer_phone)
      VALUES ($1,$2,'payment',$3,'PENDING',$4,$5,$6,$7,$8,$9) RETURNING *`,
-    [input.localTransactionId, input.reference, input.amountMzn, input.idempotencyKey, input.sourceId, input.localTransactionId, input.title, input.method, input.payerPhone],
+    [input.localTransactionId, normalizedInput.reference, input.amountMzn, input.idempotencyKey, input.sourceId, input.localTransactionId, input.title, input.method, input.payerPhone],
   );
   const isDebitoPay = activeProvider() === "debitopay";
   const isPaysuite = activeProvider() === "paysuite";
@@ -359,20 +365,20 @@ export async function createPagarPayment(input: PagarPaymentInput) {
         currency: "MZN",
         payment_method: input.method === "MPESA" ? "mpesa" : "emola",
         phone: normalizeDebitoPhone(input.payerPhone),
-        reference: input.reference,
+         reference: normalizedInput.reference,
         description: input.description,
       }
      : isPaysuite
        ? {
            amount: input.amountMzn,
            method: input.method === "MPESA" ? "mpesa" : "emola",
-           reference: input.reference.slice(0, 50),
+            reference: normalizedInput.reference,
            description: input.description.slice(0, 125),
            webhook_url: process.env.PAYSUITE_WEBHOOK_URL || "https://megabyte.live/api/paysuite/webhook",
            contact_id: paysuiteContactId,
          }
     : {
-        reference: input.reference,
+         reference: normalizedInput.reference,
         title: input.title,
         description: input.description,
         amountMzn: input.amountMzn,
