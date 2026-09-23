@@ -2700,7 +2700,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
     </button>
   </div>
 </nav>
-${isFreeMode
+${isTestMode && !isFreeMode
   ? '<div style="background:#e8f5e9;color:#1b5e20;border-bottom:1px solid #c8e6c9;padding:9px 16px;text-align:center;font-size:12px;font-weight:700;">OFERTA GRATUITA — esta oferta temporária não exige pagamento.</div>'
   : isTestMode
     ? '<div style="background:#fff3cd;color:#664d03;border-bottom:1px solid #ffecb5;padding:9px 16px;text-align:center;font-size:12px;font-weight:700;">MODO DE TESTE — os pagamentos desta preview são simulados e não movimentam dinheiro.</div>'
