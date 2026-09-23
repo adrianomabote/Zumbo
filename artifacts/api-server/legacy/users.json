@@ -29,5 +29,14 @@
     "salt": "2a116f7087d096c6c06d356925578ac1",
     "balance": 0,
     "createdAt": "2026-09-23T13:54:38.972Z"
+  },
+  {
+    "id": "c85cf2cdaff8",
+    "name": "Verificacao",
+    "phone": "840007004",
+    "passwordHash": "4ee48fd63d1d9957059d5d7789690193f09ca343cc132a345e7f28571e0e6324",
+    "salt": "3ee17f1b471fbeac6addf2b9562b84fb",
+    "balance": 0,
+    "createdAt": "2026-09-23T13:55:34.251Z"
   }
 ]
