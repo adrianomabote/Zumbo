@@ -407,7 +407,9 @@ export async function createPagarPayment(input: PagarPaymentInput) {
 export async function getPagarPayment(identifier: { id?: string; reference?: string }) {
   if (activeProvider() === "paysuite") {
     if (!identifier.id) {
-      throw new Error("Identificador Paysuite em falta para consultar o pagamento.");
+      const error = new Error("Identificador Paysuite em falta para consultar o pagamento.");
+      Object.assign(error, { status: 404 });
+      throw error;
     }
     return request("GET", `/payments/${encodeURIComponent(identifier.id)}`);
   }

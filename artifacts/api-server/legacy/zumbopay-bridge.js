@@ -1209,7 +1209,7 @@ async function reconcilePagarTransaction(tx) {
   if (!mainPort || !secret) return 'pending'
   try {
     const res = await fetch(
-      `http://localhost:${mainPort}/api/debitopay/internal/payments/${encodeURIComponent(tx.id)}/reconcile`,
+      `http://localhost:${mainPort}/api/${PAYMENT_API_ROUTE}/internal/payments/${encodeURIComponent(tx.id)}/reconcile`,
       {
         method: 'POST',
         headers: { 'x-internal-payment-key': secret },
