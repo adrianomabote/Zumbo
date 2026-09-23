@@ -3137,10 +3137,10 @@ ${allListHtml}
        <div class="res-box res-package-box">
          <div class="res-box-l">Detalhes do pacote</div>
          <div class="res-package-grid">
-           <div><span>Pacote</span><strong id="sh-ok-name-credit">—</strong></div>
-           <div><span>Megas</span><strong id="sh-ok-size-credit">—</strong></div>
-           <div><span>Preço</span><strong id="sh-ok-price-credit">—</strong></div>
-           <div><span>Validade</span><strong id="sh-ok-dur-credit">—</strong></div>
+          <div><span>Pacote</span><strong id="sh-ok-credit-name">—</strong></div>
+          <div><span>Megas</span><strong id="sh-ok-credit-size">—</strong></div>
+          <div><span>Preço</span><strong id="sh-ok-credit-price">—</strong></div>
+          <div><span>Validade</span><strong id="sh-ok-credit-dur">—</strong></div>
          </div>
        </div>
        <div class="res-box"><div class="res-box-l">Saldo disponível</div><div class="res-box-v" id="sh-credit-bal">—</div></div>
@@ -3684,6 +3684,18 @@ function shShow(s) {
   const centered=['pending','recharging']
   if(centered.includes(s)){sh.classList.add('pending-full')}else{sh.classList.remove('pending-full')}
 }
+function renderResultPackage(prefix) {
+  const values = {
+    name: curPkg?.name || '—',
+    size: curPkg?.size || '—',
+    price: curPkg ? curPkg.price + ' MT' : '—',
+    dur: curPkg?.dur || '—',
+  }
+  Object.entries(values).forEach(([key, value]) => {
+    const field = document.getElementById(prefix + '-' + key)
+    if (field) field.textContent = value
+  })
+}
 function showSheetError(message, showRecharge=false) {
   const ee=document.getElementById('sh-err')
   ee.textContent=''
@@ -3746,7 +3758,7 @@ async function pay() {
     }
     const orderMethodLabel = document.getElementById('sh-method-lbl')
     if (orderMethodLabel) orderMethodLabel.textContent = paymentMethodLabel(d.method || phoneMethod(phone))
-    document.getElementById('sh-ok-pkg').textContent = curPkg.name+' — '+curPkg.price+' MT'
+    renderResultPackage('sh-ok')
     shShow('pending')
     if (isFreeMode) {
       // Free mode has already been accepted server-side. Keep the same
@@ -3800,7 +3812,7 @@ async function payWithCredit() {
     const d=await r.json()
     if(!r.ok){showSheetError(d.error||'Erro.', /saldo insuficiente/i.test(d.error||''));selectPayVia('credit', true);return}
     authState.user.balance=d.newBalance; updateNavAuth()
-    document.getElementById('sh-ok-pkg-credit').textContent=curPkg.name+' — '+curPkg.price+' MT'
+    renderResultPackage('sh-ok-credit')
     document.getElementById('sh-credit-bal').textContent=(d.newBalance||0)+' MT'
     shShow('success-credit')
   } catch{
