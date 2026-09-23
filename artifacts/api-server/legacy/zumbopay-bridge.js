@@ -3482,14 +3482,10 @@ function clearSheetError() {
   ee.style.display='none'
 }
 function selectPayVia(v, preserveError=false) {
-  const creditOnly = (curPkg?.price || 0) < 20
-  if (creditOnly && v === 'mobile-money') v = 'credit'
   payVia = v
   document.querySelectorAll('.via-btn').forEach(b => b.classList.toggle('active', b.dataset.via===v))
   const mobileBtn = document.querySelector('.via-btn[data-via="mobile-money"]')
-  if (mobileBtn) mobileBtn.disabled = creditOnly
-  const viaNote = document.getElementById('via-note')
-  if (viaNote) viaNote.style.display = creditOnly ? 'block' : 'none'
+  if (mobileBtn) mobileBtn.disabled = false
   syncPayerFields()
   const btn = document.getElementById('sh-btn')
   if (v === 'credit') {
@@ -3605,7 +3601,7 @@ async function pay() {
     document.getElementById('sh-method-lbl').textContent = paymentMethodLabel(d.method || phoneMethod(phone))
     document.getElementById('sh-ok-pkg').textContent = curPkg.name+' — '+curPkg.price+' MT'
     shShow('pending'); listenOrder(d.txId)
-  } catch { ee.textContent='Erro de ligação. Tente novamente.'; ee.style.display='block'; btn.disabled=false; btn.textContent='Próximo' }
+  } catch { ee.textContent='Não foi possível concluir a encomenda. Tente novamente.'; ee.style.display='block'; btn.disabled=false; btn.textContent='Próximo' }
 }
 
 function getCreditPurchaseFromSheet() {
