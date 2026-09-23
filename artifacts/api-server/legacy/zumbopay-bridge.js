@@ -3271,6 +3271,7 @@ ${allListHtml}
 </div>
 
 <script>
+const isFreeMode = ${isFreeMode ? 'true' : 'false'}
 // ── Catálogo (para o sheet de compra) ──
 ${jsPkgs}
 const CLABELS = {diarias:'Diárias',semanais:'Semanais',mensais:'Mensais',infinitas:'Infinitas'}
