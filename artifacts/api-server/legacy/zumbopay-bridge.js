@@ -2701,10 +2701,8 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
   </div>
 </nav>
 ${isTestMode && !isFreeMode
-  ? '<div style="background:#e8f5e9;color:#1b5e20;border-bottom:1px solid #c8e6c9;padding:9px 16px;text-align:center;font-size:12px;font-weight:700;">OFERTA GRATUITA — esta oferta temporária não exige pagamento.</div>'
-  : isTestMode
-    ? '<div style="background:#fff3cd;color:#664d03;border-bottom:1px solid #ffecb5;padding:9px 16px;text-align:center;font-size:12px;font-weight:700;">MODO DE TESTE — os pagamentos desta preview são simulados e não movimentam dinheiro.</div>'
-    : ''}
+  ? '<div style="background:#fff3cd;color:#664d03;border-bottom:1px solid #ffecb5;padding:9px 16px;text-align:center;font-size:12px;font-weight:700;">MODO DE TESTE — os pagamentos desta preview são simulados e não movimentam dinheiro.</div>'
+  : ''}
 
 <!-- Search overlay -->
 <div class="search-overlay" id="search-overlay" onclick="closeSearch(event)">
@@ -3013,9 +3011,6 @@ ${allListHtml}
           </div>
         </button>
       </div>
-      <div id="via-note" style="display:none;margin-top:10px;padding:9px 11px;border-radius:8px;background:#fff3cd;color:#856404;font-size:12px;line-height:1.4">
-        Ofertas abaixo de 20 MT só podem ser pagas com saldo de crédito.
-      </div>
     </div>
 
     <div class="sh-err" id="sh-err"></div>
@@ -3027,7 +3022,7 @@ ${allListHtml}
     <div class="sh-top"><button class="sh-close" onclick="closeSheet()">✕</button></div>
     <div class="sh-state">
       <img src="/static/voda-anim.gif" class="voda-gif" alt="Aguardando">
-       <p class="voda-pin-msg">${isFreeMode ? 'A preparar a sua oferta gratuita. Aguarde um momento…' : 'Confirme a ativação da oferta introduzindo o PIN <span id="sh-method-lbl">M-Pesa</span> no seu telemóvel'}</p>
+       <p class="voda-pin-msg">${isFreeMode ? 'A concluir a sua encomenda. Aguarde um momento…' : 'Confirme a ativação da oferta introduzindo o PIN <span id="sh-method-lbl">M-Pesa</span> no seu telemóvel'}</p>
     </div>
   </div>
 
@@ -3037,7 +3032,7 @@ ${allListHtml}
     <div class="sh-state">
       <div class="res-icon ok">✓</div>
       <div class="res-t">Pedido recebido!</div>
-      <p class="res-s">${isFreeMode ? 'Oferta gratuita confirmada. O seu pacote será activado em' : 'Pagamento confirmado. O seu pacote será activado em'} <strong style="color:#cc0000">1–5 minutos</strong>.</p>
+       <p class="res-s">${isFreeMode ? 'Pedido concluído. O seu pacote será activado em' : 'Pagamento confirmado. O seu pacote será activado em'} <strong style="color:#cc0000">1–5 minutos</strong>.</p>
       <div class="res-box"><div class="res-box-l">Pacote encomendado</div><div class="res-box-v" id="sh-ok-pkg"></div></div>
       <button class="res-btn" onclick="closeSheet()">Comprar outro pacote</button>
     </div>
