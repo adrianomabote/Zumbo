@@ -167,6 +167,29 @@
       ],
       "createdAt": "2026-09-22T21:34:22.969Z",
       "updatedAt": "2026-09-22T21:34:23.117Z"
+    },
+    {
+      "id": "delivery_33a7267e0dcf511c4bc327ae",
+      "idempotencyKey": "order-5828228a011f",
+      "paymentId": "5828228a011f",
+      "beneficiaryPhone": "848060353",
+      "packageLabel": "380 MB",
+      "ussdSequence": [
+        "*111#",
+        "Enviar pacote 380 MB para 848060353"
+      ],
+      "status": "queued",
+      "attempts": 0,
+      "maxAttempts": 2,
+      "events": [
+        {
+          "at": "2026-09-23T13:38:47.903Z",
+          "status": "queued",
+          "detail": "Pagamento confirmado; entrega enfileirada."
+        }
+      ],
+      "createdAt": "2026-09-23T13:38:47.879Z",
+      "updatedAt": "2026-09-23T13:38:47.903Z"
     }
   ],
   "devices": [

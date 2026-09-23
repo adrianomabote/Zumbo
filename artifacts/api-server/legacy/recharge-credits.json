@@ -4,5 +4,11 @@
     "userId": "92aa482575ef",
     "amount": 10,
     "balanceApplied": true
+  },
+  {
+    "txId": "426d3bcb671d",
+    "userId": "842540b5cf36",
+    "amount": 20,
+    "balanceApplied": true
   }
 ]
