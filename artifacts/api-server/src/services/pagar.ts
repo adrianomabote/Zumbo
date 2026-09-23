@@ -122,6 +122,18 @@ export interface PagarPaymentInput {
 }
 
 function config() {
+  if (activeProvider() === "paysuite") {
+    const apiKey = process.env.PAYSUITE_API_KEY;
+    if (!apiKey) {
+      throw new Error("Paysuite API não está configurada no servidor.");
+    }
+    return {
+      provider: "paysuite" as const,
+      baseUrl: process.env.PAYSUITE_API_BASE_URL || "https://paysuite.tech/api/v1",
+      apiKey,
+    };
+  }
+
   if (activeProvider() === "debitopay") {
     const apiKey = process.env.DEBITO_API_KEY;
     const baseUrl = process.env.DEBITO_API_BASE_URL;
@@ -195,7 +207,9 @@ async function request(method: "GET" | "POST", endpoint: string, body?: Record<s
     Authorization: `Bearer ${apiKey}`,
     Accept: "application/json",
   };
-  if (configuration.provider === "debitopay") {
+  if (configuration.provider === "paysuite") {
+    headers["Content-Type"] = "application/json";
+  } else if (configuration.provider === "debitopay") {
     Object.assign(headers, {
       "Content-Type": "application/json",
       "Idempotency-Key": idempotencyKey || "",
@@ -239,7 +253,8 @@ function errorStatus(error: unknown) {
 function isConfigurationError(error: unknown) {
   return error instanceof Error && (
     error.message === "Pagar API não está configurada no servidor." ||
-    error.message === "Debito Pay API não está configurada no servidor."
+    error.message === "Debito Pay API não está configurada no servidor." ||
+    error.message === "Paysuite API não está configurada no servidor."
   );
 }
 
