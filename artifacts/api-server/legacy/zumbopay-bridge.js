@@ -3575,7 +3575,7 @@ function openBuyDirect(id) {
   const btn = document.getElementById('sh-btn'); btn.disabled=false; btn.textContent='Próximo'; btn.style.display='block'
   activeOrderRequestKey = (window.crypto && typeof window.crypto.randomUUID === 'function')
     ? window.crypto.randomUUID()
-    : `order-${Date.now()}-${Math.random().toString(16).slice(2)}`
+    : 'order-' + Date.now() + '-' + Math.random().toString(16).slice(2)
   payVia = 'mobile-money'
   selectPayVia(payVia)
   updateCreditBtn()
