@@ -518,6 +518,12 @@ export async function reconcilePagarPayment(localTransactionId: string) {
 }
 
 export async function listPagarPayments(query: { status?: string; cursor?: string; limit?: string }) {
+  if (activeProvider() === "paysuite") {
+    const params = new URLSearchParams();
+    if (query.cursor) params.set("page", query.cursor);
+    if (query.limit) params.set("limit", query.limit);
+    return request("GET", `/payments?${params.toString()}`);
+  }
   const params = new URLSearchParams();
   if (query.status) params.set("status", query.status);
   if (query.cursor) params.set("cursor", query.cursor);
