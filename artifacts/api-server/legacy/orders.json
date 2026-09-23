@@ -18,8 +18,8 @@
     "ts": "2026-09-22T22:12:13.507Z",
     "activatedAt": null,
     "userId": "842540b5cf36",
-    "pagarReconciliationStatus": "pending",
-    "pagarReconciliationError": "A confirmação continua pendente."
+    "pagarReconciliationStatus": "manual_required",
+    "pagarReconciliationError": "Pagamento não localizado no Debito Pay; não foi criada uma nova cobrança automaticamente."
   },
   {
     "txId": "067082a1aa87",
@@ -40,8 +40,8 @@
     "ts": "2026-09-22T22:02:52.831Z",
     "activatedAt": null,
     "userId": "842540b5cf36",
-    "pagarReconciliationStatus": "pending",
-    "pagarReconciliationError": "A confirmação continua pendente."
+    "pagarReconciliationStatus": "manual_required",
+    "pagarReconciliationError": "Pagamento não localizado no Debito Pay; não foi criada uma nova cobrança automaticamente."
   },
   {
     "txId": "3020b97946c4",
@@ -62,8 +62,8 @@
     "ts": "2026-09-22T22:02:18.217Z",
     "activatedAt": null,
     "userId": "842540b5cf36",
-    "pagarReconciliationStatus": "pending",
-    "pagarReconciliationError": "A confirmação continua pendente."
+    "pagarReconciliationStatus": "manual_required",
+    "pagarReconciliationError": "Pagamento não localizado no Debito Pay; não foi criada uma nova cobrança automaticamente."
   },
   {
     "txId": "27135e7eeee3",
@@ -84,8 +84,8 @@
     "ts": "2026-09-22T22:02:04.204Z",
     "activatedAt": null,
     "userId": "842540b5cf36",
-    "pagarReconciliationStatus": "pending",
-    "pagarReconciliationError": "A confirmação continua pendente."
+    "pagarReconciliationStatus": "manual_required",
+    "pagarReconciliationError": "Pagamento não localizado no Debito Pay; não foi criada uma nova cobrança automaticamente."
   },
   {
     "txId": "1aabfc0ef832",
@@ -106,8 +106,8 @@
     "ts": "2026-09-22T22:01:45.629Z",
     "activatedAt": null,
     "userId": "842540b5cf36",
-    "pagarReconciliationStatus": "pending",
-    "pagarReconciliationError": "A confirmação continua pendente."
+    "pagarReconciliationStatus": "manual_required",
+    "pagarReconciliationError": "Pagamento não localizado no Debito Pay; não foi criada uma nova cobrança automaticamente."
   },
   {
     "txId": "90d2ac642a74",
@@ -128,8 +128,8 @@
     "ts": "2026-09-22T22:01:26.569Z",
     "activatedAt": null,
     "userId": "842540b5cf36",
-    "pagarReconciliationStatus": "pending",
-    "pagarReconciliationError": "A confirmação continua pendente."
+    "pagarReconciliationStatus": "manual_required",
+    "pagarReconciliationError": "Pagamento não localizado no Debito Pay; não foi criada uma nova cobrança automaticamente."
   },
   {
     "txId": "f5d0350533d6",
@@ -150,8 +150,8 @@
     "ts": "2026-09-22T22:00:50.193Z",
     "activatedAt": null,
     "userId": "842540b5cf36",
-    "pagarReconciliationStatus": "pending",
-    "pagarReconciliationError": "A confirmação continua pendente."
+    "pagarReconciliationStatus": "manual_required",
+    "pagarReconciliationError": "Pagamento não localizado no Debito Pay; não foi criada uma nova cobrança automaticamente."
   },
   {
     "txId": "ebc47dbff34a",
@@ -172,8 +172,8 @@
     "ts": "2026-09-22T21:50:55.698Z",
     "activatedAt": null,
     "userId": "842540b5cf36",
-    "pagarReconciliationStatus": "pending",
-    "pagarReconciliationError": "A confirmação continua pendente."
+    "pagarReconciliationStatus": "manual_required",
+    "pagarReconciliationError": "Pagamento não localizado no Debito Pay; não foi criada uma nova cobrança automaticamente."
   },
   {
     "txId": "c3269296f0b1",
@@ -194,8 +194,8 @@
     "ts": "2026-09-22T21:50:26.618Z",
     "activatedAt": null,
     "userId": "842540b5cf36",
-    "pagarReconciliationStatus": "pending",
-    "pagarReconciliationError": "A confirmação continua pendente."
+    "pagarReconciliationStatus": "manual_required",
+    "pagarReconciliationError": "Pagamento não localizado no Debito Pay; não foi criada uma nova cobrança automaticamente."
   },
   {
     "txId": "4dbbf38640b6",
