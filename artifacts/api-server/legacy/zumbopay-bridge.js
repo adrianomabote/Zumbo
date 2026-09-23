@@ -3504,7 +3504,7 @@ async function submitRecharge() {
      if (isFreeMode) {
        // Keep the normal recharge waiting screen, then complete the same
        // success state after the server has had time to apply the credit.
-       setTimeout(()=>completeFreeRecharge(amount, 0), 1100)
+       setTimeout(()=>completeFreeRecharge(amount, 0), 1000)
      } else {
        listenRecharge(d.txId, amount)
      }
@@ -3730,7 +3730,7 @@ async function pay() {
       // Free mode has already been accepted server-side. Keep the same
       // processing screen, then complete the normal flow without waiting for
       // an SSE connection that may not be available through the proxy.
-      setTimeout(()=>shShow('success'), 1100)
+       setTimeout(()=>shShow('success'), 1000)
     } else {
       listenOrder(d.txId)
     }
