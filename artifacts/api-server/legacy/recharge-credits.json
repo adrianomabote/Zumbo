@@ -28,5 +28,11 @@
     "userId": "842540b5cf36",
     "amount": 20,
     "balanceApplied": true
+  },
+  {
+    "txId": "ea119f7b842e",
+    "userId": "842540b5cf36",
+    "amount": 20,
+    "balanceApplied": true
   }
 ]
