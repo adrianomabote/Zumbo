@@ -1419,8 +1419,10 @@ self.addEventListener('fetch',e=>{
     if (!sseClients.has(txId)) sseClients.set(txId, new Set())
     sseClients.get(txId).add(res)
     req.on('close', () => sseClients.get(txId)?.delete(res))
-    const tx = transactions.get(txId)
-    if (tx) res.write(`data: ${JSON.stringify({ status:tx.status, method:tx.method })}\n\n`)
+     const tx = transactions.get(txId)
+     const order = orders.find(item => item.txId === txId)
+     const current = tx || order
+     if (current) res.write(`data: ${JSON.stringify({ status:current.status, method:current.method })}\n\n`)
     return
   }
 
@@ -1444,6 +1446,21 @@ self.addEventListener('fetch',e=>{
     const { phone, beneficiaryPhone, bundleId } = body
     const bundle = BUNDLES.get(bundleId)
     if (!bundle) return json(res, { error:'Pacote inválido.' }, 400)
+    const idempotencyKey = String(body.idempotencyKey || '').trim().slice(0, 120)
+    if (isFreeMode && idempotencyKey) {
+      const existing = [...transactions.values()].find(tx =>
+        tx.type === 'bundle' && tx.userId === user.id && tx.idempotencyKey === idempotencyKey
+      ) || orders.find(order =>
+        order.type === 'bundle' && order.userId === user.id && order.idempotencyKey === idempotencyKey
+      )
+      if (existing) {
+        return json(res, {
+          txId: existing.id || existing.txId,
+          status: existing.status || 'pending',
+          method: existing.method,
+        })
+      }
+    }
     const purchaseFor = String(body.purchaseFor || '').toLowerCase()
     const isSelfPurchase = purchaseFor === 'self' || (!purchaseFor && !beneficiaryPhone)
     const payerPhone = normalizeLocalPhone(phone)
@@ -1458,7 +1475,7 @@ self.addEventListener('fetch',e=>{
     if (!['mpesa','emola'].includes(meth) || meth !== detectedMethod)
       return json(res, { error:'O método escolhido não corresponde ao número de pagamento.' }, 400)
     const txId = randomBytes(6).toString('hex')
-    const tx = { id:txId, type:'bundle', bundleId, bundleLabel:bundle.label, phone:payerPhone, beneficiaryPhone:beneficiary, msisdn, amount:bundle.price, method:meth, status:'pending', ref:null, error:null, sourceId:randomUUID(), ts:new Date().toISOString(), userId:user.id }
+    const tx = { id:txId, type:'bundle', bundleId, bundleLabel:bundle.label, phone:payerPhone, beneficiaryPhone:beneficiary, msisdn, amount:bundle.price, method:meth, status:'pending', ref:null, error:null, sourceId:randomUUID(), idempotencyKey, ts:new Date().toISOString(), userId:user.id }
     transactions.set(txId, tx)
     trackOrder(tx)
     json(res, { txId, status:'pending', method:meth })
