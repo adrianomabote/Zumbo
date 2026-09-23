@@ -3455,9 +3455,28 @@ async function submitRecharge() {
     document.getElementById('overlay').classList.add('open')
     setTimeout(()=>document.getElementById('sheet').classList.add('open'),10)
     shShow('recharging')
-    listenRecharge(d.txId, amount)
+     if (isFreeMode) {
+       // Keep the normal recharge waiting screen, then complete the same
+       // success state after the server has had time to apply the credit.
+       setTimeout(()=>completeFreeRecharge(amount, 0), 1100)
+     } else {
+       listenRecharge(d.txId, amount)
+     }
   } catch{err.textContent='Erro de ligação.';err.style.display='block';btn.disabled=false;btn.textContent='Continuar'}
 }
+ function completeFreeRecharge(amount, attempt) {
+   fetch('/api/auth/me')
+     .then(r=>r.ok ? r.json() : Promise.reject(new Error('auth refresh failed')))
+     .then(u=>{
+       authState.user=u
+       updateNavAuth()
+       document.getElementById('sh-rech-bal').textContent=(u.balance||0)+' MT'
+       shShow('recharge-ok')
+     })
+     .catch(()=>{
+       if (attempt < 8) setTimeout(()=>completeFreeRecharge(amount, attempt + 1), 500)
+     })
+ }
 function listenRecharge(txId, amount) {
   const es=new EventSource('/events/'+txId)
   es.onmessage=e=>{
