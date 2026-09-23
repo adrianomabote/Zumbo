@@ -21,15 +21,15 @@ services:
         sync: false
       - key: SITE_URL
         sync: false
-      - key: PAGAR_API_BASE_URL
-        value: https://api.pagar.co.mz/api/v1
-      - key: PAGAR_API_KEY
+      - key: PAYMENT_PROVIDER
+        value: paysuite
+      - key: PAYSUITE_API_BASE_URL
+        value: https://paysuite.tech/api/v1
+      - key: PAYSUITE_API_KEY
         sync: false
-      - key: PAGAR_SIGNING_SECRET
+      - key: PAYSUITE_WEBHOOK_SECRET
         sync: false
-      - key: PAGAR_WEBHOOK_SECRET
-        sync: false
-      - key: PAGAR_WEBHOOK_URL
+      - key: PAYSUITE_WEBHOOK_URL
         sync: false
       - key: ADMIN_PASS
         sync: false

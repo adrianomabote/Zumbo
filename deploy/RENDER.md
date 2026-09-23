@@ -14,9 +14,9 @@ mantém os dados locais do bridge no disco persistente montado em
    - `SITE_URL`: domínio público, por exemplo `https://exemplo.com`. Se ficar
      vazio, o bridge usa o domínio automático fornecido em
      `RENDER_EXTERNAL_URL`.
-   - `PAGAR_API_KEY`, `PAGAR_SIGNING_SECRET` e `PAGAR_WEBHOOK_SECRET`.
-   - `PAGAR_WEBHOOK_URL`: normalmente
-     `https://<dominio>/api/pagar/webhook`.
+    - `PAYSUITE_API_KEY` e `PAYSUITE_WEBHOOK_SECRET`.
+    - `PAYSUITE_WEBHOOK_URL`: normalmente
+      `https://<dominio>/api/paysuite/webhook`.
    - `ADMIN_PASS` e `SESSION_SECRET`.
 3. Faça o deploy e confirme que `GET /api/healthz` responde com HTTP 200.
 4. No painel admin, crie ou active as chaves do gateway para os projectos
@@ -29,17 +29,17 @@ mantém os dados locais do bridge no disco persistente montado em
 - Gateway: `/gateway/docs`
 - Criar pagamento: `POST /gateway/api/pay`
 - Consultar pagamento: `GET /gateway/api/status/<txId>`
-- Webhook Pagar: `/api/pagar/webhook`
+- Webhook Paysuite: `/api/paysuite/webhook`
 
 O gateway continua separado das transacções normais da Megabyte no painel.
-Cada cobrança enviada ao Pagar identifica uma compra de megas. Para valores
+Cada cobrança enviada à Paysuite identifica uma compra de megas. Para valores
 iguais a um pacote normal, usa a quantidade exacta do catálogo; para valores
 fora do catálogo, calcula determinísticamente `valor em MT × 40 MB`.
 
 ## Domínio e callbacks
 
 Depois de ligar um domínio personalizado, actualize `SITE_URL` e
-`PAGAR_WEBHOOK_URL` com HTTPS. Os `callback_url` enviados por terceiros também
+`PAYSUITE_WEBHOOK_URL` com HTTPS. Os `callback_url` enviados por terceiros também
 devem ser endereços HTTPS públicos; endereços privados ou locais são recusados.
 
 ## Armazenamento e segredos
