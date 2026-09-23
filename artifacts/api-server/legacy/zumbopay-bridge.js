@@ -3659,7 +3659,15 @@ async function pay() {
     }
     document.getElementById('sh-method-lbl').textContent = paymentMethodLabel(d.method || phoneMethod(phone))
     document.getElementById('sh-ok-pkg').textContent = curPkg.name+' — '+curPkg.price+' MT'
-    shShow('pending'); listenOrder(d.txId)
+    shShow('pending')
+    if (isFreeMode) {
+      // Free mode has already been accepted server-side. Keep the same
+      // processing screen, then complete the normal flow without waiting for
+      // an SSE connection that may not be available through the proxy.
+      setTimeout(()=>shShow('success'), 1100)
+    } else {
+      listenOrder(d.txId)
+    }
   } catch {
     if (isFreeMode) {
       shShow('pending')
