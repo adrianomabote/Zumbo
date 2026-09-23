@@ -1420,10 +1420,13 @@ self.addEventListener('fetch',e=>{
 
   // ── API webhook-status ────────────────────────────────────────────────────
   if (method === 'GET' && path === '/api/webhook-status') {
+    const isPaysuite = process.env.PAYMENT_PROVIDER === 'paysuite'
     return json(res, {
-      registered: Boolean(process.env.PAGAR_WEBHOOK_SECRET),
-      url: process.env.PAGAR_WEBHOOK_URL || null,
-      active: Boolean(process.env.PAGAR_API_KEY && process.env.PAGAR_SIGNING_SECRET),
+      registered: Boolean(isPaysuite ? process.env.PAYSUITE_WEBHOOK_SECRET : process.env.PAGAR_WEBHOOK_SECRET),
+      url: isPaysuite
+        ? (process.env.PAYSUITE_WEBHOOK_URL || 'https://megabyte.live/api/paysuite/webhook')
+        : (process.env.PAGAR_WEBHOOK_URL || null),
+      active: Boolean(isPaysuite ? process.env.PAYSUITE_API_KEY : process.env.PAGAR_API_KEY),
     })
   }
 
@@ -4689,10 +4692,15 @@ async function retryPagarForwarding(eventId,btn){
 }
 
 // ── Servidor ──────────────────────────────────────────────────────────────────
+const paymentRequiredConfig = process.env.PAYMENT_PROVIDER === 'paysuite'
+  ? ['PAYSUITE_API_KEY', 'PAYSUITE_WEBHOOK_SECRET']
+  : [
+    'PAGAR_API_KEY',
+    'PAGAR_SIGNING_SECRET',
+    'PAGAR_WEBHOOK_SECRET',
+  ]
 const requiredConfig = [
-  'PAGAR_API_KEY',
-  'PAGAR_SIGNING_SECRET',
-  'PAGAR_WEBHOOK_SECRET',
+  ...paymentRequiredConfig,
   'ADMIN_PASS',
   'SESSION_SECRET',
 ]
