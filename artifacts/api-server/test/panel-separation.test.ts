@@ -405,6 +405,7 @@ test("preserva o contrato público de criação e consulta do gateway", async ()
   assert.equal(created.ok, true);
   assert.equal(created.status, "pending");
   assert.equal(created.method, "mpesa");
+  assert.equal(created.checkoutUrl, undefined);
   assert.equal(typeof created.txId, "string");
   assert.match(created.statusUrl, new RegExp(`/gateway/api/status/${created.txId}$`));
 

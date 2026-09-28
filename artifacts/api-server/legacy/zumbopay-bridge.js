@@ -1002,7 +1002,7 @@ function gatewayDocsPage() {
     ? '  "checkoutUrl": "https://checkout.vpay.co.mz/exemplo-order-id",\n'
     : ''
   const checkoutCallout = isVpay
-    ? '<div class="callout"><strong>Checkout Vpay:</strong> redireccione o cliente para <code class="inline">checkoutUrl</code>. Esse link também aparece na resposta de consulta enquanto estiver disponível. Os métodos apresentados dentro do checkout são controlados pela Vpay; esta API não os filtra.</div>'
+    ? '<div class="callout"><strong>Checkout Vpay:</strong> redireccione o cliente para <code class="inline">checkoutUrl</code>. Esse link também é devolvido pela consulta do estado. Os métodos apresentados dentro do checkout são controlados pela Vpay; esta API não os filtra.</div>'
     : ''
   return `<!doctype html><html lang="pt-MZ"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
