@@ -459,12 +459,11 @@ export async function createVpayHostedOrder(input: Pick<
 >) {
   const data = await request("POST", "/v1/orders", {
     source: { source: "api" },
-    products: [{
+    items: [{
       originProductId: input.sourceId,
       name: input.title,
       quantity: 1,
       price: input.amountMzn,
-      description: input.description,
     }],
     customer: {
       name: "Cliente Megabyte",

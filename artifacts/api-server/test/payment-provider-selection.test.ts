@@ -85,12 +85,11 @@ test("Vpay creates a hosted order and polls its documented status endpoint", asy
     assert.equal(createCall.headers.get("authorization"), "Bearer unit-test-token");
     assert.deepEqual(createCall.body, {
       source: { source: "api" },
-      products: [{
+      items: [{
         originProductId: "source-test-id",
         name: "1024 MB",
         quantity: 1,
         price: 25,
-        description: "Pacote de teste",
       }],
       customer: { name: "Cliente Megabyte", phone: "+258841234567" },
       shippingAddressDisabled: true,
