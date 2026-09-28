@@ -73,7 +73,7 @@ router.post("/paysuite/webhook", async (req, res) => {
   }
 });
 
-router.post(["/pagar/internal/payments", "/debitopay/internal/payments", "/paysuite/internal/payments"], async (req, res) => {
+router.post(["/pagar/internal/payments", "/debitopay/internal/payments", "/paysuite/internal/payments", "/vpay/internal/payments"], async (req, res) => {
   if (!process.env.SESSION_SECRET || req.header("x-internal-payment-key") !== process.env.SESSION_SECRET) {
     return res.status(401).json({ error: "Origem não autorizada." });
   }
@@ -85,7 +85,7 @@ router.post(["/pagar/internal/payments", "/debitopay/internal/payments", "/paysu
   }
 });
 
-router.post(["/pagar/internal/payments/:localTransactionId/reconcile", "/debitopay/internal/payments/:localTransactionId/reconcile", "/paysuite/internal/payments/:localTransactionId/reconcile"], async (req, res) => {
+router.post(["/pagar/internal/payments/:localTransactionId/reconcile", "/debitopay/internal/payments/:localTransactionId/reconcile", "/paysuite/internal/payments/:localTransactionId/reconcile", "/vpay/internal/payments/:localTransactionId/reconcile"], async (req, res) => {
   if (!process.env.SESSION_SECRET || req.header("x-internal-payment-key") !== process.env.SESSION_SECRET) {
     return res.status(401).json({ error: "Origem não autorizada." });
   }

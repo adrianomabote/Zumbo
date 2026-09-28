@@ -18,8 +18,14 @@ const forwardingStatuses = new Set(["pending", "forwarding", "failed", "delivere
 type PaymentProvider = "pagar" | "debitopay" | "paysuite";
 
 function activeProvider(): PaymentProvider {
-  if (process.env.PAYMENT_PROVIDER === "paysuite") return "paysuite";
-  return process.env.PAYMENT_PROVIDER === "debitopay" ? "debitopay" : "pagar";
+  const configuredProvider = process.env.PAYMENT_PROVIDER?.trim().toLowerCase() || "pagar";
+  if (configuredProvider === "vpay") {
+    throw new Error("A Vpay está seleccionada, mas a cobrança directa ainda não pode ser processada sem a especificação oficial da API.");
+  }
+  if (configuredProvider === "pagar" || configuredProvider === "debitopay" || configuredProvider === "paysuite") {
+    return configuredProvider;
+  }
+  throw new Error(`Provedor de pagamento não suportado: ${configuredProvider}.`);
 }
 
 function providerName() {

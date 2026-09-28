@@ -25,11 +25,14 @@ const PAYMENT_MODE         = String(
 ).toLowerCase()
 const isTestMode           = PAYMENT_MODE === 'mock' || PAYMENT_MODE === 'test'
 const isFreeMode           = PAYMENT_MODE === 'free'
-const PAYMENT_API_ROUTE    = process.env.PAYMENT_PROVIDER === 'paysuite'
+const configuredPaymentProvider = (process.env.PAYMENT_PROVIDER || 'pagar').trim().toLowerCase()
+const PAYMENT_API_ROUTE    = configuredPaymentProvider === 'paysuite'
   ? 'paysuite'
-  : process.env.PAYMENT_PROVIDER === 'debitopay'
+  : configuredPaymentProvider === 'debitopay'
     ? 'debitopay'
-    : 'pagar'
+    : configuredPaymentProvider === 'vpay'
+      ? 'vpay'
+      : 'pagar'
 const DATA_DIR             = process.env.NET_SERVICOS_DATA_DIR || '.'
 const ORDERS_FILE          = join(DATA_DIR, 'orders.json')
 const USERS_FILE           = join(DATA_DIR, 'users.json')
@@ -1473,13 +1476,16 @@ self.addEventListener('fetch',e=>{
 
   // ── API webhook-status ────────────────────────────────────────────────────
   if (method === 'GET' && path === '/api/webhook-status') {
-    const isPaysuite = process.env.PAYMENT_PROVIDER === 'paysuite'
+    const isVpay = configuredPaymentProvider === 'vpay'
+    const isPaysuite = configuredPaymentProvider === 'paysuite'
     return json(res, {
-      registered: Boolean(isPaysuite ? process.env.PAYSUITE_WEBHOOK_SECRET : process.env.PAGAR_WEBHOOK_SECRET),
-      url: isPaysuite
+      registered: isVpay ? false : Boolean(isPaysuite ? process.env.PAYSUITE_WEBHOOK_SECRET : process.env.PAGAR_WEBHOOK_SECRET),
+      url: isVpay
+        ? null
+        : isPaysuite
         ? (process.env.PAYSUITE_WEBHOOK_URL || 'https://megabyte.live/api/paysuite/webhook')
         : (process.env.PAGAR_WEBHOOK_URL || null),
-      active: Boolean(isPaysuite ? process.env.PAYSUITE_API_KEY : process.env.PAGAR_API_KEY),
+      active: isVpay ? false : Boolean(isPaysuite ? process.env.PAYSUITE_API_KEY : process.env.PAGAR_API_KEY),
     })
   }
 
@@ -4892,9 +4898,11 @@ async function retryPagarForwarding(eventId,btn){
 }
 
 // ── Servidor ──────────────────────────────────────────────────────────────────
-const paymentRequiredConfig = process.env.PAYMENT_PROVIDER === 'paysuite'
+const paymentRequiredConfig = configuredPaymentProvider === 'paysuite'
   ? ['PAYSUITE_API_KEY', 'PAYSUITE_WEBHOOK_SECRET']
-  : [
+  : configuredPaymentProvider === 'vpay'
+    ? ['VPAY_CLIENT_ID', 'VPAY_CLIENT_SECRET']
+    : [
     'PAGAR_API_KEY',
     'PAGAR_SIGNING_SECRET',
     'PAGAR_WEBHOOK_SECRET',
@@ -4905,7 +4913,8 @@ const requiredConfig = [
   'SESSION_SECRET',
 ]
 const missingConfig = requiredConfig.filter(key => !process.env[key])
-const isLiveConfiguration = isTestMode || isFreeMode || missingConfig.length === 0
+const paymentProviderHasDirectChargeSupport = ['pagar', 'debitopay', 'paysuite'].includes(configuredPaymentProvider)
+const isLiveConfiguration = isTestMode || isFreeMode || (paymentProviderHasDirectChargeSupport && missingConfig.length === 0)
 
 await dbInit()
 await loadOrders()
