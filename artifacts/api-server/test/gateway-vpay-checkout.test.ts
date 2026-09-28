@@ -70,7 +70,7 @@ before(async () => {
   });
   await new Promise<void>((resolve, reject) => {
     apiServer?.once("error", reject);
-    apiServer?.listen(apiPort, "::", () => resolve());
+    apiServer?.listen(apiPort, "0.0.0.0", () => resolve());
   });
 
   await copyFile(
