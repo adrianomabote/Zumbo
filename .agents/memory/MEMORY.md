@@ -17,3 +17,4 @@
 - [Contrato Paysuite](paysuite-contract.md) — criar contacto E.164 antes do pagamento; consultar por ID e validar webhooks com HMAC em X-Signature
 - [Modo de oferta gratuita](free-offer-mode.md) — `free` aceita a encomenda, envia ao USSD com idempotência e deve identificar claramente a oferta como gratuita
 - [Contrato Pay.co.mz](payco-contract.md) — API pública é live-only; cobranças exigem headers de conta e e-Mola não está activo
+- [Contrato Vpay](vpay-contract.md) — a API pública documenta encomendas, mas falta confirmar a rota para cobrança directa M-Pesa/e-Mola

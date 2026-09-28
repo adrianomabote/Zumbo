@@ -1,0 +1,10 @@
+---
+name: Contrato Vpay
+description: Limites confirmados da API pública Vpay para cobrança directa por dinheiro móvel.
+---
+
+A documentação pública actual da Vpay usa `https://api.vpay.co.mz` e documenta autenticação por Client ID/Secret em `POST /v1/auth/token`, criação/consulta de encomendas em `/v1/orders` e consulta de estado em `/v1/orders/{id}/status`. A rota de autenticação `/api/auth/token` devolve 404; `/v1/auth/token` e `/v1/orders` chegam à API. A referência não documenta como iniciar uma cobrança directa M-Pesa/e-Mola, nem o payload de cobrança associado a uma encomenda. As páginas de guias de pagamentos móveis e ecommerce ligadas pela documentação devolvem 404. A collection descarregável está rotulada VOIDpay e aponta para `api.voidpay.co.mz`; não a tratar como contrato Vpay actual sem confirmação.
+
+**Why:** A loja actual depende de uma cobrança móvel confirmada antes de encaminhar o pedido para USSD. Criar apenas uma encomenda de ecommerce não prova que houve débito nem pagamento.
+
+**How to apply:** Não activar Vpay para o checkout directo, nem criar cobranças, até obter a especificação oficial de cobrança directa, incluindo método, campos, estados terminais e assinatura do webhook. Credenciais devem entrar apenas pelo fluxo de Secrets; não as incluir em documentação partilhada ou logs.
