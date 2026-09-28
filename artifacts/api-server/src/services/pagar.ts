@@ -15,13 +15,14 @@ const knownPaymentStates = new Set([
 const forwardableEventTypes = new Set(["payment.succeeded", "payment.failed"]);
 const forwardingStatuses = new Set(["pending", "forwarding", "failed", "delivered"]);
 
-type PaymentProvider = "pagar" | "debitopay" | "paysuite";
+type PaymentProvider = "pagar" | "debitopay" | "paysuite" | "vpay";
+
+let vpayTokenCache: { key: string; token: string; expiresAt: number } | null = null;
+let vpayTokenRequest: { key: string; promise: Promise<string> } | null = null;
 
 function activeProvider(): PaymentProvider {
   const configuredProvider = process.env.PAYMENT_PROVIDER?.trim().toLowerCase() || "pagar";
-  if (configuredProvider === "vpay") {
-    throw new Error("A Vpay está seleccionada, mas a cobrança directa ainda não pode ser processada sem a especificação oficial da API.");
-  }
+  if (configuredProvider === "vpay") return "vpay";
   if (configuredProvider === "pagar" || configuredProvider === "debitopay" || configuredProvider === "paysuite") {
     return configuredProvider;
   }
@@ -29,6 +30,7 @@ function activeProvider(): PaymentProvider {
 }
 
 function providerName() {
+  if (activeProvider() === "vpay") return "Vpay";
   if (activeProvider() === "paysuite") return "Paysuite";
   return activeProvider() === "debitopay" ? "Debito Pay" : "Pagar";
 }
@@ -62,6 +64,77 @@ function extractProviderOperation(data: Record<string, unknown>) {
     (value): value is Record<string, unknown> => Boolean(value && typeof value === "object" && !Array.isArray(value)),
   ) || data;
   return candidate;
+}
+
+function vpayRecords(data: unknown) {
+  const records: Record<string, unknown>[] = [];
+  const queue: Array<{ value: unknown; depth: number }> = [{ value: data, depth: 0 }];
+  const seen = new Set<object>();
+  while (queue.length) {
+    const { value, depth } = queue.shift()!;
+    if (!value || typeof value !== "object" || Array.isArray(value) || seen.has(value)) continue;
+    seen.add(value);
+    const record = value as Record<string, unknown>;
+    records.push(record);
+    if (depth >= 4) continue;
+    for (const key of ["order", "data", "result", "payment", "transaction", "status"]) {
+      if (record[key] && typeof record[key] === "object") {
+        queue.push({ value: record[key], depth: depth + 1 });
+      }
+    }
+  }
+  return records;
+}
+
+function extractVpayOperation(data: Record<string, unknown>) {
+  return Object.assign({}, ...vpayRecords(data));
+}
+
+function vpayOrderId(data: Record<string, unknown>, allowGenericId = false) {
+  const records = vpayRecords(data);
+  for (const record of records) {
+    for (const key of ["orderId", "order_id"]) {
+      if (typeof record[key] === "string" && record[key].trim()) return (record[key] as string).trim();
+    }
+  }
+  if (!allowGenericId) {
+    const orderRecords = records.filter((record) => record.order && typeof record.order === "object");
+    for (const record of orderRecords) {
+      const order = record.order as Record<string, unknown>;
+      if (typeof order.id === "string" && order.id.trim()) return order.id.trim();
+    }
+    return undefined;
+  }
+  for (const record of records) {
+    if (typeof record.id === "string" && record.id.trim()) return record.id.trim();
+  }
+  return undefined;
+}
+
+function normalizeVpayStatus(status: string | undefined) {
+  if (!status) return undefined;
+  if (status === "PAID") return "PAID";
+  if (status === "FAILED") return "FAILED";
+  if (status === "CANCELLED" || status === "CANCELED") return "CANCELLED";
+  if (status === "PENDING") return "PENDING";
+  return undefined;
+}
+
+function vpayAmount(operation: Record<string, unknown>) {
+  const raw = operation.amountMzn
+    ?? operation.amount_mzn
+    ?? operation.amount
+    ?? operation.totalAmount
+    ?? operation.total_amount
+    ?? operation.value;
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  if (typeof raw === "string" && raw.trim() && Number.isFinite(Number(raw))) return Number(raw);
+  return undefined;
+}
+
+function vpayAmountMatches(value: number | undefined, localAmountMzn: number) {
+  if (value === undefined) return undefined;
+  return value === localAmountMzn || value === localAmountMzn * 100;
 }
 
 function providerOperationId(operation: Record<string, unknown>) {
@@ -128,6 +201,20 @@ export interface PagarPaymentInput {
 }
 
 function config() {
+  if (activeProvider() === "vpay") {
+    const clientId = process.env.VPAY_CLIENT_ID;
+    const clientSecret = process.env.VPAY_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      throw new Error("Vpay API não está configurada no servidor.");
+    }
+    return {
+      provider: "vpay" as const,
+      baseUrl: process.env.VPAY_API_BASE_URL || "https://api.vpay.co.mz",
+      clientId,
+      clientSecret,
+    };
+  }
+
   if (activeProvider() === "paysuite") {
     const apiKey = process.env.PAYSUITE_API_KEY;
     if (!apiKey) {
@@ -267,7 +354,8 @@ function isConfigurationError(error: unknown) {
   return error instanceof Error && (
     error.message === "Pagar API não está configurada no servidor." ||
     error.message === "Debito Pay API não está configurada no servidor." ||
-    error.message === "Paysuite API não está configurada no servidor."
+    error.message === "Paysuite API não está configurada no servidor." ||
+    error.message === "Vpay API não está configurada no servidor."
   );
 }
 
@@ -297,11 +385,13 @@ export async function ensurePagarTables() {
       title text NOT NULL,
       method text NOT NULL,
       payer_phone text NOT NULL,
+      checkout_url text,
       receipt_number text,
       receipt_url text,
       created_at timestamptz NOT NULL DEFAULT now(),
       confirmed_at timestamptz
     );
+    ALTER TABLE pagar_operations ADD COLUMN IF NOT EXISTS checkout_url text;
     CREATE TABLE IF NOT EXISTS pagar_webhook_events (
       event_id text PRIMARY KEY,
       event_type text NOT NULL,
@@ -338,7 +428,7 @@ export async function createPagarPayment(input: PagarPaymentInput) {
     : input;
   validateInput(normalizedInput);
   const existing = await database.query(
-    "SELECT internal_id, pagar_operation_id, pagar_reference, amount_mzn, status FROM pagar_operations WHERE local_transaction_id = $1 OR idempotency_key = $2",
+    "SELECT internal_id, pagar_operation_id, pagar_reference, amount_mzn, status, checkout_url FROM pagar_operations WHERE local_transaction_id = $1 OR idempotency_key = $2",
     [input.localTransactionId, input.idempotencyKey],
   );
   if (existing.rows[0]) return existing.rows[0];
@@ -350,6 +440,7 @@ export async function createPagarPayment(input: PagarPaymentInput) {
   );
   const isDebitoPay = activeProvider() === "debitopay";
   const isPaysuite = activeProvider() === "paysuite";
+  const isVpay = activeProvider() === "vpay";
   try {
   let paysuiteContactId: string | undefined;
   if (isPaysuite) {
@@ -362,7 +453,24 @@ export async function createPagarPayment(input: PagarPaymentInput) {
       throw new Error("A Paysuite não devolveu o identificador do contacto.");
     }
   }
-  const body = isDebitoPay
+  const body = isVpay
+    ? {
+        source: { source: "api" },
+        products: [{
+          originProductId: input.sourceId,
+          name: input.title,
+          quantity: 1,
+          price: input.amountMzn,
+          description: input.description,
+        }],
+        customer: {
+          name: "Cliente Megabyte",
+          phone: normalizeDebitoPhone(input.payerPhone),
+        },
+        shippingAddressDisabled: true,
+        deliveryInfoDisabled: true,
+      }
+    : isDebitoPay
     ? {
          action: "process",
         merchant_id: process.env.DEBITO_MERCHANT_ID,
@@ -391,21 +499,32 @@ export async function createPagarPayment(input: PagarPaymentInput) {
         method: input.method,
         payerPhone: input.payerPhone,
       };
-    const data = await request("POST", isDebitoPay ? "/payment-orchestrator" : "/payments", body, input.idempotencyKey);
-    const operation = extractProviderOperation(data);
-    const status = isDebitoPay
+    const data = await request("POST", isVpay ? "/v1/orders" : isDebitoPay ? "/payment-orchestrator" : "/payments", body, input.idempotencyKey);
+    const operation = isVpay ? extractVpayOperation(data) : extractProviderOperation(data);
+    const vpayId = isVpay ? vpayOrderId(data, true) : undefined;
+    if (isVpay && !vpayId) {
+      throw new Error("A Vpay não devolveu o identificador da encomenda.");
+    }
+    const checkoutUrl = isVpay
+      ? new URL(encodeURIComponent(vpayId!), "https://checkout.vpay.co.mz/").toString()
+      : undefined;
+    const status = isVpay
+      ? "PENDING"
+      : isDebitoPay
       ? normalizeDebitoStatus(providerStatus(operation))
       : isPaysuite
         ? normalizePaysuiteStatus(providerStatus(operation))
         : normalizePaymentStatus(operation.status);
     const updated = await database.query(
-      "UPDATE pagar_operations SET pagar_operation_id = $1, status = $2 WHERE internal_id = $3 RETURNING *",
+      "UPDATE pagar_operations SET pagar_operation_id = $1, status = $2, checkout_url = $3 WHERE internal_id = $4 RETURNING *",
       [
-         providerOperationId(operation) || null,
+         vpayId || providerOperationId(operation) || null,
         (() => {
-           if (isDebitoPay || isPaysuite) return status || "RECONCILIATION_REQUIRED";
+            if (isVpay) return "PENDING";
+            if (isDebitoPay || isPaysuite) return status || "RECONCILIATION_REQUIRED";
            return status && knownPaymentStates.has(status) ? status : "RECONCILIATION_REQUIRED";
         })(),
+         checkoutUrl || null,
         input.localTransactionId,
       ],
     );
@@ -424,6 +543,14 @@ export async function createPagarPayment(input: PagarPaymentInput) {
 }
 
 export async function getPagarPayment(identifier: { id?: string; reference?: string }) {
+  if (activeProvider() === "vpay") {
+    if (!identifier.id) {
+      const error = new Error("Identificador Vpay em falta para consultar a encomenda.");
+      Object.assign(error, { status: 404 });
+      throw error;
+    }
+    return request("GET", `/v1/orders/${encodeURIComponent(identifier.id)}/status`);
+  }
   if (activeProvider() === "paysuite") {
     if (!identifier.id) {
       const error = new Error("Identificador Paysuite em falta para consultar o pagamento.");
