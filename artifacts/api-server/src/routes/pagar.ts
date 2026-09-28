@@ -79,7 +79,12 @@ router.post(["/pagar/internal/payments", "/debitopay/internal/payments", "/paysu
   }
   try {
     const payment = await createPagarPayment(req.body);
-    return res.status(202).json({ paymentId: payment.pagar_operation_id, status: payment.status, reference: payment.pagar_reference });
+    return res.status(202).json({
+      paymentId: payment.pagar_operation_id,
+      status: payment.status,
+      reference: payment.pagar_reference,
+      checkoutUrl: payment.checkout_url || null,
+    });
   } catch (error) {
     return res.status(400).json({ error: error instanceof Error ? error.message : "Pagamento inválido." });
   }
@@ -102,7 +107,7 @@ router.post(["/pagar/internal/payments/:localTransactionId/reconcile", "/debitop
   }
 });
 
-router.get(["/pagar/payments/:id", "/debitopay/payments/:id", "/paysuite/payments/:id"], async (req, res) => {
+router.get(["/pagar/payments/:id", "/debitopay/payments/:id", "/paysuite/payments/:id", "/vpay/payments/:id"], async (req, res) => {
   try { return res.json(await getPagarPayment({ id: String(req.params.id) })); } catch { return res.status(502).json({ error: "Não foi possível consultar o pagamento." }); }
 });
 

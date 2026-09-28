@@ -411,6 +411,39 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const onStorefrontMessage = (event: MessageEvent<unknown>) => {
+      if (
+        event.origin !== window.location.origin ||
+        event.source !== storefrontRef.current?.contentWindow ||
+        !event.data ||
+        typeof event.data !== "object"
+      ) {
+        return;
+      }
+      const message = event.data as { type?: unknown; checkoutUrl?: unknown };
+      if (message.type !== "megabyte:vpay-checkout" || typeof message.checkoutUrl !== "string") return;
+      try {
+        const checkout = new URL(message.checkoutUrl);
+        if (
+          checkout.protocol !== "https:" ||
+          checkout.hostname !== "checkout.vpay.co.mz" ||
+          checkout.port ||
+          checkout.username ||
+          checkout.password ||
+          checkout.pathname === "/"
+        ) {
+          return;
+        }
+        window.location.assign(checkout.href);
+      } catch {
+        // Ignore malformed messages from the embedded storefront.
+      }
+    };
+    window.addEventListener("message", onStorefrontMessage);
+    return () => window.removeEventListener("message", onStorefrontMessage);
+  }, []);
+
   const installApp = async () => {
     const prompt = deferredPromptRef.current;
     if (!prompt) {
