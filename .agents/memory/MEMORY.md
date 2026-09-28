@@ -13,6 +13,7 @@
 - [SEO da loja pública](public-storefront-seo.md) — novas páginas públicas precisam de rota no bridge, reescrita no proxy e URL correspondente no shell React
 - [Persistência do Gateway](gateway-persistence.md) — chaves e transacções devem sobreviver a deploys via PostgreSQL; JSON fica como migração e fallback
 - [Persistência dos saldos](customer-balance-persistence.md) — contas e créditos devem ser carregados do PostgreSQL no arranque; ficheiros locais são apenas fallback/migração
+- [Protecção do livro de encomendas](live-order-ledger.md) — trate `orders.json` como dados reais; isole testes e nunca restaure o ficheiro após os executar
 - [Proxy público do Gateway](gateway-proxy-order.md) — o alias `/gateway` deve ficar antes dos parsers Express para preservar o corpo bruto dos POST
 - [Contrato Paysuite](paysuite-contract.md) — criar contacto E.164 antes do pagamento; consultar por ID e validar webhooks com HMAC em X-Signature
 - [Modo de oferta gratuita](free-offer-mode.md) — `free` aceita a encomenda, envia ao USSD com idempotência e deve identificar claramente a oferta como gratuita
