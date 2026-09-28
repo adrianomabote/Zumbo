@@ -992,12 +992,24 @@ function html(res, body, extraHeaders = {}) {
 function gatewayDocsPage() {
   const baseUrl = escapeHtml(SITE_URL)
   const isVpay = PAYMENT_API_ROUTE === 'vpay'
+  const providerDescription = isVpay
+    ? 'Documentação da API Gateway Megabyte para iniciar pagamentos através do checkout hospedado Vpay.'
+    : 'Documentação da API Gateway Megabyte para receber pagamentos M-Pesa e e-Mola em projectos externos.'
+  const paymentFlowDescription = isVpay
+    ? 'Cria uma encomenda na Vpay. Abra o checkoutUrl devolvido para o cliente concluir o pagamento.'
+    : 'Cria uma cobrança e inicia o pedido no M-Pesa ou e-Mola. O método é detectado pelo prefixo do número.'
+  const checkoutResponseField = isVpay
+    ? '  "checkoutUrl": "https://checkout.vpay.co.mz/exemplo-order-id",\n'
+    : ''
+  const checkoutCallout = isVpay
+    ? '<div class="callout"><strong>Checkout Vpay:</strong> redireccione o cliente para <code class="inline">checkoutUrl</code>. Esse link também aparece na resposta de consulta enquanto estiver disponível. Os métodos apresentados dentro do checkout são controlados pela Vpay; esta API não os filtra.</div>'
+    : ''
   return `<!doctype html><html lang="pt-MZ"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Gateway de pagamentos — Megabyte</title>
-<meta name="description" content="Documentação da API Gateway Megabyte para receber pagamentos M-Pesa e e-Mola em projectos externos.">
+<meta name="description" content="${providerDescription}">
 <meta property="og:title" content="Gateway de pagamentos — Megabyte">
-<meta property="og:description" content="Integre pagamentos M-Pesa e e-Mola através da API Gateway Megabyte.">
+<meta property="og:description" content="${providerDescription}">
 <style>
 *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#f6f8fa;color:#17202a;font:15px/1.6 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
 a{color:#0f766e}.wrap{width:min(1120px,calc(100% - 36px));margin:auto}.hero{background:#102a2b;color:#fff;padding:54px 0 48px}.hero-grid{display:grid;grid-template-columns:1fr auto;gap:30px;align-items:end}.brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:-.03em}.brand-mark{width:34px;height:34px;border-radius:10px;background:#14b8a6;color:#062b2b;display:grid;place-items:center;font-size:20px}.eyebrow{margin:38px 0 10px;color:#7ee7d8;font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}.hero h1{max-width:760px;margin:0;font-size:clamp(30px,5vw,56px);line-height:1.02;letter-spacing:-.055em}.hero p{max-width:680px;margin:18px 0 0;color:#c3d8d8;font-size:17px}.base{padding:15px 18px;border:1px solid #3c6665;border-radius:14px;background:#183b3b;min-width:290px}.base small{display:block;color:#9fc3c0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}.base code{display:block;margin-top:4px;color:#fff;font-size:13px;overflow-wrap:anywhere}.layout{display:grid;grid-template-columns:210px 1fr;gap:42px;padding:42px 0 70px}.toc{position:sticky;top:20px;align-self:start}.toc strong{display:block;margin-bottom:10px;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#667085}.toc a{display:block;padding:7px 0;color:#475467;text-decoration:none;font-size:13px}.toc a:hover{color:#0f766e}.intro{margin:0 0 28px;color:#52606d}.callout{padding:17px 18px;margin:20px 0;border:1px solid #99f6e4;border-radius:14px;background:#ecfdfb;color:#134e4a}.callout strong{color:#115e59}.section{scroll-margin-top:20px;margin:0 0 38px}.section h2{margin:0 0 14px;font-size:26px;letter-spacing:-.035em;color:#17202a}.section h3{margin:22px 0 8px;font-size:17px}.endpoint{overflow:hidden;margin:16px 0;border:1px solid #e1e7eb;border-radius:16px;background:#fff;box-shadow:0 2px 8px rgba(15,23,42,.035)}.endpoint-head{display:flex;gap:12px;align-items:center;padding:15px 18px;border-bottom:1px solid #edf0f2}.method{padding:4px 8px;border-radius:6px;color:#fff;background:#0f766e;font:800 11px ui-monospace,SFMono-Regular,Menlo,monospace}.method.get{background:#2563eb}.endpoint-head code{font-weight:700;color:#334155;overflow-wrap:anywhere}.endpoint-body{padding:18px}.endpoint-body p{margin:0 0 12px;color:#52606d}pre{overflow:auto;margin:12px 0;padding:16px;border-radius:11px;background:#111827;color:#d1fae5;font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace}code.inline{padding:2px 5px;border-radius:5px;background:#eef2f4;color:#164e63;font:12px ui-monospace,SFMono-Regular,Menlo,monospace}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}.card{padding:17px;border:1px solid #e1e7eb;border-radius:14px;background:#fff}.card h3{margin:0 0 7px;font-size:15px}.card p{margin:0;color:#667085;font-size:13px}.table-wrap{overflow:auto;border:1px solid #e1e7eb;border-radius:14px;background:#fff}.table{width:100%;border-collapse:collapse;min-width:520px}.table th,.table td{padding:12px 14px;text-align:left;border-bottom:1px solid #edf0f2;font-size:13px}.table th{color:#475467;background:#f8fafb;font-size:11px;text-transform:uppercase;letter-spacing:.05em}.table tr:last-child td{border-bottom:0}.pill{display:inline-block;padding:3px 8px;border-radius:99px;background:#e6fffa;color:#0f766e;font-size:11px;font-weight:800}.footer{padding:30px 0;border-top:1px solid #e1e7eb;color:#667085;font-size:13px}@media(max-width:760px){.hero{padding:34px 0}.hero-grid,.layout,.grid2{grid-template-columns:1fr}.base{min-width:0}.layout{padding-top:28px;gap:22px}.toc{position:static;padding:14px 16px;border:1px solid #e1e7eb;border-radius:14px;background:#fff}.toc a{display:inline-block;margin-right:14px}.hero h1{font-size:38px}.wrap{width:min(100% - 26px,1120px)}}
@@ -1005,7 +1017,7 @@ a{color:#0f766e}.wrap{width:min(1120px,calc(100% - 36px));margin:auto}.hero{back
 <header class="hero"><div class="wrap">
   <div class="brand"><span class="brand-mark">◎</span><span>megabyte.live</span></div>
   <div class="eyebrow">Documentação para programadores</div>
-  <div class="hero-grid"><div><h1>Receba pagamentos no seu projecto.</h1><p>Use uma única API para iniciar cobranças M-Pesa e e-Mola, acompanhar o resultado e confirmar callbacks assinados.</p></div><div class="base"><small>Base URL</small><code>${baseUrl}</code></div></div>
+  <div class="hero-grid"><div><h1>Receba pagamentos no seu projecto.</h1><p>Use uma única API para ${isVpay ? 'criar encomendas no checkout hospedado Vpay, acompanhar o resultado e confirmar callbacks assinados.' : 'iniciar cobranças M-Pesa e e-Mola, acompanhar o resultado e confirmar callbacks assinados.'}</p></div><div class="base"><small>Base URL</small><code>${baseUrl}</code></div></div>
 </div></header>
 <main class="wrap layout">
   <nav class="toc" aria-label="Nesta página"><strong>Nesta página</strong><a href="#inicio">Visão geral</a><a href="#autenticacao">Autenticação</a><a href="#criar">Criar pagamento</a><a href="#estado">Consultar estado</a><a href="#callback">Callback</a><a href="#erros">Erros</a></nav>
