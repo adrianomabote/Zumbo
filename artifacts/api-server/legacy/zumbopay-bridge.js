@@ -1337,7 +1337,7 @@ function schedulePagarReconciliation(tx, delayMs = 30_000) {
 
 function restorePendingPagarReconciliations() {
   for (const order of orders) {
-    if (order.status !== 'pending' || !order.txId || !['mpesa','emola'].includes(order.method)) continue
+    if (order.status !== 'pending' || order.pagarReconciliationStatus === 'manual_required' || !order.txId || !['mpesa','emola'].includes(order.method)) continue
     const tx = {
       id: order.txId,
       type: order.type || 'bundle',
