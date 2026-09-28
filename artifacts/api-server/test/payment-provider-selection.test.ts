@@ -6,7 +6,7 @@ import {
   vpayOperationAmountMatches,
 } from "../src/services/pagar.ts";
 
-test("Vpay paid amounts must match MZN or the documented minor-unit representation", () => {
+test("Vpay paid amounts must match one of the accepted MZN amount representations", () => {
   assert.equal(vpayOperationAmountMatches({ amount: 25 }, 25), true);
   assert.equal(vpayOperationAmountMatches({ amount: 2500 }, 25), true);
   assert.equal(vpayOperationAmountMatches({ amount: 2499 }, 25), false);

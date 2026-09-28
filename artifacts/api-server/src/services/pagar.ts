@@ -77,7 +77,7 @@ function vpayRecords(data: unknown) {
     const record = value as Record<string, unknown>;
     records.push(record);
     if (depth >= 4) continue;
-    for (const key of ["order", "data", "result", "payment", "transaction", "status"]) {
+    for (const key of ["order", "data", "result", "payment", "transaction", "status", "token"]) {
       if (record[key] && typeof record[key] === "object") {
         queue.push({ value: record[key], depth: depth + 1 });
       }
@@ -319,7 +319,8 @@ async function vpayAccessToken(configuration: {
   clientId: string;
   clientSecret: string;
 }) {
-  const cacheKey = `${configuration.baseUrl}|${configuration.clientId}`;
+  const secretFingerprint = createHash("sha256").update(configuration.clientSecret).digest("hex");
+  const cacheKey = `${configuration.baseUrl}|${configuration.clientId}|${secretFingerprint}`;
   if (vpayTokenCache?.key === cacheKey && vpayTokenCache.expiresAt > Date.now() + 5_000) {
     return vpayTokenCache.token;
   }

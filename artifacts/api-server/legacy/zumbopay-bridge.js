@@ -3856,8 +3856,8 @@ function listenOrder(txId) {
             alreadyOpened = saved?.txId === txId && saved?.checkoutOpened === true
           } catch {}
           if(!alreadyOpened){
-            localStorage.setItem(pendingVpayKey, JSON.stringify({txId, checkoutOpened:true, savedAt:Date.now()}))
             checkoutDispatched = true
+            try { localStorage.setItem(pendingVpayKey, JSON.stringify({txId, checkoutOpened:true, savedAt:Date.now()})) } catch {}
             if(window.parent !== window) window.parent.postMessage({type:'megabyte:vpay-checkout',checkoutUrl:checkout.href},window.location.origin)
             else window.location.assign(checkout.href)
           }
