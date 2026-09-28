@@ -1022,9 +1022,9 @@ a{color:#0f766e}.wrap{width:min(1120px,calc(100% - 36px));margin:auto}.hero{back
 <main class="wrap layout">
   <nav class="toc" aria-label="Nesta página"><strong>Nesta página</strong><a href="#inicio">Visão geral</a><a href="#autenticacao">Autenticação</a><a href="#criar">Criar pagamento</a><a href="#estado">Consultar estado</a><a href="#callback">Callback</a><a href="#erros">Erros</a></nav>
   <div>
-    <section class="section" id="inicio"><h2>Começar em 3 passos</h2><p class="intro">Crie uma chave no painel Gateway, guarde-a no seu servidor e use o fluxo abaixo. O Gateway regista cada cobrança como uma compra de megas na rede móvel.</p><div class="grid2"><div class="card"><h3>1. Obter credenciais</h3><p>No painel admin, abra <strong>Gateway → Chaves de API</strong>. Copie a chave e o segredo para as variáveis privadas do seu servidor.</p></div><div class="card"><h3>2. Iniciar cobrança</h3><p>Envie o número do cliente e o valor em MT para receber o pedido de PIN no telemóvel.</p></div><div class="card"><h3>3. Confirmar resultado</h3><p>Use o callback assinado e confirme o estado com o endpoint de consulta antes de entregar o produto.</p></div><div class="card"><h3>Ambiente</h3><p>Esta documentação aponta para produção. Use sempre HTTPS e nunca exponha credenciais no browser.</p></div></div><div class="callout"><strong>Importante:</strong> a chave <code class="inline">gw_live_...</code> autentica os pedidos. O segredo <code class="inline">gwsec_...</code> serve apenas para verificar callbacks no seu backend.</div></section>
+    <section class="section" id="inicio"><h2>Começar em 3 passos</h2><p class="intro">Crie uma chave no painel Gateway, guarde-a no seu servidor e use o fluxo abaixo. O Gateway regista cada cobrança como uma compra de megas na rede móvel.</p><div class="grid2"><div class="card"><h3>1. Obter credenciais</h3><p>No painel admin, abra <strong>Gateway → Chaves de API</strong>. Copie a chave e o segredo para as variáveis privadas do seu servidor.</p></div><div class="card"><h3>2. Iniciar cobrança</h3><p>${isVpay ? 'Envie o número do cliente e o valor em MT. Abra o checkout hospedado indicado em checkoutUrl.' : 'Envie o número do cliente e o valor em MT para receber o pedido de PIN no telemóvel.'}</p></div><div class="card"><h3>3. Confirmar resultado</h3><p>Use o callback assinado e confirme o estado com o endpoint de consulta antes de entregar o produto.</p></div><div class="card"><h3>Ambiente</h3><p>Esta documentação aponta para produção. Use sempre HTTPS e nunca exponha credenciais no browser.</p></div></div><div class="callout"><strong>Importante:</strong> a chave <code class="inline">gw_live_...</code> autentica os pedidos. O segredo <code class="inline">gwsec_...</code> serve apenas para verificar callbacks no seu backend.</div></section>
     <section class="section" id="autenticacao"><h2>Autenticação</h2><p>Envie a chave em todos os pedidos de pagamento e de consulta:</p><pre>X-API-Key: gw_live_SUA_CHAVE</pre><p>Guarde ambos os valores em variáveis de ambiente. Não os coloque em aplicações mobile, JavaScript do frontend, páginas HTML ou repositórios públicos.</p></section>
-    <section class="section" id="criar"><h2>Criar um pagamento</h2><div class="endpoint"><div class="endpoint-head"><span class="method">POST</span><code>/gateway/api/pay</code></div><div class="endpoint-body"><p>Cria uma cobrança e inicia o pedido no M-Pesa ou e-Mola. O método é detectado pelo prefixo do número.</p><h3>Pedido</h3><pre>curl -X POST ${baseUrl}/gateway/api/pay \\
+    <section class="section" id="criar"><h2>Criar um pagamento</h2><div class="endpoint"><div class="endpoint-head"><span class="method">POST</span><code>/gateway/api/pay</code></div><div class="endpoint-body"><p>${paymentFlowDescription}${isVpay ? ' O campo method indica a carteira inferida pelo prefixo do telefone, mas não garante o método efectivamente escolhido no checkout.' : ''}</p><h3>Pedido</h3><pre>curl -X POST ${baseUrl}/gateway/api/pay \\
   -H "Content-Type: application/json" \\
   -H "X-API-Key: gw_live_SUA_CHAVE" \\
   -d '{
@@ -1871,6 +1871,7 @@ NOTAS
       txId,
       status: publicStatus,
       method: meth,
+      ...(tx.checkoutUrl ? { checkoutUrl: tx.checkoutUrl } : {}),
       statusUrl: `${SITE_URL}/gateway/api/status/${txId}`,
       ...(tx.error ? { error: tx.error } : {}),
     }, 202)
@@ -1883,11 +1884,11 @@ NOTAS
     if (!gk) return json(res, { error:'Chave de API inválida ou inactiva. Use o header X-API-Key.' }, 401)
     const tx = transactions.get(gwStP.txId)
     if (tx && tx.type === 'gateway' && tx.gwKeyId === gk.id)
-      return json(res, { ok:true, txId:tx.id, status:tx.status, amount:tx.amount, megabytes:tx.megabytes || megaDetailsForAmount(tx.amount).megabytes, phone:tx.phone, method:tx.method, reference:tx.extRef, error:tx.error||null, ts:tx.ts })
+      return json(res, { ok:true, txId:tx.id, status:tx.status, amount:tx.amount, megabytes:tx.megabytes || megaDetailsForAmount(tx.amount).megabytes, phone:tx.phone, method:tx.method, ...(tx.checkoutUrl ? { checkoutUrl:tx.checkoutUrl } : {}), reference:tx.extRef, error:tx.error||null, ts:tx.ts })
     // fallback: após reinício do servidor, procura no registo persistente
     const rec = orders.find(o => o.txId === gwStP.txId && o.type === 'gateway' && o.gwKeyId === gk.id)
     if (!rec) return json(res, { error:'Transacção não encontrada.' }, 404)
-    return json(res, { ok:true, txId:rec.txId, status:rec.status, amount:rec.amount, megabytes:rec.megabytes || megaDetailsForAmount(rec.amount).megabytes, phone:rec.phone, method:rec.method, reference:rec.extRef||null, error:null, ts:rec.ts })
+    return json(res, { ok:true, txId:rec.txId, status:rec.status, amount:rec.amount, megabytes:rec.megabytes || megaDetailsForAmount(rec.amount).megabytes, phone:rec.phone, method:rec.method, ...(rec.checkoutUrl ? { checkoutUrl:rec.checkoutUrl } : {}), reference:rec.extRef||null, error:null, ts:rec.ts })
   }
 
   // ── Admin: gestão de chaves do gateway ────────────────────────────────────
