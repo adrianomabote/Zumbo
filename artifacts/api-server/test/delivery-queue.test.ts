@@ -338,6 +338,7 @@ async function startBridge(mainApiPort: number) {
       PORT: String(bridgePort),
       MAIN_API_PORT: String(mainApiPort),
       NODE_ENV: "production",
+      PAYMENT_PROVIDER: "pagar",
       NET_SERVICOS_PAYMENT_MODE: "mock",
       PAGAR_API_KEY: "test-api-key",
       PAGAR_SIGNING_SECRET: "test-signing-secret",
@@ -357,7 +358,10 @@ async function stopBridge() {
   });
 }
 
+const previousPaymentProvider = process.env.PAYMENT_PROVIDER;
+
 before(async () => {
+  process.env.PAYMENT_PROVIDER = "pagar";
   await ensurePagarTables();
   const selfTxId = `delivery-test-self-${testId}`;
   const otherTxId = `delivery-test-other-${testId}`;
@@ -397,6 +401,8 @@ after(async () => {
   await pool?.end();
   await rm(queueDirectory, { recursive: true, force: true });
   await rm(bridgeDirectory, { recursive: true, force: true });
+  if (previousPaymentProvider === undefined) delete process.env.PAYMENT_PROVIDER;
+  else process.env.PAYMENT_PROVIDER = previousPaymentProvider;
 });
 
 test("PAID Para Mim reaches the account number and repeated equivalent webhooks keep one delivery", async () => {

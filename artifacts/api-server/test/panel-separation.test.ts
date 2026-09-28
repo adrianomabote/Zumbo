@@ -159,6 +159,7 @@ before(async () => {
       ...process.env,
       PORT: String(bridgePort),
       NODE_ENV: "production",
+      PAYMENT_PROVIDER: "pagar",
       NET_SERVICOS_PAYMENT_MODE: "mock",
       ADMIN_PASS: adminPassword,
       SESSION_SECRET: "panel-test-session-secret",
