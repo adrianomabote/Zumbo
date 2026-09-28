@@ -1038,7 +1038,7 @@ a{color:#0f766e}.wrap{width:min(1120px,calc(100% - 36px));margin:auto}.hero{back
   "txId": "a1b2c3d4e5f6",
   "status": "pending",
   "method": "mpesa",
-  "statusUrl": "${baseUrl}/gateway/api/status/a1b2c3d4e5f6"
+${checkoutResponseField}  "statusUrl": "${baseUrl}/gateway/api/status/a1b2c3d4e5f6"
 }</pre></div></div><div class="callout"><strong>Conversão em megas:</strong> valores iguais aos pacotes normais usam a quantidade exacta do catálogo. Outros valores usam <code class="inline">amount × 40 MB</code>. Por exemplo: 25 MT = 1024 MB; 100 MT = 4096 MB.</div></section>
     <section class="section" id="estado"><h2>Consultar o estado</h2><div class="endpoint"><div class="endpoint-head"><span class="method get">GET</span><code>/gateway/api/status/&lt;txId&gt;</code></div><div class="endpoint-body"><pre>curl ${baseUrl}/gateway/api/status/a1b2c3d4e5f6 \\
   -H "X-API-Key: gw_live_SUA_CHAVE"</pre><h3>Resposta</h3><pre>{
@@ -1049,10 +1049,11 @@ a{color:#0f766e}.wrap{width:min(1120px,calc(100% - 36px));margin:auto}.hero{back
   "megabytes": 4096,
   "phone": "84xxxxxxx",
   "method": "mpesa",
-  "reference": "pedido-123",
+${checkoutResponseField}  "reference": "pedido-123",
   "error": null,
   "ts": "2026-09-21T12:00:00.000Z"
 }</pre><p>Consulte a cada 3–5 segundos enquanto o estado for <code class="inline">pending</code>. Pare quando chegar a <code class="inline">succeeded</code> ou <code class="inline">failed</code>.</p></div></div></section>
+${checkoutCallout}
     <section class="section" id="callback"><h2>Callback assinado</h2><p>Se enviar <code class="inline">callback_url</code>, o Gateway fará um POST quando o pagamento terminar.</p><pre>Content-Type: application/json
 X-Gateway-Signature: assinatura_hmac_sha256</pre><pre>{
   "event": "payment.succeeded",
@@ -1090,10 +1091,10 @@ const response = await fetch(baseUrl + "/gateway/api/pay", {
   })
 });
 
-const payment = await response.json();
-console.log(payment.txId, payment.status);</pre></section>
+ const payment = await response.json();
+ console.log(payment.txId, payment.status, payment.checkoutUrl);</pre></section>
   </div>
-</main><footer class="footer"><div class="wrap">Gateway Megabyte · M-Pesa e e-Mola · <a href="${baseUrl}/megas">Voltar à loja</a></div></footer>
+</main><footer class="footer"><div class="wrap">Gateway Megabyte · ${isVpay ? 'Checkout Vpay' : 'M-Pesa e e-Mola'} · <a href="${baseUrl}/megas">Voltar à loja</a></div></footer>
 </body></html>`
 }
 function redirect(res, url, headers = {}) {
