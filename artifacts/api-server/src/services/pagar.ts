@@ -152,7 +152,7 @@ function providerReference(operation: Record<string, unknown>) {
 }
 
 function providerStatus(operation: Record<string, unknown>) {
-  const raw = operation.status ?? operation.payment_status ?? operation.paymentStatus;
+  const raw = operation.status ?? operation.payment_status ?? operation.paymentStatus ?? operation.order_status;
   return typeof raw === "string" ? raw.trim().toUpperCase() : undefined;
 }
 
@@ -291,23 +291,91 @@ async function parseResponse(response: Response) {
   return data as Record<string, unknown>;
 }
 
+async function vpayAccessToken(configuration: {
+  provider: "vpay";
+  baseUrl: string;
+  clientId: string;
+  clientSecret: string;
+}) {
+  const cacheKey = `${configuration.baseUrl}|${configuration.clientId}`;
+  if (vpayTokenCache?.key === cacheKey && vpayTokenCache.expiresAt > Date.now() + 5_000) {
+    return vpayTokenCache.token;
+  }
+  if (vpayTokenRequest?.key === cacheKey) return vpayTokenRequest.promise;
+
+  const promise = (async () => {
+    const url = new URL(`${configuration.baseUrl.replace(/\/$/, "")}/v1/auth/token`);
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({
+        client_id: configuration.clientId,
+        client_secret: configuration.clientSecret,
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const data = await parseResponse(response);
+    const records = vpayRecords(data);
+    let token: string | undefined;
+    let expiresIn: number | undefined;
+    for (const record of records) {
+      if (!token) {
+        for (const key of ["access_token", "accessToken", "token"]) {
+          if (typeof record[key] === "string" && record[key].trim()) {
+            token = (record[key] as string).trim();
+            break;
+          }
+        }
+      }
+      if (expiresIn === undefined) {
+        const rawExpiry = record.expires_in ?? record.expiresIn;
+        if (typeof rawExpiry === "number" && Number.isFinite(rawExpiry)) expiresIn = rawExpiry;
+        else if (typeof rawExpiry === "string" && Number.isFinite(Number(rawExpiry))) expiresIn = Number(rawExpiry);
+      }
+    }
+    if (!token) throw new Error("A Vpay não devolveu o token de acesso.");
+    const lifetimeSeconds = Math.max(30, Math.min(expiresIn || 300, 86_400));
+    vpayTokenCache = {
+      key: cacheKey,
+      token,
+      expiresAt: Date.now() + lifetimeSeconds * 1_000 - 10_000,
+    };
+    return token;
+  })();
+  vpayTokenRequest = { key: cacheKey, promise };
+  try {
+    return await promise;
+  } finally {
+    if (vpayTokenRequest?.promise === promise) vpayTokenRequest = null;
+  }
+}
+
 async function request(method: "GET" | "POST", endpoint: string, body?: Record<string, unknown>, idempotencyKey?: string) {
   const configuration = config();
-  const { baseUrl, apiKey } = configuration;
+  const { baseUrl } = configuration;
   const rawBody = body === undefined ? undefined : JSON.stringify(body);
   const url = new URL(`${baseUrl.replace(/\/$/, "")}${endpoint}`);
   const headers: Record<string, string> = {
-    Authorization: `Bearer ${apiKey}`,
     Accept: "application/json",
   };
-  if (configuration.provider === "paysuite") {
+  if (configuration.provider === "vpay") {
+    headers.Authorization = `Bearer ${await vpayAccessToken(configuration)}`;
+    if (rawBody !== undefined) headers["Content-Type"] = "application/json";
+  } else if (configuration.provider === "paysuite") {
+    headers.Authorization = `Bearer ${configuration.apiKey}`;
     headers["Content-Type"] = "application/json";
   } else if (configuration.provider === "debitopay") {
     Object.assign(headers, {
+      Authorization: `Bearer ${configuration.apiKey}`,
       "Content-Type": "application/json",
       "Idempotency-Key": idempotencyKey || "",
     });
-  } else if (rawBody !== undefined) {
+  } else {
+    headers.Authorization = `Bearer ${configuration.apiKey}`;
+    if (rawBody === undefined) {
+      const response = await fetch(url, { method, headers, signal: AbortSignal.timeout(15_000) });
+      return parseResponse(response);
+    }
     const { signingSecret } = configuration;
     const timestamp = Date.now().toString();
     const nonce = randomBytes(18).toString("base64url");
@@ -343,6 +411,36 @@ function validateInput(input: PagarPaymentInput) {
   const local = digits.startsWith("258") ? digits.slice(3) : digits;
    const valid = input.method === "MPESA" ? /^(84|85)\d{7}$/.test(local) : /^(86|87)\d{7}$/.test(local);
   if (!valid) throw new Error("O telefone não corresponde ao método de pagamento.");
+}
+
+export async function createVpayHostedOrder(input: Pick<
+  PagarPaymentInput,
+  "sourceId" | "title" | "description" | "amountMzn" | "payerPhone"
+>) {
+  const data = await request("POST", "/v1/orders", {
+    source: { source: "api" },
+    products: [{
+      originProductId: input.sourceId,
+      name: input.title,
+      quantity: 1,
+      price: input.amountMzn,
+      description: input.description,
+    }],
+    customer: {
+      name: "Cliente Megabyte",
+      phone: normalizeDebitoPhone(input.payerPhone),
+    },
+    shippingAddressDisabled: true,
+    deliveryInfoDisabled: true,
+  });
+  const orderId = vpayOrderId(data, true);
+  if (!orderId || orderId.length > 200 || /[\u0000-\u001f\u007f]/.test(orderId)) {
+    throw new Error("A Vpay não devolveu um identificador válido para a encomenda.");
+  }
+  return {
+    orderId,
+    checkoutUrl: new URL(encodeURIComponent(orderId), "https://checkout.vpay.co.mz/").toString(),
+  };
 }
 
 function errorStatus(error: unknown) {
@@ -453,24 +551,7 @@ export async function createPagarPayment(input: PagarPaymentInput) {
       throw new Error("A Paysuite não devolveu o identificador do contacto.");
     }
   }
-  const body = isVpay
-    ? {
-        source: { source: "api" },
-        products: [{
-          originProductId: input.sourceId,
-          name: input.title,
-          quantity: 1,
-          price: input.amountMzn,
-          description: input.description,
-        }],
-        customer: {
-          name: "Cliente Megabyte",
-          phone: normalizeDebitoPhone(input.payerPhone),
-        },
-        shippingAddressDisabled: true,
-        deliveryInfoDisabled: true,
-      }
-    : isDebitoPay
+  const body = isDebitoPay
     ? {
          action: "process",
         merchant_id: process.env.DEBITO_MERCHANT_ID,
@@ -499,15 +580,17 @@ export async function createPagarPayment(input: PagarPaymentInput) {
         method: input.method,
         payerPhone: input.payerPhone,
       };
-    const data = await request("POST", isVpay ? "/v1/orders" : isDebitoPay ? "/payment-orchestrator" : "/payments", body, input.idempotencyKey);
-    const operation = isVpay ? extractVpayOperation(data) : extractProviderOperation(data);
-    const vpayId = isVpay ? vpayOrderId(data, true) : undefined;
-    if (isVpay && !vpayId) {
-      throw new Error("A Vpay não devolveu o identificador da encomenda.");
+    let vpayId: string | undefined;
+    let checkoutUrl: string | undefined;
+    let data: Record<string, unknown> = {};
+    if (isVpay) {
+      const hostedOrder = await createVpayHostedOrder(input);
+      vpayId = hostedOrder.orderId;
+      checkoutUrl = hostedOrder.checkoutUrl;
+    } else {
+      data = await request("POST", isDebitoPay ? "/payment-orchestrator" : "/payments", body, input.idempotencyKey);
     }
-    const checkoutUrl = isVpay
-      ? new URL(encodeURIComponent(vpayId!), "https://checkout.vpay.co.mz/").toString()
-      : undefined;
+    const operation = isVpay ? {} : extractProviderOperation(data);
     const status = isVpay
       ? "PENDING"
       : isDebitoPay
@@ -594,27 +677,37 @@ export async function reconcilePagarPayment(localTransactionId: string) {
     id: local.pagar_operation_id || undefined,
     reference: local.pagar_reference,
   });
-  const operation = extractProviderOperation(data);
+  const isVpay = activeProvider() === "vpay";
+  const operation = isVpay ? extractVpayOperation(data) : extractProviderOperation(data);
   const rawProviderStatus = providerStatus(operation);
   const normalizedProviderStatus = activeProvider() === "debitopay"
     ? normalizeDebitoStatus(rawProviderStatus)
     : activeProvider() === "paysuite"
       ? normalizePaysuiteStatus(rawProviderStatus)
-    : normalizePaymentStatus(rawProviderStatus);
-  if (!normalizedProviderStatus || (activeProvider() === "pagar" && !knownPaymentStates.has(normalizedProviderStatus))) {
+      : isVpay
+        ? normalizeVpayStatus(rawProviderStatus)
+        : normalizePaymentStatus(rawProviderStatus);
+  if (!normalizedProviderStatus || (
+    (activeProvider() === "pagar" || isVpay) && !knownPaymentStates.has(normalizedProviderStatus)
+  )) {
     throw new Error(`O ${providerName()} devolveu um estado de pagamento desconhecido.`);
   }
 
-  const operationId = providerOperationId(operation);
-  const reference = providerReference(operation);
+  const operationId = isVpay
+    ? vpayOrderId(data, false)
+    : providerOperationId(operation);
+  const reference = isVpay ? undefined : providerReference(operation);
   if (local.pagar_operation_id && operationId && local.pagar_operation_id !== operationId) {
     throw new Error("A operação devolvida pelo Pagar não corresponde ao pagamento local.");
   }
   if (local.pagar_reference && reference && local.pagar_reference !== reference) {
     throw new Error("A referência devolvida pelo Pagar não corresponde ao pagamento local.");
   }
-  const amount = providerAmount(operation);
-  if (!providerAmountMatches(amount, local.amount_mzn)) {
+  const amount = isVpay ? vpayAmount(operation) : providerAmount(operation);
+  const amountMatches = isVpay
+    ? vpayAmountMatches(amount, local.amount_mzn)
+    : providerAmountMatches(amount, local.amount_mzn);
+  if ((isVpay && normalizedProviderStatus === "PAID" && amount === undefined) || amountMatches === false) {
     throw new Error(`O valor devolvido pelo ${providerName()} não corresponde ao pagamento local.`);
   }
 
