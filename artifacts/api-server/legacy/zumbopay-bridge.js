@@ -1176,6 +1176,14 @@ async function initiateCharge(tx, customerName) {
     console.log(`[${PAYMENT_API_ROUTE}] POST /payments → ${resp.status}`, JSON.stringify({ status:data.status, paymentId:data.paymentId, reference:data.reference }))
     if (resp.status === 202) {
       tx.ref = data.reference || tx.ref || pagarReference
+      if (PAYMENT_API_ROUTE === 'vpay' && typeof data.checkoutUrl === 'string') {
+        try {
+          const checkout = new URL(data.checkoutUrl)
+          if (checkout.protocol === 'https:' && checkout.hostname === 'checkout.vpay.co.mz' && !checkout.port && !checkout.username && !checkout.password && checkout.pathname !== '/') {
+            tx.checkoutUrl = checkout.href
+          }
+        } catch {}
+      }
       const providerStatus = String(data.status || 'PENDING').toUpperCase()
       if (providerStatus === 'PAID') {
         await applyPagarProviderStatus(tx, providerStatus, { reference: tx.ref })
@@ -1183,11 +1191,12 @@ async function initiateCharge(tx, customerName) {
         await applyPagarProviderStatus(tx, providerStatus, { reference: tx.ref })
       } else {
         tx.status = 'pending'
-        notifyTx(tx.id, { status:'pending', method:tx.method })
+        notifyTx(tx.id, { status:'pending', method:tx.method, checkoutUrl:tx.checkoutUrl || null })
         await updateOrderStatus(tx.id, 'pending', {
           pagarRef: tx.ref,
           pagarTitle: tx.pagarTitle,
           pagarDescription: tx.pagarDescription,
+          checkoutUrl: tx.checkoutUrl || null,
           pagarReconciliationStatus: 'pending',
           pagarReconciliationError: null,
         })
@@ -1470,7 +1479,7 @@ self.addEventListener('fetch',e=>{
      const tx = transactions.get(txId)
      const order = orders.find(item => item.txId === txId)
      const current = tx || order
-     if (current) res.write(`data: ${JSON.stringify({ status:current.status, method:current.method })}\n\n`)
+     if (current) res.write(`data: ${JSON.stringify({ status:current.status, method:current.method, checkoutUrl:current.checkoutUrl || null, error:current.error || null })}\n\n`)
     return
   }
 
@@ -1485,7 +1494,9 @@ self.addEventListener('fetch',e=>{
         : isPaysuite
         ? (process.env.PAYSUITE_WEBHOOK_URL || 'https://megabyte.live/api/paysuite/webhook')
         : (process.env.PAGAR_WEBHOOK_URL || null),
-      active: isVpay ? false : Boolean(isPaysuite ? process.env.PAYSUITE_API_KEY : process.env.PAGAR_API_KEY),
+      active: isVpay
+        ? Boolean(process.env.VPAY_CLIENT_ID && process.env.VPAY_CLIENT_SECRET)
+        : Boolean(isPaysuite ? process.env.PAYSUITE_API_KEY : process.env.PAGAR_API_KEY),
     })
   }
 
@@ -3829,17 +3840,39 @@ async function payWithCredit() {
 }
 function listenOrder(txId) {
   if (evtSrc) evtSrc.close()
+  const pendingVpayKey = 'megabyte-vpay-pending'
+  let checkoutDispatched = false
   evtSrc = new EventSource('/events/'+txId)
   evtSrc.onmessage = e => {
     const d=JSON.parse(e.data)
+    if(d.status==='pending' && d.checkoutUrl && !checkoutDispatched){
+      try {
+        const checkout = new URL(d.checkoutUrl, window.location.href)
+        if(checkout.protocol==='https:' && checkout.hostname==='checkout.vpay.co.mz' && !checkout.port && !checkout.username && !checkout.password && checkout.pathname!=='/'){
+          let alreadyOpened = false
+          try {
+            const saved = JSON.parse(localStorage.getItem(pendingVpayKey) || 'null')
+            alreadyOpened = saved?.txId === txId && saved?.checkoutOpened === true
+          } catch {}
+          if(!alreadyOpened){
+            localStorage.setItem(pendingVpayKey, JSON.stringify({txId, checkoutOpened:true, savedAt:Date.now()}))
+            checkoutDispatched = true
+            if(window.parent !== window) window.parent.postMessage({type:'megabyte:vpay-checkout',checkoutUrl:checkout.href},window.location.origin)
+            else window.location.assign(checkout.href)
+          }
+        }
+      } catch {}
+    }
     if(d.status==='succeeded'){
       evtSrc.close()
+      try { if(JSON.parse(localStorage.getItem(pendingVpayKey) || 'null')?.txId === txId) localStorage.removeItem(pendingVpayKey) } catch {}
       const showSuccess = () => shShow('success')
       if (isFreeMode) setTimeout(showSuccess, 900)
       else showSuccess()
     }
     if(d.status==='failed'){
       evtSrc.close()
+      try { if(JSON.parse(localStorage.getItem(pendingVpayKey) || 'null')?.txId === txId) localStorage.removeItem(pendingVpayKey) } catch {}
       if (isFreeMode) {
         setTimeout(()=>listenOrder(txId), 700)
       } else {
@@ -3850,6 +3883,16 @@ function listenOrder(txId) {
   }
   evtSrc.onerror = () => { evtSrc.close(); setTimeout(()=>listenOrder(txId),3000) }
 }
+
+try {
+  const pendingVpay = JSON.parse(localStorage.getItem('megabyte-vpay-pending') || 'null')
+  if (pendingVpay?.txId && pendingVpay?.checkoutOpened && Date.now() - Number(pendingVpay.savedAt || 0) < 24 * 60 * 60 * 1000) {
+    shShow('pending')
+    listenOrder(String(pendingVpay.txId))
+  } else if (pendingVpay) {
+    localStorage.removeItem('megabyte-vpay-pending')
+  }
+} catch {}
 
 // ── Search ──
 function openSearch() {
@@ -4913,8 +4956,8 @@ const requiredConfig = [
   'SESSION_SECRET',
 ]
 const missingConfig = requiredConfig.filter(key => !process.env[key])
-const paymentProviderHasDirectChargeSupport = ['pagar', 'debitopay', 'paysuite'].includes(configuredPaymentProvider)
-const isLiveConfiguration = isTestMode || isFreeMode || (paymentProviderHasDirectChargeSupport && missingConfig.length === 0)
+const paymentProviderIsSupported = ['pagar', 'debitopay', 'paysuite', 'vpay'].includes(configuredPaymentProvider)
+const isLiveConfiguration = isTestMode || isFreeMode || (paymentProviderIsSupported && missingConfig.length === 0)
 
 await dbInit()
 await loadOrders()

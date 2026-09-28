@@ -91,22 +91,30 @@ function extractVpayOperation(data: Record<string, unknown>) {
 }
 
 function vpayOrderId(data: Record<string, unknown>, allowGenericId = false) {
+  const toIdentifier = (value: unknown) => {
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return String(value);
+    return undefined;
+  };
   const records = vpayRecords(data);
   for (const record of records) {
-    for (const key of ["orderId", "order_id"]) {
-      if (typeof record[key] === "string" && record[key].trim()) return (record[key] as string).trim();
+    for (const key of ["orderId", "order_id", "orderID"]) {
+      const identifier = toIdentifier(record[key]);
+      if (identifier) return identifier;
     }
   }
   if (!allowGenericId) {
     const orderRecords = records.filter((record) => record.order && typeof record.order === "object");
     for (const record of orderRecords) {
       const order = record.order as Record<string, unknown>;
-      if (typeof order.id === "string" && order.id.trim()) return order.id.trim();
+      const identifier = toIdentifier(order.id);
+      if (identifier) return identifier;
     }
     return undefined;
   }
   for (const record of records) {
-    if (typeof record.id === "string" && record.id.trim()) return record.id.trim();
+    const identifier = toIdentifier(record.id);
+    if (identifier) return identifier;
   }
   return undefined;
 }
@@ -135,6 +143,19 @@ function vpayAmount(operation: Record<string, unknown>) {
 function vpayAmountMatches(value: number | undefined, localAmountMzn: number) {
   if (value === undefined) return undefined;
   return value === localAmountMzn || value === localAmountMzn * 100;
+}
+
+function vpayOperationAmountMatches(operation: Record<string, unknown>, localAmountMzn: number) {
+  const explicitMzn = operation.amountMzn ?? operation.amount_mzn;
+  if (explicitMzn !== undefined) {
+    const amount = typeof explicitMzn === "number" && Number.isFinite(explicitMzn)
+      ? explicitMzn
+      : typeof explicitMzn === "string" && explicitMzn.trim() && Number.isFinite(Number(explicitMzn))
+        ? Number(explicitMzn)
+        : undefined;
+    return amount === undefined ? false : amount === localAmountMzn;
+  }
+  return vpayAmountMatches(vpayAmount(operation), localAmountMzn);
 }
 
 function providerOperationId(operation: Record<string, unknown>) {
