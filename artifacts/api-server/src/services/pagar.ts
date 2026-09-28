@@ -146,7 +146,7 @@ function vpayAmountMatches(value: number | undefined, localAmountMzn: number) {
   return value === localAmountMzn || value === localAmountMzn * 100;
 }
 
-function vpayOperationAmountMatches(operation: Record<string, unknown>, localAmountMzn: number) {
+export function vpayOperationAmountMatches(operation: Record<string, unknown>, localAmountMzn: number) {
   const explicitMzn = operation.amountMzn ?? operation.amount_mzn;
   if (explicitMzn !== undefined) {
     const amount = typeof explicitMzn === "number" && Number.isFinite(explicitMzn)
@@ -729,7 +729,7 @@ export async function reconcilePagarPayment(localTransactionId: string) {
   const amountMatches = isVpay
     ? vpayOperationAmountMatches(operation, local.amount_mzn)
     : providerAmountMatches(amount, local.amount_mzn);
-  if ((isVpay && normalizedProviderStatus === "PAID" && amount === undefined) || amountMatches === false) {
+  if ((isVpay && normalizedProviderStatus === "PAID" && amountMatches !== true) || amountMatches === false) {
     throw new Error(`O valor devolvido pelo ${providerName()} não corresponde ao pagamento local.`);
   }
 

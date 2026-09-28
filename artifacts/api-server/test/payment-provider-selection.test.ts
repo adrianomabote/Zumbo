@@ -1,6 +1,18 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createVpayHostedOrder, getPagarPayment } from "../src/services/pagar.ts";
+import {
+  createVpayHostedOrder,
+  getPagarPayment,
+  vpayOperationAmountMatches,
+} from "../src/services/pagar.ts";
+
+test("Vpay paid amounts must match MZN or the documented minor-unit representation", () => {
+  assert.equal(vpayOperationAmountMatches({ amount: 25 }, 25), true);
+  assert.equal(vpayOperationAmountMatches({ amount: 2500 }, 25), true);
+  assert.equal(vpayOperationAmountMatches({ amount: 2499 }, 25), false);
+  assert.equal(vpayOperationAmountMatches({ amountMzn: 2500 }, 25), false);
+  assert.equal(vpayOperationAmountMatches({}, 25), undefined);
+});
 
 test("Vpay creates a hosted order and polls its documented status endpoint", async () => {
   const previousProvider = process.env.PAYMENT_PROVIDER;

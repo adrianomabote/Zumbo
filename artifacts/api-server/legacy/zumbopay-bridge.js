@@ -1361,6 +1361,7 @@ function restorePendingPagarReconciliations() {
       extDesc: order.extDesc,
       pagarTitle: order.pagarTitle || null,
       pagarDescription: order.pagarDescription || null,
+      checkoutUrl: order.checkoutUrl || null,
     }
     transactions.set(tx.id, tx)
     schedulePagarReconciliation(tx, 1_000)
