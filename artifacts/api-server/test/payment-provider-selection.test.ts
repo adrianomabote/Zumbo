@@ -3,15 +3,30 @@ import assert from "node:assert/strict";
 import {
   createVpayHostedOrder,
   getPagarPayment,
+  vpayOperationIdentityMatches,
   vpayOperationAmountMatches,
+  vpayResponseStatus,
 } from "../src/services/pagar.ts";
 
 test("Vpay paid amounts must match one of the accepted MZN amount representations", () => {
   assert.equal(vpayOperationAmountMatches({ amount: 25 }, 25), true);
   assert.equal(vpayOperationAmountMatches({ amount: 2500 }, 25), true);
+  assert.equal(vpayOperationAmountMatches({ data: { order: { amountMzn: 25, payment: { amount: 2500 } } } }, 25), true);
+  assert.equal(vpayOperationAmountMatches({ data: { order: { amountMzn: 25, payment: { amount: 2400 } } } }, 25), false);
   assert.equal(vpayOperationAmountMatches({ amount: 2499 }, 25), false);
   assert.equal(vpayOperationAmountMatches({ amountMzn: 2500 }, 25), false);
+  assert.equal(vpayOperationAmountMatches({ total_mzn: 2500 }, 25), false);
   assert.equal(vpayOperationAmountMatches({}, 25), undefined);
+});
+
+test("Vpay PAID confirmation requires one consistent status and the matching order ID", () => {
+  const matchingOrder = { data: { order: { orderId: "order-25", status: "PAID" } } };
+  assert.equal(vpayOperationIdentityMatches(matchingOrder, "order-25"), true);
+  assert.equal(vpayOperationIdentityMatches(matchingOrder, "another-order"), false);
+  assert.equal(vpayOperationIdentityMatches({ data: { order: { status: "PAID" } } }, "order-25"), false);
+  assert.equal(vpayResponseStatus(matchingOrder), "PAID");
+  assert.equal(vpayResponseStatus({ status: "PENDING", data: { order: { status: "PAID" } } }), undefined);
+  assert.equal(vpayResponseStatus({ data: { order: { status: "COMPLETED" } } }), undefined);
 });
 
 test("Vpay creates a hosted order and polls its documented status endpoint", async () => {

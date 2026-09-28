@@ -97,26 +97,26 @@ function vpayOrderId(data: Record<string, unknown>, allowGenericId = false) {
     return undefined;
   };
   const records = vpayRecords(data);
+  const orderIds: string[] = [];
   for (const record of records) {
     for (const key of ["orderId", "order_id", "orderID"]) {
       const identifier = toIdentifier(record[key]);
-      if (identifier) return identifier;
+      if (identifier) orderIds.push(identifier);
     }
-  }
-  if (!allowGenericId) {
-    const orderRecords = records.filter((record) => record.order && typeof record.order === "object");
-    for (const record of orderRecords) {
+    if (record.order && typeof record.order === "object" && !Array.isArray(record.order)) {
       const order = record.order as Record<string, unknown>;
       const identifier = toIdentifier(order.id);
-      if (identifier) return identifier;
+      if (identifier) orderIds.push(identifier);
     }
-    return undefined;
   }
-  for (const record of records) {
-    const identifier = toIdentifier(record.id);
-    if (identifier) return identifier;
-  }
-  return undefined;
+  const uniqueOrderIds = [...new Set(orderIds)];
+  if (uniqueOrderIds.length) return uniqueOrderIds.length === 1 ? uniqueOrderIds[0] : undefined;
+  if (!allowGenericId) return undefined;
+  const genericIds = records
+    .map((record) => toIdentifier(record.id))
+    .filter((identifier): identifier is string => Boolean(identifier));
+  const uniqueGenericIds = [...new Set(genericIds)];
+  return uniqueGenericIds.length === 1 ? uniqueGenericIds[0] : undefined;
 }
 
 function normalizeVpayStatus(status: string | undefined) {
@@ -128,35 +128,52 @@ function normalizeVpayStatus(status: string | undefined) {
   return undefined;
 }
 
-function vpayAmount(operation: Record<string, unknown>) {
-  const raw = operation.amountMzn
-    ?? operation.amount_mzn
-    ?? operation.amount
-    ?? operation.totalAmount
-    ?? operation.total_amount
-    ?? operation.total_mzn
-    ?? operation.value;
-  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
-  if (typeof raw === "string" && raw.trim() && Number.isFinite(Number(raw))) return Number(raw);
-  return undefined;
+export function vpayResponseStatus(data: Record<string, unknown>) {
+  const statuses: string[] = [];
+  for (const record of vpayRecords(data)) {
+    for (const key of ["payment_status", "paymentStatus", "order_status"]) {
+      if (record[key] === undefined) continue;
+      if (typeof record[key] !== "string") return undefined;
+      const status = normalizeVpayStatus(record[key] as string);
+      if (!status) return undefined;
+      statuses.push(status);
+    }
+    if (typeof record.status === "string") {
+      const status = normalizeVpayStatus(record.status);
+      if (status) statuses.push(status);
+    }
+  }
+  const uniqueStatuses = [...new Set(statuses)];
+  return uniqueStatuses.length === 1 ? uniqueStatuses[0] : undefined;
 }
 
-function vpayAmountMatches(value: number | undefined, localAmountMzn: number) {
-  if (value === undefined) return undefined;
-  return value === localAmountMzn || value === localAmountMzn * 100;
+export function vpayOperationIdentityMatches(data: Record<string, unknown>, expectedOrderId: unknown) {
+  if (typeof expectedOrderId !== "string" || !expectedOrderId) return false;
+  const actualOrderId = vpayOrderId(data, false);
+  return Boolean(actualOrderId && actualOrderId === expectedOrderId);
 }
 
 export function vpayOperationAmountMatches(operation: Record<string, unknown>, localAmountMzn: number) {
-  const explicitMzn = operation.amountMzn ?? operation.amount_mzn;
-  if (explicitMzn !== undefined) {
-    const amount = typeof explicitMzn === "number" && Number.isFinite(explicitMzn)
-      ? explicitMzn
-      : typeof explicitMzn === "string" && explicitMzn.trim() && Number.isFinite(Number(explicitMzn))
-        ? Number(explicitMzn)
-        : undefined;
-    return amount === undefined ? false : amount === localAmountMzn;
+  let foundAmount = false;
+  const parseAmount = (value: unknown) => {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string" && value.trim() && Number.isFinite(Number(value))) return Number(value);
+    return undefined;
+  };
+  for (const record of vpayRecords(operation)) {
+    for (const key of ["amountMzn", "amount_mzn", "total_mzn"]) {
+      if (record[key] === undefined) continue;
+      foundAmount = true;
+      if (parseAmount(record[key]) !== localAmountMzn) return false;
+    }
+    for (const key of ["amount", "totalAmount", "total_amount", "value"]) {
+      if (record[key] === undefined) continue;
+      foundAmount = true;
+      const amount = parseAmount(record[key]);
+      if (amount !== localAmountMzn && amount !== localAmountMzn * 100) return false;
+    }
   }
-  return vpayAmountMatches(vpayAmount(operation), localAmountMzn);
+  return foundAmount ? true : undefined;
 }
 
 function providerOperationId(operation: Record<string, unknown>) {
@@ -708,7 +725,7 @@ export async function reconcilePagarPayment(localTransactionId: string) {
     : activeProvider() === "paysuite"
       ? normalizePaysuiteStatus(rawProviderStatus)
       : isVpay
-        ? normalizeVpayStatus(rawProviderStatus)
+        ? vpayResponseStatus(data)
         : normalizePaymentStatus(rawProviderStatus);
   if (!normalizedProviderStatus || (
     (activeProvider() === "pagar" || isVpay) && !knownPaymentStates.has(normalizedProviderStatus)
@@ -720,16 +737,19 @@ export async function reconcilePagarPayment(localTransactionId: string) {
     ? vpayOrderId(data, false)
     : providerOperationId(operation);
   const reference = isVpay ? undefined : providerReference(operation);
+  if (isVpay && normalizedProviderStatus === "PAID" &&
+      !vpayOperationIdentityMatches(data, local.pagar_operation_id)) {
+    throw new Error("A Vpay não confirmou o identificador da encomenda.");
+  }
   if (local.pagar_operation_id && operationId && local.pagar_operation_id !== operationId) {
-    throw new Error("A operação devolvida pelo Pagar não corresponde ao pagamento local.");
+    throw new Error(`A operação devolvida pelo ${providerName()} não corresponde ao pagamento local.`);
   }
   if (local.pagar_reference && reference && local.pagar_reference !== reference) {
-    throw new Error("A referência devolvida pelo Pagar não corresponde ao pagamento local.");
+    throw new Error(`A referência devolvida pelo ${providerName()} não corresponde ao pagamento local.`);
   }
-  const amount = isVpay ? vpayAmount(operation) : providerAmount(operation);
   const amountMatches = isVpay
-    ? vpayOperationAmountMatches(operation, local.amount_mzn)
-    : providerAmountMatches(amount, local.amount_mzn);
+    ? vpayOperationAmountMatches(data, local.amount_mzn)
+    : providerAmountMatches(providerAmount(operation), local.amount_mzn);
   if ((isVpay && normalizedProviderStatus === "PAID" && amountMatches !== true) || amountMatches === false) {
     throw new Error(`O valor devolvido pelo ${providerName()} não corresponde ao pagamento local.`);
   }
