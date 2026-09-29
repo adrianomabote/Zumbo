@@ -78,3 +78,17 @@ mtime_ms = 1787904320395
 storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:eb234228-0113-4818-9eeb-8f9a84e672de/59d60e67-c72a-41a7-b2eb-7dbcacea49b6/15a0d5c2-e85e-4a2e-9a6a-65572d7fe606"
 storage_version_token = "1787904338558668"
 content_type = "image/png"
+
+[[outputs]]
+id = "LuvXA-doS3fikKAjRD-ow"
+uri = "file://research/notes.md"
+type = "text"
+title = "Pesquisa NicePay — notas"
+description = "Perguntas e fontes para avaliar a integração antes de alterar o Net Serviços."
+logical_id = "db440d17-6533-4179-baaf-63827a94b408"
+content_hash = "sha256:08c70225461a867e8d055ccbb64fa5b2bda2e17ba2ddd28585da893259fa256f"
+size = 1608
+mtime_ms = 1790661767480
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:eb234228-0113-4818-9eeb-8f9a84e672de/db440d17-6533-4179-baaf-63827a94b408/0cf5ae8b-48cc-4069-ad70-4bb89e8d5aa5"
+storage_version_token = "1790661767990105"
+content_type = "text/markdown"
