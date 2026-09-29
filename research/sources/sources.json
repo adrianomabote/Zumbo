@@ -1,0 +1,65 @@
+[
+  {
+    "key": "nicepay-home",
+    "title": "NicePay — Checkout de pagamentos M-Pesa e e-Mola em Moçambique",
+    "url": "https://paynice.online/",
+    "publishedDate": null,
+    "tier": "Tier 3",
+    "savedEvidence": "research/sources/nicepay-home.md",
+    "status": "fetched"
+  },
+  {
+    "key": "nicepay-terms",
+    "title": "Termos e Condições — NicePay",
+    "url": "https://paynice.online/terms",
+    "publishedDate": null,
+    "tier": "Tier 3",
+    "savedEvidence": "research/sources/nicepay-terms.md",
+    "status": "fetched"
+  },
+  {
+    "key": "nicepay-privacy",
+    "title": "Política de Privacidade — NicePay",
+    "url": "https://paynice.online/privacy",
+    "publishedDate": null,
+    "tier": "Tier 3",
+    "savedEvidence": "research/sources/nicepay-privacy.md",
+    "status": "fetched"
+  },
+  {
+    "key": "nicepay-refund",
+    "title": "Política de Reembolso — NicePay",
+    "url": "https://paynice.online/refund",
+    "publishedDate": null,
+    "tier": "Tier 3",
+    "savedEvidence": "research/sources/nicepay-refund.md",
+    "status": "fetched"
+  },
+  {
+    "key": "nicepay-signup",
+    "title": "Entrar ou criar conta — NicePay",
+    "url": "https://paynice.online/auth?mode=signup",
+    "publishedDate": null,
+    "tier": "Tier 3",
+    "savedEvidence": "research/sources/nicepay-signup.md",
+    "status": "fetched"
+  },
+  {
+    "key": "nicepay-signin",
+    "title": "Entrar ou criar conta — NicePay",
+    "url": "https://paynice.online/auth?mode=signin",
+    "publishedDate": null,
+    "tier": "Tier 3",
+    "savedEvidence": "research/sources/nicepay-signin.md",
+    "status": "fetched"
+  },
+  {
+    "key": "nicepay-manifest",
+    "title": "nicepay-manifest",
+    "url": "https://paynice.online/manifest.webmanifest",
+    "publishedDate": null,
+    "tier": "Tier 3",
+    "savedEvidence": "research/sources/nicepay-manifest.md",
+    "status": "fetched"
+  }
+]
