@@ -487,7 +487,7 @@ export function parseMozPaymentC2BResponse(data: unknown): {
     : undefined;
 
   if (response.cod === 409 || response.cod === 401) {
-    return { status: "FAILED", operationId };
+    return { status: "FAILED", ...(operationId ? { operationId } : {}) };
   }
   if (
     response.cod === 200 &&
@@ -497,7 +497,10 @@ export function parseMozPaymentC2BResponse(data: unknown): {
   ) {
     return { status: "PAID", operationId };
   }
-  return { status: "RECONCILIATION_REQUIRED", operationId };
+  return {
+    status: "RECONCILIATION_REQUIRED",
+    ...(operationId ? { operationId } : {}),
+  };
 }
 
 export async function createMozPaymentC2B(input: Pick<
