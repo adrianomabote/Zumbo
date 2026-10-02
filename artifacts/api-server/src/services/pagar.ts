@@ -752,6 +752,11 @@ export async function createPagarPayment(input: PagarPaymentInput) {
 }
 
 export async function getPagarPayment(identifier: { id?: string; reference?: string }) {
+  if (activeProvider() === "mozpayment") {
+    const error = new Error("A documentação pública do MozPayment não disponibiliza consulta de estado.");
+    Object.assign(error, { status: 501 });
+    throw error;
+  }
   if (activeProvider() === "vpay") {
     if (!identifier.id) {
       const error = new Error("Identificador Vpay em falta para consultar a encomenda.");
@@ -796,6 +801,14 @@ export async function reconcilePagarPayment(localTransactionId: string) {
   if (!local) {
     const error = new Error("Operação de pagamento não encontrada.");
     Object.assign(error, { status: 404 });
+    throw error;
+  }
+  if (activeProvider() === "mozpayment") {
+    if (terminalStates.has(normalizePaymentStatus(local.status) || "")) return local;
+    const error = new Error(
+      "O MozPayment não documenta consulta de estado; esta operação requer confirmação manual.",
+    );
+    Object.assign(error, { status: 501 });
     throw error;
   }
 
