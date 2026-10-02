@@ -15,7 +15,7 @@ const knownPaymentStates = new Set([
 const forwardableEventTypes = new Set(["payment.succeeded", "payment.failed"]);
 const forwardingStatuses = new Set(["pending", "forwarding", "failed", "delivered"]);
 
-type PaymentProvider = "pagar" | "debitopay" | "paysuite" | "vpay";
+type PaymentProvider = "pagar" | "debitopay" | "paysuite" | "vpay" | "mozpayment";
 
 let vpayTokenCache: { key: string; token: string; expiresAt: number } | null = null;
 let vpayTokenRequest: { key: string; promise: Promise<string> } | null = null;
@@ -23,6 +23,7 @@ let vpayTokenRequest: { key: string; promise: Promise<string> } | null = null;
 function activeProvider(): PaymentProvider {
   const configuredProvider = process.env.PAYMENT_PROVIDER?.trim().toLowerCase() || "pagar";
   if (configuredProvider === "vpay") return "vpay";
+  if (configuredProvider === "mozpayment") return "mozpayment";
   if (configuredProvider === "pagar" || configuredProvider === "debitopay" || configuredProvider === "paysuite") {
     return configuredProvider;
   }
@@ -31,6 +32,7 @@ function activeProvider(): PaymentProvider {
 
 function providerName() {
   if (activeProvider() === "vpay") return "Vpay";
+  if (activeProvider() === "mozpayment") return "MozPayment";
   if (activeProvider() === "paysuite") return "Paysuite";
   return activeProvider() === "debitopay" ? "Debito Pay" : "Pagar";
 }
@@ -240,6 +242,18 @@ export interface PagarPaymentInput {
 }
 
 function config() {
+  if (activeProvider() === "mozpayment") {
+    const walletId = process.env.MOZPAYMENT_WALLET_ID?.trim();
+    if (!walletId) {
+      throw new Error("MozPayment não está configurado no servidor.");
+    }
+    return {
+      provider: "mozpayment" as const,
+      baseUrl: "https://mozpayment.co.mz/api/1.1/wf",
+      walletId,
+    };
+  }
+
   if (activeProvider() === "vpay") {
     const clientId = process.env.VPAY_CLIENT_ID;
     const clientSecret = process.env.VPAY_CLIENT_SECRET;
@@ -410,6 +424,8 @@ async function request(method: "GET" | "POST", endpoint: string, body?: Record<s
       "Content-Type": "application/json",
       "Idempotency-Key": idempotencyKey || "",
     });
+  } else if (configuration.provider === "mozpayment") {
+    if (rawBody !== undefined) headers["Content-Type"] = "application/json";
   } else {
     headers.Authorization = `Bearer ${configuration.apiKey}`;
     if (rawBody === undefined) {
