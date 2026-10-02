@@ -61,5 +61,32 @@
     "tier": "Tier 3",
     "savedEvidence": "research/sources/nicepay-manifest.md",
     "status": "fetched"
+  },
+  {
+    "key": "bom-licensing",
+    "title": "Licenciamento de Instituições - Banco de Moçambique",
+    "url": "https://www.bancomoc.mz/pt/areas-de-actuacao/licenciamento/licenciamento-de-instituicoes/",
+    "publishedDate": null,
+    "tier": "Tier 1",
+    "savedEvidence": "research/sources/bom-licensing.md",
+    "status": "fetched"
+  },
+  {
+    "key": "bom-payments-framework",
+    "title": "Enquadramento - Banco de Moçambique",
+    "url": "https://www.bancomoc.mz/pt/areas-de-actuacao/sistemas-de-pagamentos/enquadramento/",
+    "publishedDate": null,
+    "tier": "Tier 1",
+    "savedEvidence": "research/sources/bom-payments-framework.md",
+    "status": "fetched"
+  },
+  {
+    "key": "bom-payment-instruments",
+    "title": "Instrumentos de Pagamento - Banco de Moçambique",
+    "url": "https://www.bancomoc.mz/pt/areas-de-actuacao/sistemas-de-pagamentos/instrumentos-de-pagamento/",
+    "publishedDate": null,
+    "tier": "Tier 1",
+    "savedEvidence": "research/sources/bom-payment-instruments.md",
+    "status": "fetched"
   }
 ]
