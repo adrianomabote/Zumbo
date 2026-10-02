@@ -1,8 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  createMozPaymentC2B,
   createVpayHostedOrder,
   getPagarPayment,
+  parseMozPaymentC2BResponse,
   vpayOperationIdentityMatches,
   vpayOperationAmountMatches,
   vpayResponseStatus,
@@ -134,5 +136,83 @@ test("unknown payment providers fail closed instead of falling back to Pagar", a
     globalThis.fetch = previousFetch;
     if (previousProvider === undefined) delete process.env.PAYMENT_PROVIDER;
     else process.env.PAYMENT_PROVIDER = previousProvider;
+  }
+});
+
+test("MozPayment C2B uses the documented endpoints and requires an explicit JSON success", async () => {
+  const previousProvider = process.env.PAYMENT_PROVIDER;
+  const previousWalletId = process.env.MOZPAYMENT_WALLET_ID;
+  const previousFetch = globalThis.fetch;
+  const calls: Array<{ url: string; headers: Headers; body: Record<string, unknown> }> = [];
+  let responseCode = 200;
+
+  globalThis.fetch = (async (input, init = {}) => {
+    const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
+    const headers = new Headers(init.headers);
+    const body = JSON.parse(String(init.body || "{}")) as Record<string, unknown>;
+    calls.push({ url: url.href, headers, body });
+    const response = responseCode === 200
+      ? { cod: 200, status: "success", transacao: "moz-txn-test-1" }
+      : { cod: 409, status: "error", mensagem: "Pagamento rejeitado." };
+    return new Response(JSON.stringify(response), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    process.env.PAYMENT_PROVIDER = "mozpayment";
+    process.env.MOZPAYMENT_WALLET_ID = "wallet-test-id";
+
+    const mpesa = await createMozPaymentC2B({
+      amountMzn: 25,
+      method: "MPESA",
+      payerPhone: "+258 841 234 567",
+    });
+    assert.deepEqual(mpesa, { status: "PAID", operationId: "moz-txn-test-1" });
+
+    responseCode = 409;
+    const emola = await createMozPaymentC2B({
+      amountMzn: 40,
+      method: "EMOLA",
+      payerPhone: "868765432",
+    });
+    assert.deepEqual(emola, { status: "FAILED" });
+
+    assert.deepEqual(calls.map(({ url }) => url), [
+      "https://mozpayment.co.mz/api/1.1/wf/pagamentorotativompesa",
+      "https://mozpayment.co.mz/api/1.1/wf/pagamentorotativoemola",
+    ]);
+    assert.deepEqual(calls[0]?.body, {
+      carteira: "wallet-test-id",
+      numero: "841234567",
+      cliente: "Cliente Megabyte",
+      valor: "25",
+    });
+    assert.deepEqual(calls[1]?.body, {
+      carteira: "wallet-test-id",
+      numero: "868765432",
+      cliente: "Cliente Megabyte",
+      valor: "40",
+    });
+    assert.equal(calls[0]?.headers.get("content-type"), "application/json");
+    assert.equal(calls[0]?.headers.get("authorization"), null);
+    assert.equal(calls[0]?.headers.get("idempotency-key"), null);
+
+    assert.deepEqual(parseMozPaymentC2BResponse({
+      cod: 200,
+      status: "success",
+    }), { status: "RECONCILIATION_REQUIRED" });
+    assert.deepEqual(parseMozPaymentC2BResponse({
+      cod: "200",
+      status: "success",
+      transacao: "moz-txn-test-2",
+    }), { status: "RECONCILIATION_REQUIRED", operationId: "moz-txn-test-2" });
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousProvider === undefined) delete process.env.PAYMENT_PROVIDER;
+    else process.env.PAYMENT_PROVIDER = previousProvider;
+    if (previousWalletId === undefined) delete process.env.MOZPAYMENT_WALLET_ID;
+    else process.env.MOZPAYMENT_WALLET_ID = previousWalletId;
   }
 });
