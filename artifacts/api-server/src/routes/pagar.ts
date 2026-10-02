@@ -73,7 +73,7 @@ router.post("/paysuite/webhook", async (req, res) => {
   }
 });
 
-router.post(["/pagar/internal/payments", "/debitopay/internal/payments", "/paysuite/internal/payments", "/vpay/internal/payments"], async (req, res) => {
+router.post(["/pagar/internal/payments", "/debitopay/internal/payments", "/paysuite/internal/payments", "/vpay/internal/payments", "/mozpayment/internal/payments"], async (req, res) => {
   if (!process.env.SESSION_SECRET || req.header("x-internal-payment-key") !== process.env.SESSION_SECRET) {
     return res.status(401).json({ error: "Origem não autorizada." });
   }
@@ -90,7 +90,7 @@ router.post(["/pagar/internal/payments", "/debitopay/internal/payments", "/paysu
   }
 });
 
-router.post(["/pagar/internal/payments/:localTransactionId/reconcile", "/debitopay/internal/payments/:localTransactionId/reconcile", "/paysuite/internal/payments/:localTransactionId/reconcile", "/vpay/internal/payments/:localTransactionId/reconcile"], async (req, res) => {
+router.post(["/pagar/internal/payments/:localTransactionId/reconcile", "/debitopay/internal/payments/:localTransactionId/reconcile", "/paysuite/internal/payments/:localTransactionId/reconcile", "/vpay/internal/payments/:localTransactionId/reconcile", "/mozpayment/internal/payments/:localTransactionId/reconcile"], async (req, res) => {
   if (!process.env.SESSION_SECRET || req.header("x-internal-payment-key") !== process.env.SESSION_SECRET) {
     return res.status(401).json({ error: "Origem não autorizada." });
   }
@@ -102,7 +102,8 @@ router.post(["/pagar/internal/payments/:localTransactionId/reconcile", "/debitop
       reference: payment.pagar_reference,
     });
   } catch (error) {
-    const status = (error as { status?: unknown })?.status === 404 ? 404 : 502;
+    const errorStatus = (error as { status?: unknown })?.status;
+    const status = errorStatus === 404 ? 404 : errorStatus === 501 ? 501 : 502;
     return res.status(status).json({ error: error instanceof Error ? error.message : "Não foi possível reconciliar o pagamento." });
   }
 });
@@ -115,7 +116,7 @@ router.get(["/pagar/payments", "/debitopay/payments", "/paysuite/payments"], asy
   try { return res.json(await listPagarPayments({ status: String(req.query.status || ""), cursor: String(req.query.cursor || ""), limit: String(req.query.limit || "") })); } catch { return res.status(502).json({ error: "Não foi possível consultar os pagamentos." }); }
 });
 
-router.get(["/pagar/admin/webhook-deliveries", "/debitopay/admin/webhook-deliveries", "/paysuite/admin/webhook-deliveries"], async (req, res) => {
+router.get(["/pagar/admin/webhook-deliveries", "/debitopay/admin/webhook-deliveries", "/paysuite/admin/webhook-deliveries", "/mozpayment/admin/webhook-deliveries"], async (req, res) => {
   if (!process.env.SESSION_SECRET || req.header("x-internal-payment-key") !== process.env.SESSION_SECRET) {
     return res.status(401).json({ error: "Acção administrativa não autorizada." });
   }
@@ -126,7 +127,7 @@ router.get(["/pagar/admin/webhook-deliveries", "/debitopay/admin/webhook-deliver
   }
 });
 
-router.post(["/pagar/admin/webhook-deliveries/:eventId/retry", "/debitopay/admin/webhook-deliveries/:eventId/retry", "/paysuite/admin/webhook-deliveries/:eventId/retry"], async (req, res) => {
+router.post(["/pagar/admin/webhook-deliveries/:eventId/retry", "/debitopay/admin/webhook-deliveries/:eventId/retry", "/paysuite/admin/webhook-deliveries/:eventId/retry", "/mozpayment/admin/webhook-deliveries/:eventId/retry"], async (req, res) => {
   if (!process.env.SESSION_SECRET || req.header("x-internal-payment-key") !== process.env.SESSION_SECRET) {
     return res.status(401).json({ error: "Acção administrativa não autorizada." });
   }

@@ -32,7 +32,9 @@ const PAYMENT_API_ROUTE    = configuredPaymentProvider === 'paysuite'
     ? 'debitopay'
     : configuredPaymentProvider === 'vpay'
       ? 'vpay'
-      : 'pagar'
+      : configuredPaymentProvider === 'mozpayment'
+        ? 'mozpayment'
+        : 'pagar'
 const DATA_DIR             = process.env.NET_SERVICOS_DATA_DIR || '.'
 const ORDERS_FILE          = join(DATA_DIR, 'orders.json')
 const USERS_FILE           = join(DATA_DIR, 'users.json')
@@ -1199,6 +1201,20 @@ async function initiateCharge(tx, customerName) {
         } catch {}
       }
       const providerStatus = String(data.status || 'PENDING').toUpperCase()
+      if (PAYMENT_API_ROUTE === 'mozpayment' && providerStatus === 'RECONCILIATION_REQUIRED') {
+        const message = 'Não foi possível confirmar o resultado automaticamente. Não tente pagar novamente enquanto a confirmação estiver em análise; contacte o suporte.'
+        tx.status = 'pending'
+        tx.error = message
+        await updateOrderStatus(tx.id, 'pending', {
+          pagarRef: tx.ref,
+          pagarTitle: tx.pagarTitle,
+          pagarDescription: tx.pagarDescription,
+          pagarReconciliationStatus: 'manual_required',
+          pagarReconciliationError: message,
+        })
+        notifyTx(tx.id, { status:'pending', method:tx.method, error:message, reconciliationRequired:true })
+        return
+      }
       if (providerStatus === 'PAID') {
         await applyPagarProviderStatus(tx, providerStatus, { reference: tx.ref })
       } else if (['FAILED','CANCELLED','REFUNDED'].includes(providerStatus)) {
@@ -1502,16 +1518,19 @@ self.addEventListener('fetch',e=>{
   if (method === 'GET' && path === '/api/webhook-status') {
     const isVpay = configuredPaymentProvider === 'vpay'
     const isPaysuite = configuredPaymentProvider === 'paysuite'
+    const isMozPayment = configuredPaymentProvider === 'mozpayment'
     return json(res, {
-      registered: isVpay ? false : Boolean(isPaysuite ? process.env.PAYSUITE_WEBHOOK_SECRET : process.env.PAGAR_WEBHOOK_SECRET),
-      url: isVpay
+      registered: isVpay || isMozPayment ? false : Boolean(isPaysuite ? process.env.PAYSUITE_WEBHOOK_SECRET : process.env.PAGAR_WEBHOOK_SECRET),
+      url: isVpay || isMozPayment
         ? null
         : isPaysuite
         ? (process.env.PAYSUITE_WEBHOOK_URL || 'https://megabyte.live/api/paysuite/webhook')
         : (process.env.PAGAR_WEBHOOK_URL || null),
       active: isVpay
         ? Boolean(process.env.VPAY_CLIENT_ID && process.env.VPAY_CLIENT_SECRET)
-        : Boolean(isPaysuite ? process.env.PAYSUITE_API_KEY : process.env.PAGAR_API_KEY),
+        : isMozPayment
+          ? Boolean(process.env.MOZPAYMENT_WALLET_ID)
+          : Boolean(isPaysuite ? process.env.PAYSUITE_API_KEY : process.env.PAGAR_API_KEY),
     })
   }
 
@@ -4964,18 +4983,20 @@ const paymentRequiredConfig = configuredPaymentProvider === 'paysuite'
   ? ['PAYSUITE_API_KEY', 'PAYSUITE_WEBHOOK_SECRET']
   : configuredPaymentProvider === 'vpay'
     ? ['VPAY_CLIENT_ID', 'VPAY_CLIENT_SECRET']
-    : [
-    'PAGAR_API_KEY',
-    'PAGAR_SIGNING_SECRET',
-    'PAGAR_WEBHOOK_SECRET',
-  ]
+    : configuredPaymentProvider === 'mozpayment'
+      ? ['MOZPAYMENT_WALLET_ID']
+      : [
+        'PAGAR_API_KEY',
+        'PAGAR_SIGNING_SECRET',
+        'PAGAR_WEBHOOK_SECRET',
+      ]
 const requiredConfig = [
   ...paymentRequiredConfig,
   'ADMIN_PASS',
   'SESSION_SECRET',
 ]
 const missingConfig = requiredConfig.filter(key => !process.env[key])
-const paymentProviderIsSupported = ['pagar', 'debitopay', 'paysuite', 'vpay'].includes(configuredPaymentProvider)
+const paymentProviderIsSupported = ['pagar', 'debitopay', 'paysuite', 'vpay', 'mozpayment'].includes(configuredPaymentProvider)
 const isLiveConfiguration = isTestMode || isFreeMode || (paymentProviderIsSupported && missingConfig.length === 0)
 
 await dbInit()
