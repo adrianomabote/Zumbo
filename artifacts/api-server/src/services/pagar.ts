@@ -469,6 +469,59 @@ function validateInput(input: PagarPaymentInput) {
   if (!valid) throw new Error("O telefone não corresponde ao método de pagamento.");
 }
 
+export type MozPaymentC2BStatus = "PAID" | "FAILED" | "RECONCILIATION_REQUIRED";
+
+export function parseMozPaymentC2BResponse(data: unknown): {
+  status: MozPaymentC2BStatus;
+  operationId?: string;
+} {
+  const response = data && typeof data === "object" && !Array.isArray(data)
+    ? data as Record<string, unknown>
+    : {};
+  const rawOperationId = response.transacao;
+  const operationId = typeof rawOperationId === "string" &&
+      rawOperationId.trim().length > 0 &&
+      rawOperationId.trim().length <= 200 &&
+      !/[\u0000-\u001f\u007f]/.test(rawOperationId)
+    ? rawOperationId.trim()
+    : undefined;
+
+  if (response.cod === 409 || response.cod === 401) {
+    return { status: "FAILED", operationId };
+  }
+  if (
+    response.cod === 200 &&
+    typeof response.status === "string" &&
+    response.status.trim().toLowerCase() === "success" &&
+    operationId
+  ) {
+    return { status: "PAID", operationId };
+  }
+  return { status: "RECONCILIATION_REQUIRED", operationId };
+}
+
+export async function createMozPaymentC2B(input: Pick<
+  PagarPaymentInput,
+  "amountMzn" | "method" | "payerPhone"
+>) {
+  const configuration = config();
+  if (configuration.provider !== "mozpayment") {
+    throw new Error("MozPayment não é o provedor activo.");
+  }
+  const digits = input.payerPhone.replace(/\D/g, "");
+  const localPhone = digits.startsWith("258") ? digits.slice(3) : digits;
+  const endpoint = input.method === "MPESA"
+    ? "/pagamentorotativompesa"
+    : "/pagamentorotativoemola";
+  const data = await request("POST", endpoint, {
+    carteira: configuration.walletId,
+    numero: localPhone,
+    cliente: "Cliente Megabyte",
+    valor: String(input.amountMzn),
+  });
+  return parseMozPaymentC2BResponse(data);
+}
+
 export async function createVpayHostedOrder(input: Pick<
   PagarPaymentInput,
   "sourceId" | "title" | "description" | "amountMzn" | "payerPhone"
@@ -508,7 +561,8 @@ function isConfigurationError(error: unknown) {
     error.message === "Pagar API não está configurada no servidor." ||
     error.message === "Debito Pay API não está configurada no servidor." ||
     error.message === "Paysuite API não está configurada no servidor." ||
-    error.message === "Vpay API não está configurada no servidor."
+    error.message === "Vpay API não está configurada no servidor." ||
+    error.message === "MozPayment não está configurado no servidor."
   );
 }
 
@@ -594,6 +648,7 @@ export async function createPagarPayment(input: PagarPaymentInput) {
   const isDebitoPay = activeProvider() === "debitopay";
   const isPaysuite = activeProvider() === "paysuite";
   const isVpay = activeProvider() === "vpay";
+  const isMozPayment = activeProvider() === "mozpayment";
   try {
   let paysuiteContactId: string | undefined;
   if (isPaysuite) {
@@ -642,6 +697,22 @@ export async function createPagarPayment(input: PagarPaymentInput) {
       const hostedOrder = await createVpayHostedOrder(input);
       vpayId = hostedOrder.orderId;
       checkoutUrl = hostedOrder.checkoutUrl;
+    } else if (isMozPayment) {
+      const result = await createMozPaymentC2B(input);
+      const updated = await database.query(
+        `UPDATE pagar_operations
+            SET pagar_operation_id = $1,
+                status = $2,
+                confirmed_at = CASE WHEN $2 = 'PAID' THEN COALESCE(confirmed_at, now()) ELSE confirmed_at END
+          WHERE internal_id = $3
+          RETURNING *`,
+        [result.operationId || null, result.status, input.localTransactionId],
+      );
+      return updated.rows[0] || {
+        ...inserted.rows[0],
+        pagar_operation_id: result.operationId || null,
+        status: result.status,
+      };
     } else {
       data = await request("POST", isDebitoPay ? "/payment-orchestrator" : "/payments", body, input.idempotencyKey);
     }
