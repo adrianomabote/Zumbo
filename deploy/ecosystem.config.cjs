@@ -45,6 +45,7 @@ module.exports = {
         PAGAR_WEBHOOK_SECRET: process.env.PAGAR_WEBHOOK_SECRET ?? "",
         PAGAR_WEBHOOK_URL:
           process.env.PAGAR_WEBHOOK_URL ?? "https://megabyte.live/api/pagar/webhook",
+        MOZPAYMENT_WEBHOOK_SECRET: process.env.MOZPAYMENT_WEBHOOK_SECRET ?? "",
         SESSION_SECRET: process.env.SESSION_SECRET ?? "",
         NET_SERVICOS_AGENT_PAIRING_CODE:
           process.env.NET_SERVICOS_AGENT_PAIRING_CODE ?? "00220022a1",

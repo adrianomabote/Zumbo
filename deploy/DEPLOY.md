@@ -126,9 +126,14 @@ PAGAR_WEBHOOK_URL=https://megabyte.live/api/pagar/webhook
 PAGAR_API_KEY=sk_live_xxx
 PAGAR_SIGNING_SECRET=sig_live_xxx
 PAGAR_WEBHOOK_SECRET=whsec_live_xxx
+MOZPAYMENT_WEBHOOK_SECRET=SEGREDO_CONFIGURADO_PARA_O_WEBHOOK_MOZPAYMENT
 ```
 
 Guardar: `Ctrl+X` → `Y` → `Enter`
+
+> Configure `MOZPAYMENT_WEBHOOK_SECRET` com o segredo partilhado que a
+> MozPayment associa ao webhook. Não use a chave C2B/B2C da carteira. O
+> endpoint recusa chamadas sem um segredo correspondente.
 
 > Na preview da Replit, o servidor usa automaticamente `mock` quando
 > `NODE_ENV` não é `production`; os pagamentos são simulados e não movimentam
@@ -268,8 +273,9 @@ systemctl reload nginx
 ```
 
 > O `ecosystem.config.cjs` fixa `NET_SERVICOS_PAYMENT_MODE=live` para a VPS.
-> As chaves `PAGAR_*`, `DATABASE_URL`, `SESSION_SECRET` e `ADMIN_PASS` continuam
-> exclusivamente no `.env` do VPS. Depois do reload, confirme com
+> As chaves `PAGAR_*`, `MOZPAYMENT_WEBHOOK_SECRET`, `DATABASE_URL`,
+> `SESSION_SECRET` e `ADMIN_PASS` continuam exclusivamente no `.env` do VPS.
+> Depois do reload, confirme com
 > `curl -s https://megabyte.live/api/legacy/api/config` que
 > `paymentMode` aparece como `live`.
 
