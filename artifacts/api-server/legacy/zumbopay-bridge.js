@@ -585,6 +585,7 @@ async function gwForwardCallback(tx) {
     event: tx.status === 'succeeded' ? 'payment.succeeded' : 'payment.failed',
     txId: tx.id, reference: tx.extRef || null,
     amount: tx.amount, megabytes: tx.megabytes || megaDetailsForAmount(tx.amount).megabytes,
+    deliveryStatus: tx.deliveryStatus || null,
     phone: tx.phone, method: tx.method,
     error: tx.error || null, ts: new Date().toISOString(),
   })
@@ -1020,18 +1021,25 @@ function html(res, body, extraHeaders = {}) {
 function gatewayDocsPage() {
   const baseUrl = escapeHtml(SITE_URL)
   const isVpay = PAYMENT_API_ROUTE === 'vpay'
+  const isMozPayment = PAYMENT_API_ROUTE === 'mozpayment'
   const providerDescription = isVpay
     ? 'Documentação da API Gateway Megabyte para iniciar pagamentos através do checkout hospedado Vpay.'
-    : 'Documentação da API Gateway Megabyte para receber pagamentos M-Pesa e e-Mola em projectos externos.'
+    : isMozPayment
+      ? 'Documentação da API Gateway Megabyte para criar recargas C2B MozPayment e acompanhar a activação automática de pacotes.'
+      : 'Documentação da API Gateway Megabyte para receber pagamentos M-Pesa e e-Mola em projectos externos.'
   const paymentFlowDescription = isVpay
     ? 'Cria uma encomenda na Vpay. Abra o checkoutUrl devolvido para o cliente concluir o pagamento.'
-    : 'Cria uma cobrança e inicia o pedido no M-Pesa ou e-Mola. O método é detectado pelo prefixo do número.'
+    : isMozPayment
+      ? 'Cria uma recarga C2B MozPayment no valor exacto indicado. O método é detectado pelo prefixo do telefone; após confirmação, o pacote é enviado para esse número.'
+      : 'Cria uma cobrança e inicia o pedido no M-Pesa ou e-Mola. O método é detectado pelo prefixo do número.'
   const checkoutResponseField = isVpay
     ? '  "checkoutUrl": "https://checkout.vpay.co.mz/exemplo-order-id",\n'
     : ''
   const checkoutCallout = isVpay
     ? '<div class="callout"><strong>Checkout Vpay:</strong> redireccione o cliente para <code class="inline">checkoutUrl</code>. Esse link também é devolvido pela consulta do estado. Os métodos apresentados dentro do checkout são controlados pela Vpay; esta API não os filtra.</div>'
-    : ''
+    : isMozPayment
+      ? '<div class="callout"><strong>MozPayment C2B:</strong> o valor enviado é usado como valor da recarga e como montante da compra de megas. A confirmação imediata explícita ou o callback autenticado actualiza o estado; a Megabyte coloca a entrega USSD em fila automaticamente. O webhook interno da MozPayment é <code class="inline">/api/mozpayment/webhook</code> e não substitui o <code class="inline">callback_url</code> do seu projecto.</div>'
+      : ''
   return `<!doctype html><html lang="pt-MZ"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Gateway de pagamentos — Megabyte</title>
@@ -1045,14 +1053,14 @@ a{color:#0f766e}.wrap{width:min(1120px,calc(100% - 36px));margin:auto}.hero{back
 <header class="hero"><div class="wrap">
   <div class="brand"><span class="brand-mark">◎</span><span>megabyte.live</span></div>
   <div class="eyebrow">Documentação para programadores</div>
-  <div class="hero-grid"><div><h1>Receba pagamentos no seu projecto.</h1><p>Use uma única API para ${isVpay ? 'criar encomendas no checkout hospedado Vpay, acompanhar o resultado e confirmar callbacks assinados.' : 'iniciar cobranças M-Pesa e e-Mola, acompanhar o resultado e confirmar callbacks assinados.'}</p></div><div class="base"><small>Base URL</small><code>${baseUrl}</code></div></div>
+  <div class="hero-grid"><div><h1>Receba pagamentos no seu projecto.</h1><p>Use uma única API para ${isVpay ? 'criar encomendas no checkout hospedado Vpay, acompanhar o resultado e confirmar callbacks assinados.' : isMozPayment ? 'criar recargas MozPayment, acompanhar a confirmação e consultar o estado da activação do pacote.' : 'iniciar cobranças M-Pesa e e-Mola, acompanhar o resultado e confirmar callbacks assinados.'}</p></div><div class="base"><small>Base URL</small><code>${baseUrl}</code></div></div>
 </div></header>
 <main class="wrap layout">
   <nav class="toc" aria-label="Nesta página"><strong>Nesta página</strong><a href="#inicio">Visão geral</a><a href="#autenticacao">Autenticação</a><a href="#criar">Criar pagamento</a><a href="#estado">Consultar estado</a><a href="#callback">Callback</a><a href="#erros">Erros</a></nav>
   <div>
-    <section class="section" id="inicio"><h2>Começar em 3 passos</h2><p class="intro">Crie uma chave no painel Gateway, guarde-a no seu servidor e use o fluxo abaixo. O Gateway regista cada cobrança como uma compra de megas na rede móvel.</p><div class="grid2"><div class="card"><h3>1. Obter credenciais</h3><p>No painel admin, abra <strong>Gateway → Chaves de API</strong>. Copie a chave e o segredo para as variáveis privadas do seu servidor.</p></div><div class="card"><h3>2. Iniciar cobrança</h3><p>${isVpay ? 'Envie o número do cliente e o valor em MT. Abra o checkout hospedado indicado em checkoutUrl.' : 'Envie o número do cliente e o valor em MT para receber o pedido de PIN no telemóvel.'}</p></div><div class="card"><h3>3. Confirmar resultado</h3><p>Use o callback assinado e confirme o estado com o endpoint de consulta antes de entregar o produto.</p></div><div class="card"><h3>Ambiente</h3><p>Esta documentação aponta para produção. Use sempre HTTPS e nunca exponha credenciais no browser.</p></div></div><div class="callout"><strong>Importante:</strong> a chave <code class="inline">gw_live_...</code> autentica os pedidos. O segredo <code class="inline">gwsec_...</code> serve apenas para verificar callbacks no seu backend.</div></section>
+    <section class="section" id="inicio"><h2>Começar em 3 passos</h2><p class="intro">Crie uma chave no painel Gateway, guarde-a no seu servidor e use o fluxo abaixo. O Gateway regista cada cobrança como uma compra de megas na rede móvel.</p><div class="grid2"><div class="card"><h3>1. Obter credenciais</h3><p>No painel admin, abra <strong>Gateway → Chaves de API</strong>. Copie a chave e o segredo para as variáveis privadas do seu servidor.</p></div><div class="card"><h3>2. Iniciar cobrança</h3><p>${isVpay ? 'Envie o número do cliente e o valor em MT. Abra o checkout hospedado indicado em checkoutUrl.' : isMozPayment ? 'Envie o telefone que vai pagar e receber os megas, e o valor inteiro da recarga em MT (de 10 a 40000 MT).' : 'Envie o número do cliente e o valor em MT para receber o pedido de PIN no telemóvel.'}</p></div><div class="card"><h3>3. Confirmar resultado</h3><p>Use o callback assinado e confirme o estado com o endpoint de consulta antes de entregar o seu produto. A entrega de megas da Megabyte é iniciada automaticamente após confirmação.</p></div><div class="card"><h3>Ambiente</h3><p>Esta documentação aponta para produção. Use sempre HTTPS e nunca exponha credenciais no browser.</p></div></div><div class="callout"><strong>Importante:</strong> a chave <code class="inline">gw_live_...</code> autentica os pedidos. O segredo <code class="inline">gwsec_...</code> serve apenas para verificar callbacks no seu backend.</div></section>
     <section class="section" id="autenticacao"><h2>Autenticação</h2><p>Envie a chave em todos os pedidos de pagamento e de consulta:</p><pre>X-API-Key: gw_live_SUA_CHAVE</pre><p>Guarde ambos os valores em variáveis de ambiente. Não os coloque em aplicações mobile, JavaScript do frontend, páginas HTML ou repositórios públicos.</p></section>
-    <section class="section" id="criar"><h2>Criar um pagamento</h2><div class="endpoint"><div class="endpoint-head"><span class="method">POST</span><code>/gateway/api/pay</code></div><div class="endpoint-body"><p>${paymentFlowDescription}${isVpay ? ' O campo method indica a carteira inferida pelo prefixo do telefone, mas não garante o método efectivamente escolhido no checkout.' : ''}</p><h3>Pedido</h3><pre>curl -X POST ${baseUrl}/gateway/api/pay \\
+    <section class="section" id="criar"><h2>Criar um pagamento</h2><div class="endpoint"><div class="endpoint-head"><span class="method">POST</span><code>/gateway/api/pay</code></div><div class="endpoint-body"><p>${paymentFlowDescription}${isVpay ? ' O campo method indica a carteira inferida pelo prefixo do telefone, mas não garante o método efectivamente escolhido no checkout.' : isMozPayment ? ' O telefone recebe o pedido de confirmação PIN. Não repita a cobrança enquanto o estado estiver pending.' : ''}</p><h3>Pedido</h3><pre>curl -X POST ${baseUrl}/gateway/api/pay \\
   -H "Content-Type: application/json" \\
   -H "X-API-Key: gw_live_SUA_CHAVE" \\
   -d '{
@@ -1066,6 +1074,7 @@ a{color:#0f766e}.wrap{width:min(1120px,calc(100% - 36px));margin:auto}.hero{back
   "txId": "a1b2c3d4e5f6",
   "status": "pending",
   "method": "mpesa",
+  "megabytes": 4096,
 ${checkoutResponseField}  "statusUrl": "${baseUrl}/gateway/api/status/a1b2c3d4e5f6"
 }</pre></div></div><div class="callout"><strong>Conversão em megas:</strong> valores iguais aos pacotes normais usam a quantidade exacta do catálogo. Outros valores usam <code class="inline">amount × 40 MB</code>. Por exemplo: 25 MT = 1024 MB; 100 MT = 4096 MB.</div></section>
     <section class="section" id="estado"><h2>Consultar o estado</h2><div class="endpoint"><div class="endpoint-head"><span class="method get">GET</span><code>/gateway/api/status/&lt;txId&gt;</code></div><div class="endpoint-body"><pre>curl ${baseUrl}/gateway/api/status/a1b2c3d4e5f6 \\
@@ -1077,10 +1086,11 @@ ${checkoutResponseField}  "statusUrl": "${baseUrl}/gateway/api/status/a1b2c3d4e5
   "megabytes": 4096,
   "phone": "84xxxxxxx",
   "method": "mpesa",
+  "deliveryStatus": "queued",
 ${checkoutResponseField}  "reference": "pedido-123",
   "error": null,
   "ts": "2026-09-21T12:00:00.000Z"
-}</pre><p>Consulte a cada 3–5 segundos enquanto o estado for <code class="inline">pending</code>. Pare quando chegar a <code class="inline">succeeded</code> ou <code class="inline">failed</code>.</p></div></div></section>
+ }</pre><p>Consulte a cada 3–5 segundos enquanto o estado for <code class="inline">pending</code>. Pare quando chegar a <code class="inline">succeeded</code> ou <code class="inline">failed</code>. Quando disponível, <code class="inline">deliveryStatus</code> indica o estado da entrega USSD dos megas.</p></div></div></section>
 ${checkoutCallout}
     <section class="section" id="callback"><h2>Callback assinado</h2><p>Se enviar <code class="inline">callback_url</code>, o Gateway fará um POST quando o pagamento terminar.</p><pre>Content-Type: application/json
 X-Gateway-Signature: assinatura_hmac_sha256</pre><pre>{
@@ -1088,6 +1098,8 @@ X-Gateway-Signature: assinatura_hmac_sha256</pre><pre>{
   "txId": "a1b2c3d4e5f6",
   "reference": "pedido-123",
   "amount": 100,
+  "megabytes": 4096,
+  "deliveryStatus": "queued",
   "phone": "84xxxxxxx",
   "method": "mpesa",
   "error": null,
@@ -1120,9 +1132,9 @@ const response = await fetch(baseUrl + "/gateway/api/pay", {
 });
 
  const payment = await response.json();
- console.log(payment.txId, payment.status, payment.checkoutUrl);</pre></section>
+ console.log(payment.txId, payment.status, payment.statusUrl);</pre></section>
   </div>
-</main><footer class="footer"><div class="wrap">Gateway Megabyte · ${isVpay ? 'Checkout Vpay' : 'M-Pesa e e-Mola'} · <a href="${baseUrl}/megas">Voltar à loja</a></div></footer>
+</main><footer class="footer"><div class="wrap">Gateway Megabyte · ${isVpay ? 'Checkout Vpay' : isMozPayment ? 'MozPayment C2B' : 'M-Pesa e e-Mola'} · <a href="${baseUrl}/megas">Voltar à loja</a></div></footer>
 </body></html>`
 }
 function redirect(res, url, headers = {}) {
