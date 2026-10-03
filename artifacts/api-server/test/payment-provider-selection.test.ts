@@ -4,6 +4,7 @@ import {
   createMozPaymentC2B,
   createVpayHostedOrder,
   getPagarPayment,
+  mozPaymentC2BResponseLogFields,
   parseMozPaymentC2BResponse,
   validatePagarPaymentInput,
   vpayOperationIdentityMatches,
@@ -288,4 +289,28 @@ test("MozPayment C2B uses the documented endpoints and requires an explicit JSON
     if (previousWalletId === undefined) delete process.env.MOZPAYMENT_WALLET_ID;
     else process.env.MOZPAYMENT_WALLET_ID = previousWalletId;
   }
+});
+
+test("MozPayment response diagnostics retain status fields without logging payment details", () => {
+  const diagnostics = mozPaymentC2BResponseLogFields({
+    cod: 503,
+    status: "error",
+    transacao: "moz-txn-sensitive-value",
+    mensagem: "Falha para o número 841234567.",
+    numero: "841234567",
+    data: { detalhe: "informação privada" },
+  });
+
+  assert.deepEqual(diagnostics, {
+    responseCode: 503,
+    responseStatus: "error",
+    responseKeys: ["cod", "data", "detalhe", "mensagem", "numero", "status", "transacao"],
+    transacaoFieldPresent: true,
+    transacaoValueType: "string",
+    transacaoRecognized: true,
+  });
+  const loggedFields = JSON.stringify(diagnostics);
+  assert.equal(loggedFields.includes("moz-txn-sensitive-value"), false);
+  assert.equal(loggedFields.includes("841234567"), false);
+  assert.equal(loggedFields.includes("informação privada"), false);
 });
