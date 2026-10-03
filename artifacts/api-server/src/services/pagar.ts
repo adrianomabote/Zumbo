@@ -560,11 +560,13 @@ export function validatePagarPaymentInput(input: PagarPaymentInput) {
 
 export type MozPaymentC2BStatus = "PAID" | "FAILED" | "RECONCILIATION_REQUIRED";
 
-export function parseMozPaymentC2BResponse(data: unknown): {
+export type MozPaymentC2BResult = {
   status: MozPaymentC2BStatus;
   operationId?: string;
   failureReason?: "EMOLA_PIN_INCORRECT";
-} {
+};
+
+export function parseMozPaymentC2BResponse(data: unknown): MozPaymentC2BResult {
   const records = mozPaymentResponseRecords(data);
   const response = records.find((record) => record.cod !== undefined) || records[0] || {};
   const rawOperationId = records
@@ -621,7 +623,7 @@ export function parseMozPaymentC2BResponse(data: unknown): {
 export async function createMozPaymentC2B(input: Pick<
   PagarPaymentInput,
   "amountMzn" | "method" | "payerPhone"
->) {
+>): Promise<MozPaymentC2BResult> {
   const configuration = config();
   if (configuration.provider !== "mozpayment") {
     throw new Error("MozPayment não é o provedor activo.");
