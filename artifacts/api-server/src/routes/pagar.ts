@@ -9,8 +9,10 @@ import {
   reconcilePagarPayment,
   retryPagarWebhookForwarding,
   processDebitoPayWebhook,
+  processMozPaymentWebhook,
   processPaysuiteWebhook,
   verifyDebitoPayWebhook,
+  verifyMozPaymentWebhook,
   verifyPaysuiteWebhook,
   verifyPagarWebhook,
 } from "../services/pagar";
@@ -70,6 +72,50 @@ router.post("/paysuite/webhook", async (req, res) => {
     return res.sendStatus(204);
   } catch {
     return res.status(500).json({ error: "Webhook Paysuite não processado." });
+  }
+});
+
+router.post("/mozpayment/webhook", async (req, res) => {
+  const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from("");
+  if (!process.env.MOZPAYMENT_WEBHOOK_SECRET?.trim()) {
+    return res.status(503).json({ error: "Webhook MozPayment ainda não está configurado." });
+  }
+  let payload: unknown;
+  try {
+    payload = JSON.parse(rawBody.toString("utf8"));
+  } catch {
+    return res.status(400).json({ error: "O corpo do webhook MozPayment não é JSON válido." });
+  }
+  const records = webhookRecords(payload);
+  const authenticators = [
+    req.header("x-webhook-signature"),
+    req.header("x-mozpayment-signature"),
+    req.header("x-signature"),
+    req.header("x-webhook-secret"),
+    req.header("x-mozpayment-secret"),
+    req.header("authorization"),
+    ...records.flatMap((record) =>
+      ["webhook_secret", "webhookSecret", "_webhook_secret", "secret"]
+        .map((key) => record[key])
+        .filter((value): value is string => typeof value === "string"),
+    ),
+  ].filter((value): value is string => Boolean(value));
+  if (!verifyMozPaymentWebhook(rawBody, authenticators)) {
+    return res.status(401).json({ error: "Assinatura do webhook MozPayment inválida." });
+  }
+
+  try {
+    const result = await processMozPaymentWebhook(rawBody);
+    if (result.forwardingStatus === "pending" || result.forwardingStatus === "failed") {
+      await forwardPagarWebhook(result, { force: result.duplicate });
+    }
+    return res.sendStatus(204);
+  } catch (error) {
+    const errorStatus = (error as { status?: unknown })?.status;
+    if (errorStatus === 400 || errorStatus === 409) {
+      return res.status(errorStatus).json({ error: error instanceof Error ? error.message : "Evento MozPayment inválido." });
+    }
+    return res.status(500).json({ error: "Webhook MozPayment não processado." });
   }
 });
 
@@ -141,3 +187,20 @@ router.post(["/pagar/admin/webhook-deliveries/:eventId/retry", "/debitopay/admin
 });
 
 export default router;
+
+function webhookRecords(payload: unknown) {
+  const records: Record<string, unknown>[] = [];
+  const queue: unknown[] = [payload];
+  const seen = new Set<object>();
+  while (queue.length) {
+    const value = queue.shift();
+    if (!value || typeof value !== "object" || Array.isArray(value) || seen.has(value)) continue;
+    seen.add(value);
+    const record = value as Record<string, unknown>;
+    records.push(record);
+    for (const key of ["data", "payment", "transaction", "payload"]) {
+      if (record[key] && typeof record[key] === "object") queue.push(record[key]);
+    }
+  }
+  return records;
+}

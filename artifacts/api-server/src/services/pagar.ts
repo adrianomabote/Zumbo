@@ -993,6 +993,24 @@ export function verifyPaysuiteWebhook(rawBody: Buffer, signatureHeader: string) 
   return Boolean(secret && timingSafeSignature(rawBody, signatureHeader, secret));
 }
 
+function constantTimeTextEquals(expected: string, received: string) {
+  const expectedBytes = Buffer.from(expected);
+  const receivedBytes = Buffer.from(received);
+  return expectedBytes.length === receivedBytes.length && timingSafeEqual(expectedBytes, receivedBytes);
+}
+
+export function verifyMozPaymentWebhook(rawBody: Buffer, authenticators: string[]) {
+  const secret = process.env.MOZPAYMENT_WEBHOOK_SECRET?.trim();
+  if (!secret) return false;
+
+  return authenticators.some((candidate) => {
+    const value = candidate.trim();
+    if (!value) return false;
+    const bearerToken = value.replace(/^Bearer\s+/i, "");
+    return constantTimeTextEquals(secret, bearerToken) || timingSafeSignature(rawBody, value, secret);
+  });
+}
+
 function paysuiteEventType(payload: Record<string, unknown>) {
   const event = typeof payload.event === "string" ? payload.event.toLowerCase() : "";
   if (event === "payment.success") return "payment.succeeded";
@@ -1064,6 +1082,148 @@ export async function processDebitoPayWebhook(rawBody: Buffer) {
   );
 }
 
+function mozPaymentWebhookRecords(payload: unknown) {
+  const records: Record<string, unknown>[] = [];
+  const queue: Array<{ value: unknown; depth: number }> = [{ value: payload, depth: 0 }];
+  const seen = new Set<object>();
+  while (queue.length) {
+    const { value, depth } = queue.shift()!;
+    if (!value || typeof value !== "object" || Array.isArray(value) || seen.has(value)) continue;
+    seen.add(value);
+    const record = value as Record<string, unknown>;
+    records.push(record);
+    if (depth >= 3) continue;
+    for (const key of ["data", "payment", "transaction", "payload"]) {
+      if (record[key] && typeof record[key] === "object") {
+        queue.push({ value: record[key], depth: depth + 1 });
+      }
+    }
+  }
+  return records;
+}
+
+function mozPaymentWebhookText(records: Record<string, unknown>[], keys: string[]) {
+  for (const record of records) {
+    for (const key of keys) {
+      const value = record[key];
+      if (typeof value === "string" && value.trim()) return value.trim();
+      if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return String(value);
+    }
+  }
+  return undefined;
+}
+
+function mozPaymentWebhookAmount(records: Record<string, unknown>[]) {
+  for (const record of records) {
+    for (const key of ["amount", "amountMzn", "valor"]) {
+      const value = record[key];
+      if (typeof value === "number" && Number.isFinite(value) && value >= 0) return value;
+      if (typeof value === "string" && value.trim() && Number.isFinite(Number(value))) {
+        const amount = Number(value);
+        if (amount >= 0) return amount;
+      }
+    }
+  }
+  return undefined;
+}
+
+function mozPaymentWebhookFailure(message: string, status = 400) {
+  return Object.assign(new Error(message), { status });
+}
+
+export async function processMozPaymentWebhook(rawBody: Buffer) {
+  let payload: unknown;
+  try {
+    payload = JSON.parse(rawBody.toString("utf8"));
+  } catch {
+    throw mozPaymentWebhookFailure("O corpo do webhook MozPayment não é JSON válido.");
+  }
+  const records = mozPaymentWebhookRecords(payload);
+  if (!records.length) throw mozPaymentWebhookFailure("O webhook MozPayment não contém um evento válido.");
+
+  const rawStatus = mozPaymentWebhookText(records, ["status", "statuspago", "payment_status", "paymentStatus", "event"]);
+  const status = rawStatus?.toUpperCase().replace(/[ .-]+/g, "_");
+  const eventStatus = status === "PAID" || status === "PAYMENT_PAID" || status === "PAYMENT_SUCCESS"
+    ? "PAID"
+    : status === "FAILED" || status === "PAYMENT_FAILED"
+      ? "FAILED"
+      : status === "EXPIRED" || status === "PAYMENT_EXPIRED"
+        ? "CANCELLED"
+        : undefined;
+  if (!eventStatus) {
+    throw mozPaymentWebhookFailure("O estado do evento MozPayment não é PAID, FAILED ou EXPIRED.");
+  }
+
+  const operationIds = [...new Set(records.flatMap((record) =>
+    ["payment_id", "paymentId", "transaction_id", "transactionId", "transacao", "operation_id"]
+      .map((key) => record[key])
+      .flatMap((value) => {
+        if (typeof value === "string" && value.trim()) return [value.trim()];
+        if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return [String(value)];
+        return [];
+      }),
+  ))];
+  const references = [...new Set(records.flatMap((record) =>
+    ["reference", "merchant_reference", "merchantReference", "reference_id"]
+      .map((key) => record[key])
+      .flatMap((value) => typeof value === "string" && value.trim() ? [value.trim()] : []),
+  ))];
+  if (!operationIds.length && !references.length) {
+    throw mozPaymentWebhookFailure("O webhook MozPayment não contém um identificador de transacção.");
+  }
+
+  const amountMzn = mozPaymentWebhookAmount(records);
+  if (amountMzn === undefined) throw mozPaymentWebhookFailure("O webhook MozPayment não contém o valor pago.");
+  const currency = mozPaymentWebhookText(records, ["currency", "currency_code"])?.toUpperCase();
+  if (currency && currency !== "MZN" && currency !== "MT") {
+    throw mozPaymentWebhookFailure("A moeda do evento MozPayment não é MZN.");
+  }
+
+  const database = requirePool();
+  const localResult = await database.query(
+    `SELECT internal_id, pagar_operation_id, pagar_reference, amount_mzn
+       FROM pagar_operations
+      WHERE provider = 'mozpayment'
+        AND (
+          pagar_operation_id = ANY($1::text[])
+          OR internal_id = ANY($1::text[])
+          OR pagar_reference = ANY($2::text[])
+        )
+      LIMIT 2`,
+    [operationIds, references],
+  );
+  if (localResult.rows.length !== 1) {
+    throw mozPaymentWebhookFailure(
+      localResult.rows.length > 1
+        ? "O webhook MozPayment corresponde a mais de uma cobrança."
+        : "Não foi encontrada uma cobrança MozPayment correspondente.",
+      409,
+    );
+  }
+  const local = localResult.rows[0];
+  if (Number(local.amount_mzn) !== amountMzn) {
+    throw mozPaymentWebhookFailure("O valor do webhook MozPayment não corresponde à cobrança.", 409);
+  }
+
+  const explicitEventId = mozPaymentWebhookText(records, ["event_id", "eventId", "webhook_id", "webhookId"]);
+  const eventId = `mozpayment:${explicitEventId || `${local.internal_id}:${eventStatus}`}`;
+  const eventType = eventStatus === "PAID" ? "payment.succeeded" : "payment.failed";
+  const normalizedBody = {
+    data: {
+      id: local.pagar_operation_id || undefined,
+      reference: local.pagar_reference,
+      status: eventStatus,
+      amountMzn,
+    },
+  };
+  return processPagarWebhook(
+    eventId,
+    eventType,
+    Buffer.from(JSON.stringify(normalizedBody)),
+    "mozpayment",
+  );
+}
+
 interface PagarWebhookRow {
   event_id: string;
   event_type: string;
@@ -1116,7 +1276,12 @@ function forwardingStatusFor(eventType: string, operationId?: string, reference?
   return forwardableEventTypes.has(eventType) && (operationId || reference) ? "pending" : "not_required";
 }
 
-export async function processPagarWebhook(eventId: string, eventType: string, rawBody: Buffer): Promise<PagarWebhookEvent & { duplicate: boolean }> {
+export async function processPagarWebhook(
+  eventId: string,
+  eventType: string,
+  rawBody: Buffer,
+  provider?: PaymentProvider,
+): Promise<PagarWebhookEvent & { duplicate: boolean }> {
   const database = requirePool();
   const payload = JSON.parse(rawBody.toString("utf8")) as { data?: Record<string, unknown> };
   const data = payload.data || {};
@@ -1147,8 +1312,11 @@ export async function processPagarWebhook(eventId: string, eventType: string, ra
     }
     if (eventType === "payment.succeeded" || eventType === "payment.failed") {
       const current = await client.query(
-        "SELECT * FROM pagar_operations WHERE pagar_operation_id = $1 OR pagar_reference = $2 FOR UPDATE",
-        [operationId || "", reference || ""],
+        `SELECT * FROM pagar_operations
+          WHERE (pagar_operation_id = $1 OR pagar_reference = $2)
+            AND ($3::text IS NULL OR provider = $3)
+          FOR UPDATE`,
+        [operationId || "", reference || "", provider || null],
       );
       const local = current.rows[0];
       const eventAmount = typeof data.amountMzn === "number" ? data.amountMzn : undefined;

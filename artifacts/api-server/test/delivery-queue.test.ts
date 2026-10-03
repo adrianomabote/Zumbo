@@ -21,6 +21,7 @@ const concurrentTxId = `delivery-test-concurrent-${testId}`;
 process.env.DELIVERY_QUEUE_FILE = queueFile;
 process.env.PAGAR_BRIDGE_PORT = String(bridgePort);
 process.env.PAGAR_WEBHOOK_SECRET = "delivery-webhook-test-secret";
+process.env.MOZPAYMENT_WEBHOOK_SECRET = "mozpayment-delivery-test-secret";
 process.env.SESSION_SECRET = "delivery-test-secret";
 
 const {
@@ -402,6 +403,7 @@ after(async () => {
   await stopBridge();
   await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   await pool?.query("DELETE FROM pagar_webhook_events WHERE event_id LIKE $1", [`delivery-test-%`]);
+  await pool?.query("DELETE FROM pagar_webhook_events WHERE event_id LIKE $1", [`mozpayment:delivery-test-%`]);
   await pool?.query("DELETE FROM pagar_operations WHERE internal_id LIKE $1", [`delivery-test-%`]);
   await pool?.end();
   await rm(queueDirectory, { recursive: true, force: true });
@@ -439,6 +441,43 @@ test("PAID Para Mim reaches the account number and repeated equivalent webhooks 
     status: "completed",
     confirmationReference: "SELF-DELIVERY-OK",
   });
+});
+
+test("MozPayment webhook verifies its secret, confirms the matching amount and deduplicates events", async () => {
+  const txId = `delivery-test-mozpayment-${testId}`;
+  const operationId = `mozpayment-operation-${testId}`;
+  const reference = `net-${txId}`;
+  const eventId = `mozpayment:${txId}:PAID`;
+  await insertPendingOperation(txId, operationId, reference, "mozpayment");
+  const rawBody = JSON.stringify({
+    amount: "20",
+    currency: "MZN",
+    payment_id: operationId,
+    reference,
+    status: "PAID",
+    transaction_id: operationId,
+  });
+  const signature = createHmac("sha256", process.env.MOZPAYMENT_WEBHOOK_SECRET!)
+    .update(rawBody)
+    .digest("hex");
+  const sendWebhook = (sig: string) => fetch(`${baseUrl}/api/mozpayment/webhook`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-webhook-signature": `sha256=${sig}` },
+    body: rawBody,
+  });
+
+  try {
+    assert.equal((await sendWebhook("invalid")).status, 401);
+    assert.equal((await pool!.query("SELECT status FROM pagar_operations WHERE internal_id = $1", [txId])).rows[0]?.status, "PENDING");
+    assert.equal((await sendWebhook(signature)).status, 204);
+    assert.equal((await sendWebhook(signature)).status, 204);
+    assert.equal((await pool!.query("SELECT status FROM pagar_operations WHERE internal_id = $1", [txId])).rows[0]?.status, "PAID");
+    const events = await pool!.query("SELECT event_id FROM pagar_webhook_events WHERE event_id = $1", [eventId]);
+    assert.equal(events.rowCount, 1);
+  } finally {
+    await pool!.query("DELETE FROM pagar_webhook_events WHERE event_id = $1", [eventId]);
+    await pool!.query("DELETE FROM pagar_operations WHERE internal_id = $1", [txId]);
+  }
 });
 
 test("PAID Para Outro keeps the informed beneficiary and failed delivery can be retried from the panel", async () => {
