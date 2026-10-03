@@ -65,6 +65,7 @@ before(async () => {
         status: "PENDING",
         reference: "gateway-vpay-reference",
         checkoutUrl: expectedCheckoutUrl,
+        provider: "vpay",
       }));
     });
   });
