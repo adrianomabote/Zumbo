@@ -856,10 +856,14 @@ export async function createPagarPayment(input: PagarPaymentInput) {
           RETURNING *`,
         [result.operationId || null, result.status, input.localTransactionId],
       );
-      return updated.rows[0] || {
+      const payment = updated.rows[0] || {
         ...inserted.rows[0],
         pagar_operation_id: result.operationId || null,
         status: result.status,
+      };
+      return {
+        ...payment,
+        mozpayment_failure_reason: result.failureReason || null,
       };
     } else {
       data = await request("POST", isDebitoPay ? "/payment-orchestrator" : "/payments", body, input.idempotencyKey, provider);
