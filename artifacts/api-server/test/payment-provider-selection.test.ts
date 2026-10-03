@@ -179,9 +179,15 @@ test("MozPayment C2B uses the documented endpoints and requires an explicit JSON
   const previousProvider = process.env.PAYMENT_PROVIDER;
   const previousWalletId = process.env.MOZPAYMENT_WALLET_ID;
   const previousFetch = globalThis.fetch;
+  const previousTimeout = AbortSignal.timeout;
+  const timeoutValues: number[] = [];
   const calls: Array<{ url: string; headers: Headers; body: Record<string, unknown> }> = [];
   let responseCode = 200;
 
+  AbortSignal.timeout = ((milliseconds: number) => {
+    timeoutValues.push(milliseconds);
+    return new AbortController().signal;
+  }) as typeof AbortSignal.timeout;
   globalThis.fetch = (async (input, init = {}) => {
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
     const headers = new Headers(init.headers);
@@ -206,6 +212,7 @@ test("MozPayment C2B uses the documented endpoints and requires an explicit JSON
       payerPhone: "+258 841 234 567",
     });
     assert.deepEqual(mpesa, { status: "PAID", operationId: "moz-txn-test-1" });
+    assert.equal(timeoutValues[0], 120_000);
 
     responseCode = 409;
     const emola = await createMozPaymentC2B({
@@ -265,6 +272,7 @@ test("MozPayment C2B uses the documented endpoints and requires an explicit JSON
     }), { status: "PAID", operationId: "123456" });
   } finally {
     globalThis.fetch = previousFetch;
+    AbortSignal.timeout = previousTimeout;
     if (previousProvider === undefined) delete process.env.PAYMENT_PROVIDER;
     else process.env.PAYMENT_PROVIDER = previousProvider;
     if (previousWalletId === undefined) delete process.env.MOZPAYMENT_WALLET_ID;
