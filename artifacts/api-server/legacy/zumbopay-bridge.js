@@ -1038,7 +1038,7 @@ function gatewayDocsPage() {
   const checkoutCallout = isVpay
     ? '<div class="callout"><strong>Checkout Vpay:</strong> redireccione o cliente para <code class="inline">checkoutUrl</code>. Esse link também é devolvido pela consulta do estado. Os métodos apresentados dentro do checkout são controlados pela Vpay; esta API não os filtra.</div>'
     : isMozPayment
-      ? '<div class="callout"><strong>MozPayment C2B:</strong> o valor enviado é usado como valor da recarga e como montante da compra de megas. A confirmação imediata explícita ou o callback autenticado actualiza o estado; a Megabyte coloca a entrega USSD em fila automaticamente. O webhook interno da MozPayment é <code class="inline">/api/mozpayment/webhook</code> e não substitui o <code class="inline">callback_url</code> do seu projecto.</div>'
+      ? '<div class="callout"><strong>MozPayment C2B:</strong> a cobrança aparece no painel como <code class="inline">Recarga [valor] MT</code>; o montante é exactamente o valor da recarga e da compra de megas. A confirmação imediata explícita ou o callback autenticado actualiza o estado; a Megabyte coloca a entrega USSD em fila automaticamente. O webhook interno da MozPayment é <code class="inline">/api/mozpayment/webhook</code> e não substitui o <code class="inline">callback_url</code> do seu projecto.</div>'
       : ''
   return `<!doctype html><html lang="pt-MZ"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">

@@ -142,6 +142,7 @@ test("MozPayment Gateway cobra exactamente 10 MT e inicia a entrega USSD", async
   assert.equal(docsResponse.status, 200);
   const docs = await docsResponse.text();
   assert.match(docs, /MozPayment C2B/);
+  assert.match(docs, /Recarga \[valor\] MT/);
   assert.match(docs, /entre 10 e 40000 MT/);
   assert.match(docs, /entrega USSD em fila automaticamente/i);
 
