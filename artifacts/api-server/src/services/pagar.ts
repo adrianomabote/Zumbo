@@ -1,5 +1,6 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { hasDatabase, pool } from "@workspace/db";
+import { logger } from "../lib/logger";
 
 const DEFAULT_BASE_URL = "https://api.pagar.co.mz/api/v1";
 const terminalStates = new Set(["PAID", "FAILED", "CANCELLED", "REFUNDED"]);
@@ -323,16 +324,32 @@ function safeMessage(status: number, data: unknown) {
   };
 }
 
-async function parseResponse(response: Response) {
+async function parseResponse(
+  response: Response,
+  observe?: (details: {
+    httpStatus: number;
+    contentType: string | null;
+    jsonParsed: boolean;
+    data: unknown;
+  }) => void,
+) {
   const rawText = await response.text();
   let data: unknown = {};
+  let jsonParsed = false;
   if (rawText.trim()) {
     try {
       data = JSON.parse(rawText);
+      jsonParsed = true;
     } catch {
       data = { message: rawText.slice(0, 500) };
     }
   }
+  observe?.({
+    httpStatus: response.status,
+    contentType: response.headers.get("content-type"),
+    jsonParsed,
+    data,
+  });
   if (!response.ok) {
     const failure = safeMessage(response.status, data);
     console.error(`[${providerName()}] resposta recusada`, JSON.stringify({
@@ -459,8 +476,35 @@ async function request(
   // MozPayment's synchronous C2B response can wait while the customer confirms
   // the wallet prompt. A short generic timeout can lose a paid result.
   const timeoutMs = configuration.provider === "mozpayment" ? 120_000 : 15_000;
-  const response = await fetch(url, { method, headers, body: rawBody, signal: AbortSignal.timeout(timeoutMs) });
-  return parseResponse(response);
+  const startedAt = configuration.provider === "mozpayment" ? Date.now() : undefined;
+  let response: Response;
+  try {
+    response = await fetch(url, { method, headers, body: rawBody, signal: AbortSignal.timeout(timeoutMs) });
+  } catch (error) {
+    if (startedAt !== undefined) {
+      logger.warn({
+        provider: "mozpayment",
+        endpoint,
+        durationMs: Date.now() - startedAt,
+        errorName: error instanceof Error ? error.name : typeof error,
+      }, "MozPayment C2B request failed before receiving a response");
+    }
+    throw error;
+  }
+  const observeMozPaymentResponse = startedAt === undefined
+    ? undefined
+    : (details: { httpStatus: number; contentType: string | null; jsonParsed: boolean; data: unknown }) => {
+        logger.info({
+          provider: "mozpayment",
+          endpoint,
+          durationMs: Date.now() - startedAt,
+          httpStatus: details.httpStatus,
+          contentType: details.contentType,
+          jsonParsed: details.jsonParsed,
+          ...mozPaymentC2BResponseLogFields(details.data),
+        }, "MozPayment C2B provider response");
+      };
+  return parseResponse(response, observeMozPaymentResponse);
 }
 
 function validateInput(input: PagarPaymentInput, provider: PaymentProvider) {
@@ -1091,6 +1135,45 @@ function mozPaymentResponseRecords(payload: unknown) {
     }
   }
   return records;
+}
+
+export function mozPaymentC2BResponseLogFields(payload: unknown) {
+  const records = mozPaymentResponseRecords(payload);
+  const response = records.find((record) => record.cod !== undefined) || records[0] || {};
+  const rawOperationId = records
+    .map((record) => record.transacao)
+    .find((value) => value !== undefined);
+  const normalizedOperationId = typeof rawOperationId === "number" &&
+      Number.isSafeInteger(rawOperationId) &&
+      rawOperationId >= 0
+    ? String(rawOperationId)
+    : rawOperationId;
+  const operationIdRecognized = typeof normalizedOperationId === "string" &&
+    normalizedOperationId.trim().length > 0 &&
+    normalizedOperationId.trim().length <= 200 &&
+    !/[\u0000-\u001f\u007f]/.test(normalizedOperationId);
+  const responseCode = typeof response.cod === "number" && Number.isFinite(response.cod)
+    ? response.cod
+    : typeof response.cod === "string" && /^[A-Za-z0-9_-]{1,32}$/.test(response.cod)
+      ? response.cod
+      : undefined;
+  const responseStatus = typeof response.status === "string" &&
+      /^[A-Za-z0-9 _.-]{1,40}$/.test(response.status)
+    ? response.status
+    : undefined;
+  const responseKeys = [...new Set(records.flatMap((record) => Object.keys(record)
+    .filter((key) => /^[A-Za-z_][A-Za-z0-9_]{0,39}$/.test(key))))]
+    .sort()
+    .slice(0, 30);
+
+  return {
+    responseCode,
+    responseStatus,
+    responseKeys,
+    transacaoFieldPresent: records.some((record) => Object.hasOwn(record, "transacao")),
+    transacaoValueType: rawOperationId === undefined ? "missing" : rawOperationId === null ? "null" : typeof rawOperationId,
+    transacaoRecognized: operationIdRecognized,
+  };
 }
 
 interface PagarWebhookRow {
