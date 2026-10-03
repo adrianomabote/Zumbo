@@ -642,18 +642,21 @@ export async function createMozPaymentC2B(input: Pick<
     ? "/pagamentorotativompesa"
     : "/pagamentorotativoemola";
   let data: Record<string, unknown>;
+  let httpStatus = 200;
   try {
     data = await request("POST", endpoint, {
       carteira: configuration.walletId,
       numero: localPhone,
       cliente: `Recarga ${input.amountMzn} MT`,
       valor: String(input.amountMzn),
-    }, undefined, "mozpayment");
+    }, undefined, "mozpayment", (status) => {
+      httpStatus = status;
+    });
   } catch (error) {
     if (isConfigurationError(error)) throw error;
     return { status: "RECONCILIATION_REQUIRED" };
   }
-  return parseMozPaymentC2BResponse(data);
+  return parseMozPaymentC2BResponse(data, httpStatus);
 }
 
 export async function createVpayHostedOrder(input: Pick<
@@ -1220,9 +1223,18 @@ function mozPaymentResponseRecords(payload: unknown) {
   return records;
 }
 
+function mozPaymentNumericCode(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && /^\d{3}$/.test(value.trim())) {
+    return Number(value.trim());
+  }
+  return undefined;
+}
+
 function mozPaymentExplicitFailureReason(
   records: Record<string, unknown>[],
-): "EMOLA_PIN_INCORRECT" | "PROVIDER_DECLINED" | undefined {
+  httpStatus: number,
+): "EMOLA_PIN_INCORRECT" | "INSUFFICIENT_FUNDS" | "PROVIDER_DECLINED" | undefined {
   const messageKeys = [
     "message",
     "mensagem",
@@ -1247,10 +1259,19 @@ function mozPaymentExplicitFailureReason(
       .filter((value): value is string => typeof value === "string")
       .map((value) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase())
   );
-  if (messages.some((message) =>
+  const hasErrorStatus = httpStatus >= 400 || records.some((record) =>
+    typeof record.statusCode === "number" && record.statusCode >= 400
+  );
+  if (hasErrorStatus && messages.some((message) =>
     /\b(?:pin.{0,40}(?:incorrect|wrong|invalid|not correct|errado|errada|incorreto|incorreta)|(?:incorrect|wrong|invalid|not correct|errado|errada|incorreto|incorreta).{0,40}pin)\b/.test(message)
   )) {
     return "EMOLA_PIN_INCORRECT";
+  }
+
+  if (messages.some((message) =>
+    /\b(saldo insuficiente|saldo nao e suficiente|fundos? insuficientes?|saldo baixo|sem saldo|insufficient (?:account )?balance|insufficient funds|not enough (?:balance|funds)|low balance)\b/.test(message)
+  )) {
+    return "INSUFFICIENT_FUNDS";
   }
 
   const hasMpesaFailureCode = records.some((record) =>
