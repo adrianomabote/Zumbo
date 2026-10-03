@@ -1076,7 +1076,7 @@ a{color:#0f766e}.wrap{width:min(1120px,calc(100% - 36px));margin:auto}.hero{back
   "method": "mpesa",
   "megabytes": 4096,
 ${checkoutResponseField}  "statusUrl": "${baseUrl}/gateway/api/status/a1b2c3d4e5f6"
-}</pre></div></div><div class="callout"><strong>Conversão em megas:</strong> valores iguais aos pacotes normais usam a quantidade exacta do catálogo. Outros valores usam <code class="inline">amount × 40 MB</code>. O valor cobrado pela MozPayment é sempre exactamente o <code class="inline">amount</code> enviado. Por exemplo: 25 MT = 1024 MB; 100 MT = 4096 MB.</div></section>
+}</pre></div></div><div class="callout"><strong>Conversão em megas:</strong> valores iguais aos pacotes normais usam a quantidade exacta do catálogo. Outros valores usam <code class="inline">amount × 40 MB</code>. ${isMozPayment ? 'O valor cobrado pela MozPayment é exactamente o <code class="inline">amount</code> enviado.' : ''} Por exemplo: 25 MT = 1024 MB; 100 MT = 4096 MB.</div></section>
     <section class="section" id="estado"><h2>Consultar o estado</h2><div class="endpoint"><div class="endpoint-head"><span class="method get">GET</span><code>/gateway/api/status/&lt;txId&gt;</code></div><div class="endpoint-body"><pre>curl ${baseUrl}/gateway/api/status/a1b2c3d4e5f6 \\
   -H "X-API-Key: gw_live_SUA_CHAVE"</pre><h3>Resposta</h3><pre>{
   "ok": true,
