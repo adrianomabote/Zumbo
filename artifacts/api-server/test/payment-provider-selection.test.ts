@@ -184,6 +184,8 @@ test("MozPayment C2B uses the documented endpoints and requires an explicit JSON
   const timeoutValues: number[] = [];
   const calls: Array<{ url: string; headers: Headers; body: Record<string, unknown> }> = [];
   let responseCode = 200;
+  let responseHttpStatus = 200;
+  let responseBody: Record<string, unknown> | undefined;
 
   AbortSignal.timeout = ((milliseconds: number) => {
     timeoutValues.push(milliseconds);
@@ -194,11 +196,11 @@ test("MozPayment C2B uses the documented endpoints and requires an explicit JSON
     const headers = new Headers(init.headers);
     const body = JSON.parse(String(init.body || "{}")) as Record<string, unknown>;
     calls.push({ url: url.href, headers, body });
-    const response = responseCode === 200
+    const response = responseBody ?? (responseCode === 200
       ? { cod: 200, status: "success", transacao: "moz-txn-test-1" }
-      : { cod: 409, status: "error", mensagem: "Saldo insuficiente." };
+      : { cod: 409, status: "error", mensagem: "Saldo insuficiente." });
     return new Response(JSON.stringify(response), {
-      status: 200,
+      status: responseHttpStatus,
       headers: { "Content-Type": "application/json" },
     });
   }) as typeof fetch;
@@ -223,21 +225,51 @@ test("MozPayment C2B uses the documented endpoints and requires an explicit JSON
     });
     assert.deepEqual(emola, { status: "FAILED" });
 
-    globalThis.fetch = (async () => new Response(JSON.stringify({
+    responseCode = 200;
+    responseBody = {
       cod: 401,
       status: "error",
       mensagem: "Falha",
-    }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    })) as typeof fetch;
+    };
     assert.deepEqual(await createMozPaymentC2B({
       amountMzn: 40,
       method: "MPESA",
       payerPhone: "841234567",
     }), { status: "FAILED" });
 
-    assert.deepEqual(calls.map(({ url }) => url), [
+    responseHttpStatus = 400;
+    responseBody = {
+      emola_response: {
+        message: "The PIN is incorrect. Five wrong attempts can lock this account.",
+      },
+    };
+    assert.deepEqual(await createMozPaymentC2B({
+      amountMzn: 40,
+      method: "EMOLA",
+      payerPhone: "868765432",
+    }), { status: "FAILED", failureReason: "EMOLA_PIN_INCORRECT" });
+
+    responseBody = {
+      mpesa_response: {
+        code: "INS-6",
+        message: "Transaction Failed",
+        transaction_id: "N/A",
+      },
+    };
+    assert.deepEqual(await createMozPaymentC2B({
+      amountMzn: 40,
+      method: "MPESA",
+      payerPhone: "841234567",
+    }), { status: "FAILED" });
+
+    responseBody = { message: "Gateway returned an unexpected response." };
+    assert.deepEqual(await createMozPaymentC2B({
+      amountMzn: 40,
+      method: "MPESA",
+      payerPhone: "841234567",
+    }), { status: "RECONCILIATION_REQUIRED" });
+
+    assert.deepEqual(calls.slice(0, 2).map(({ url }) => url), [
       "https://mozpayment.co.mz/api/1.1/wf/pagamentorotativompesa",
       "https://mozpayment.co.mz/api/1.1/wf/pagamentorotativoemola",
     ]);

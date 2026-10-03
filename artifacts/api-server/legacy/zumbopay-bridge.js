@@ -2862,6 +2862,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .res-btn{width:100%;padding:15px;border:none;border-radius:12px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;background:#cc0000;color:#fff;margin-bottom:10px;transition:opacity .2s;}
 .res-btn:active{opacity:.85;}
 .res-btn-g{background:#f2f2f7;color:#636366;}
+.res-fail-caution{font-size:12px;color:#8a4b08;background:#fff7e6;border:1px solid #f2d49b;border-radius:10px;padding:10px 12px;line-height:1.5;margin:-8px 0 16px;}
 
 /* ── Balance pill no nav ── */
 .nav-balance{display:none;align-items:center;gap:6px;background:#fff0f0;border:1px solid #ffcdd2;border-radius:20px;padding:5px 6px 5px 12px;flex:1;max-width:220px;margin:0 6px;}
@@ -3329,7 +3330,8 @@ ${allListHtml}
       <div class="res-icon bad">✗</div>
       <div class="res-t">Pagamento não confirmado</div>
       <p class="res-s" id="sh-fail-msg">O PIN não foi introduzido ou o tempo expirou.</p>
-      <button class="res-btn" onclick="shShow('buy')">Tentar novamente</button>
+      <p class="res-fail-caution" id="sh-fail-caution" style="display:none"></p>
+      <button class="res-btn" onclick="retryFailedPayment()">Tentar novamente</button>
       <button class="res-btn res-btn-g" onclick="closeSheet()">Cancelar</button>
     </div>
   </div>
@@ -3868,9 +3870,7 @@ function openBuyDirect(id) {
   syncSelfPurchaseRecipient()
   document.getElementById('sh-err').style.display = 'none'
   const btn = document.getElementById('sh-btn'); btn.disabled=false; btn.textContent='Próximo'; btn.style.display='block'
-  activeOrderRequestKey = (window.crypto && typeof window.crypto.randomUUID === 'function')
-    ? window.crypto.randomUUID()
-    : 'order-' + Date.now() + '-' + Math.random().toString(16).slice(2)
+  activeOrderRequestKey = newOrderRequestKey()
   payVia = 'mobile-money'
   selectPayVia(payVia)
   updateCreditBtn()
@@ -3878,6 +3878,19 @@ function openBuyDirect(id) {
   shShow('buy')
   document.getElementById('overlay').classList.add('open')
   setTimeout(()=>document.getElementById('sheet').classList.add('open'),10)
+}
+function newOrderRequestKey() {
+  return (window.crypto && typeof window.crypto.randomUUID === 'function')
+    ? window.crypto.randomUUID()
+    : 'order-' + Date.now() + '-' + Math.random().toString(16).slice(2)
+}
+function retryFailedPayment() {
+  activeOrderRequestKey = newOrderRequestKey()
+  const btn = document.getElementById('sh-btn')
+  if (btn) { btn.disabled=false; btn.textContent='Próximo'; btn.style.display='block' }
+  const error = document.getElementById('sh-err')
+  if (error) error.style.display='none'
+  shShow('buy')
 }
 function closeSheet() {
   document.getElementById('sheet').classList.remove('open')
@@ -4072,7 +4085,12 @@ function listenOrder(txId) {
       if (isFreeMode) {
         setTimeout(()=>listenOrder(txId), 700)
       } else {
-        document.getElementById('sh-fail-msg').textContent=d.error||'Tempo expirou.'
+        document.getElementById('sh-fail-msg').textContent=d.error||'O pagamento foi recusado. Verifique os dados antes de tentar novamente.'
+        const caution=document.getElementById('sh-fail-caution')
+        if(caution){
+          caution.textContent=d.retryCaution||''
+          caution.style.display=d.retryCaution?'block':'none'
+        }
         shShow('failed')
       }
     }
