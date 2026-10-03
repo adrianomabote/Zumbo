@@ -27,6 +27,14 @@ As ofertas da loja começam em 10 MT, por isso a validação MozPayment tem de a
 
 **How to apply:** manter o mínimo C2B alinhado ao preço mais baixo publicado e preservar a mensagem PIN acordada.
 
+## Carteira C2B versus credencial B2C
+
+O utilizador esclareceu que o valor anteriormente configurado como `MOZPAYMENT_WALLET_ID` era uma secret key B2C, não o ID de carteira C2B. Não reutilizar credenciais B2C no campo `carteira` dos pedidos C2B. O ID C2B correcto deve ser substituído através do fluxo seguro de Secrets, em todos os ambientes usados.
+
+**Why:** C2B e B2C têm credenciais e funções distintas; a cobrança directa C2B exige o identificador da carteira C2B.
+
+**How to apply:** confirmar que `MOZPAYMENT_WALLET_ID` contém o ID de carteira C2B e nunca ler, copiar ou registar a secret key B2C em memória ou no chat.
+
 ## Reconciliação por provedor
 
 Cada operação guarda o provedor que a criou; reconciliações têm de usar esse valor, não `PAYMENT_PROVIDER` actual. Uma operação Vpay antiga só pode ser inferida com segurança quando tem `checkout_url` guardado. Outros registos antigos sem provedor identificado exigem confirmação manual.
