@@ -1025,7 +1025,7 @@ function gatewayDocsPage() {
   const providerDescription = isVpay
     ? 'Documentação da API Gateway Megabyte para iniciar pagamentos através do checkout hospedado Vpay.'
     : isMozPayment
-      ? 'Documentação da API Gateway Megabyte para criar recargas C2B MozPayment e acompanhar a activação automática de pacotes.'
+      ? 'Documentação da API Gateway Megabyte para criar recargas C2B MozPayment, confirmar o pagamento pela resposta da API e acompanhar a activação automática.'
       : 'Documentação da API Gateway Megabyte para receber pagamentos M-Pesa e e-Mola em projectos externos.'
   const paymentFlowDescription = isVpay
     ? 'Cria uma encomenda na Vpay. Abra o checkoutUrl devolvido para o cliente concluir o pagamento.'
@@ -1038,7 +1038,7 @@ function gatewayDocsPage() {
   const checkoutCallout = isVpay
     ? '<div class="callout"><strong>Checkout Vpay:</strong> redireccione o cliente para <code class="inline">checkoutUrl</code>. Esse link também é devolvido pela consulta do estado. Os métodos apresentados dentro do checkout são controlados pela Vpay; esta API não os filtra.</div>'
     : isMozPayment
-      ? '<div class="callout"><strong>MozPayment C2B:</strong> a cobrança aparece no painel como <code class="inline">Recarga [valor] MT</code>; o montante é exactamente o valor da recarga e da compra de megas. A confirmação imediata explícita ou o callback autenticado actualiza o estado; a Megabyte coloca a entrega USSD em fila automaticamente. O webhook interno da MozPayment é <code class="inline">/api/mozpayment/webhook</code> e não substitui o <code class="inline">callback_url</code> do seu projecto.</div>'
+      ? '<div class="callout"><strong>MozPayment C2B:</strong> o pagamento é confirmado pela resposta imediata da API: <code class="inline">cod: 200</code>, <code class="inline">status: "success"</code> e <code class="inline">transacao</code>. M-Pesa e e-Mola não enviam callback/webhook neste fluxo. A cobrança aparece no painel como <code class="inline">Recarga [valor] MT</code>, pelo montante exacto; após confirmação, a Megabyte coloca a entrega USSD em fila. O <code class="inline">callback_url</code> opcional desta API é apenas uma notificação do Gateway Megabyte para o seu projecto.</div>'
       : ''
   return `<!doctype html><html lang="pt-MZ"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -1053,7 +1053,7 @@ a{color:#0f766e}.wrap{width:min(1120px,calc(100% - 36px));margin:auto}.hero{back
 <header class="hero"><div class="wrap">
   <div class="brand"><span class="brand-mark">◎</span><span>megabyte.live</span></div>
   <div class="eyebrow">Documentação para programadores</div>
-  <div class="hero-grid"><div><h1>Receba pagamentos no seu projecto.</h1><p>Use uma única API para ${isVpay ? 'criar encomendas no checkout hospedado Vpay, acompanhar o resultado e confirmar callbacks assinados.' : isMozPayment ? 'criar recargas MozPayment, acompanhar a confirmação e consultar o estado da activação do pacote.' : 'iniciar cobranças M-Pesa e e-Mola, acompanhar o resultado e confirmar callbacks assinados.'}</p></div><div class="base"><small>Base URL</small><code>${baseUrl}</code></div></div>
+  <div class="hero-grid"><div><h1>Receba pagamentos no seu projecto.</h1><p>Use uma única API para ${isVpay ? 'criar encomendas no checkout hospedado Vpay, acompanhar o resultado e confirmar callbacks assinados.' : isMozPayment ? 'criar recargas MozPayment, confirmar o pagamento pela resposta C2B e acompanhar a activação do pacote.' : 'iniciar cobranças M-Pesa e e-Mola, acompanhar o resultado e confirmar callbacks assinados.'}</p></div><div class="base"><small>Base URL</small><code>${baseUrl}</code></div></div>
 </div></header>
 <main class="wrap layout">
   <nav class="toc" aria-label="Nesta página"><strong>Nesta página</strong><a href="#inicio">Visão geral</a><a href="#autenticacao">Autenticação</a><a href="#criar">Criar pagamento</a><a href="#estado">Consultar estado</a><a href="#callback">Callback</a><a href="#erros">Erros</a></nav>
