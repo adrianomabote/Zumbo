@@ -21,8 +21,8 @@ A documentação não apresenta consulta de estado C2B, callback/webhook nem cha
 
 ## Reconciliação por provedor
 
-Cada operação guarda o provedor que a criou; reconciliações têm de usar esse valor, não `PAYMENT_PROVIDER` actual. As operações existentes sem coluna de provedor são assumidas Vpay porque as pendentes identificadas antes da mudança pertenciam à Vpay.
+Cada operação guarda o provedor que a criou; reconciliações têm de usar esse valor, não `PAYMENT_PROVIDER` actual. Uma operação Vpay antiga só pode ser inferida com segurança quando tem `checkout_url` guardado. Outros registos antigos sem provedor identificado exigem confirmação manual.
 
-**Why:** mudar a configuração global não pode desviar cobranças Vpay ainda pendentes para outro provedor.
+**Why:** mudar a configuração global não pode desviar cobranças pendentes para outro provedor, e classificações presumidas podem fazer uma consulta errada.
 
-**How to apply:** persistir o provedor na criação, consultar por operação durante reconciliação e manter transacções MozPayment ambíguas fora de polling automático.
+**How to apply:** persistir o provedor na criação, inferir Vpay legado apenas a partir de `checkout_url`, consultar por operação durante reconciliação e manter provedor desconhecido ou transacções MozPayment ambíguas fora de polling automático.

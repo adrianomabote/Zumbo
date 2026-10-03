@@ -1365,6 +1365,13 @@ async function reconcilePagarTransaction(tx) {
     return 'pending'
   } catch (error) {
     console.error('[Pagar] Falha na reconciliação:', error.message)
+    if (Number(error.status) === 409) {
+      await requireManualPagarReconciliation(
+        tx,
+        error.message || 'Não foi possível identificar com segurança o provedor desta cobrança. É necessária confirmação manual.',
+      )
+      return 'manual_required'
+    }
     if (tx.pagarProvider === 'mozpayment') {
       const message = 'O MozPayment não disponibiliza consulta de estado; confirme esta cobrança manualmente antes de qualquer nova tentativa.'
       await requireManualPagarReconciliation(tx, message)
@@ -1389,7 +1396,9 @@ function schedulePagarReconciliation(tx, delayMs = 30_000) {
     if (tx.status !== 'pending') return
     const result = await reconcilePagarTransaction(tx)
     if (tx.status !== 'pending') return
-    if (result === 'missing') {
+    if (result === 'manual_required') {
+      return
+    } else if (result === 'missing') {
       const message = 'Pagamento não localizado no Debito Pay; não foi criada uma nova cobrança automaticamente.'
       tx.error = message
       await updateOrderStatus(tx.id, 'pending', {

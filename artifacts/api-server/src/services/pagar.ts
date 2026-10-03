@@ -594,7 +594,7 @@ export async function ensurePagarTables() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS pagar_operations (
       internal_id text PRIMARY KEY,
-      provider text NOT NULL DEFAULT 'vpay',
+      provider text,
       pagar_operation_id text UNIQUE,
       pagar_reference text NOT NULL UNIQUE,
       type text NOT NULL,
@@ -612,8 +612,16 @@ export async function ensurePagarTables() {
       created_at timestamptz NOT NULL DEFAULT now(),
       confirmed_at timestamptz
     );
-    ALTER TABLE pagar_operations ADD COLUMN IF NOT EXISTS provider text NOT NULL DEFAULT 'vpay';
+    ALTER TABLE pagar_operations ADD COLUMN IF NOT EXISTS provider text;
+    ALTER TABLE pagar_operations ALTER COLUMN provider DROP NOT NULL;
+    ALTER TABLE pagar_operations ALTER COLUMN provider DROP DEFAULT;
     ALTER TABLE pagar_operations ADD COLUMN IF NOT EXISTS checkout_url text;
+    UPDATE pagar_operations
+       SET provider = 'vpay'
+     WHERE provider IS NULL AND checkout_url IS NOT NULL;
+    UPDATE pagar_operations
+       SET provider = NULL
+     WHERE provider = 'vpay' AND checkout_url IS NULL;
     CREATE TABLE IF NOT EXISTS pagar_webhook_events (
       event_id text PRIMARY KEY,
       event_type text NOT NULL,
