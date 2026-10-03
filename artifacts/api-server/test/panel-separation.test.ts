@@ -9,12 +9,35 @@ import assert from "node:assert/strict";
 
 const bridgeDirectory = await mkdtemp(path.join(os.tmpdir(), "net-servicos-panel-"));
 const bridgePort = await findFreePort();
+const deliveryPort = await findFreePort();
 const masterKey = "gw-master-panel-test-key";
 const adminPassword = "panel-test-admin-pass";
 const gatewayTransactionId = "GATEWAY-ONLY-PANEL-SENTINEL";
+const manualMozPaymentId = "MEGA-FIRST-PAGE-SENTINEL";
 const externalReference = "PRIVATE-EXTERNAL-REFERENCE-SENTINEL";
 const externalDescription = "PRIVATE-DESCRIPTION-SENTINEL";
 const callbackUrl = "https://callbacks.example.test/PRIVATE-CALLBACK-SENTINEL";
+const deliveryRequests: Array<Record<string, unknown>> = [];
+const deliveryServer = createServer((req, res) => {
+  const chunks: Buffer[] = [];
+  req.on("data", (chunk: Buffer) => chunks.push(chunk));
+  req.on("end", () => {
+    if (req.method !== "POST" || req.url !== "/api/ussd-agent/internal/paid-deliveries") {
+      res.writeHead(404).end();
+      return;
+    }
+    if (req.headers["x-internal-delivery-key"] !== "panel-test-session-secret") {
+      res.writeHead(401).end();
+      return;
+    }
+    const body = JSON.parse(Buffer.concat(chunks).toString()) as Record<string, unknown>;
+    deliveryRequests.push(body);
+    res.writeHead(201, { "content-type": "application/json" });
+    res.end(JSON.stringify({
+      delivery: { id: `panel-delivery-${deliveryRequests.length}`, status: "queued", failureReason: null },
+    }));
+  });
+});
 
 let bridgeProcess: ChildProcess | undefined;
 let bridgeOutput = "";
@@ -61,6 +84,17 @@ function bundleRecord(txId: string) {
     status: "succeeded",
     sourceId: `source-${txId}`,
     ts: "2026-08-26T10:00:00.000Z",
+  };
+}
+
+function manualMozPaymentRecord(txId: string) {
+  return {
+    ...bundleRecord(txId),
+    status: "pending",
+    method: "mpesa",
+    pagarProvider: "mozpayment",
+    pagarReconciliationStatus: "manual_required",
+    pagarReconciliationError: "Confirmar no painel do provedor.",
   };
 }
 
@@ -134,10 +168,14 @@ before(async () => {
   const megabyteOrders = Array.from({ length: 1_001 }, (_, index) =>
     bundleRecord(index === 1_000 ? "MEGA-LAST-PAGE-SENTINEL" : `mega-panel-${index}`),
   );
+  await new Promise<void>((resolve, reject) => {
+    deliveryServer.once("error", reject);
+    deliveryServer.listen(deliveryPort, resolve);
+  });
   await writeFile(
     path.join(bridgeDirectory, "orders.json"),
     JSON.stringify([
-      bundleRecord("MEGA-FIRST-PAGE-SENTINEL"),
+      manualMozPaymentRecord(manualMozPaymentId),
       ...megabyteOrders.slice(1),
       gatewayRecord(gatewayTransactionId, "succeeded", 777, {
         extRef: externalReference,
@@ -161,6 +199,7 @@ before(async () => {
       NODE_ENV: "production",
       PAYMENT_PROVIDER: "pagar",
       NET_SERVICOS_PAYMENT_MODE: "mock",
+      MAIN_API_PORT: String(deliveryPort),
       ADMIN_PASS: adminPassword,
       SESSION_SECRET: "panel-test-session-secret",
       PAGAR_API_KEY: "panel-test-api-key",
@@ -252,6 +291,11 @@ after(async () => {
     });
   }
   await stopBridge();
+  if (deliveryServer.listening) {
+    await new Promise<void>((resolve, reject) => {
+      deliveryServer.close((error) => (error ? reject(error) : resolve()));
+    });
+  }
   await rm(bridgeDirectory, { recursive: true, force: true });
 });
 
@@ -429,4 +473,56 @@ test("preserva o contrato público de criação e consulta do gateway", async ()
   assert.equal(status.phone, "841234567");
   assert.equal(status.method, "mpesa");
   assert.equal(status.reference, "PUBLIC-CONTRACT-REFERENCE");
+});
+
+test("confirma só pagamentos MozPayment elegíveis e enfileira uma entrega", async () => {
+  const page = await panelRequest("all", 1);
+  assert.match(page, /Confirmação manual necessária/);
+  assert.match(page, /Confirmar pagamento no MozPayment/);
+
+  const endpoint = `${baseUrl}/admin/confirm-mozpayment`;
+  const request = {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ txId: manualMozPaymentId }),
+  };
+  const unauthorized = await fetch(endpoint, request);
+  assert.equal(unauthorized.status, 401);
+  assert.equal(deliveryRequests.some((delivery) => delivery.paymentId === manualMozPaymentId), false);
+
+  const beforeDeliveries = deliveryRequests.length;
+  const confirmed = await fetch(endpoint, {
+    ...request,
+    headers: { ...request.headers, cookie: adminCookie },
+  });
+  assert.equal(confirmed.status, 200);
+  assert.deepEqual(await confirmed.json(), {
+    ok: true,
+    status: "succeeded",
+    reconciliationStatus: "manual_confirmed",
+    deliveryStatus: "queued",
+  });
+
+  const matchingDeliveries = deliveryRequests.filter((delivery) => delivery.paymentId === manualMozPaymentId);
+  assert.equal(deliveryRequests.length, beforeDeliveries + 1);
+  assert.equal(matchingDeliveries.length, 1);
+  assert.equal(matchingDeliveries[0]?.idempotencyKey, `order-${manualMozPaymentId}`);
+
+  const duplicate = await fetch(endpoint, {
+    ...request,
+    headers: { ...request.headers, cookie: adminCookie },
+  });
+  assert.equal(duplicate.status, 409);
+  assert.equal(deliveryRequests.filter((delivery) => delivery.paymentId === manualMozPaymentId).length, 1);
+
+  const ordersResponse = await fetch(`${baseUrl}/admin/orders.json`, {
+    headers: { cookie: adminCookie },
+  });
+  assert.equal(ordersResponse.status, 200);
+  const orders = await ordersResponse.json();
+  const savedOrder = orders.find((order: { txId?: string }) => order.txId === manualMozPaymentId);
+  assert.equal(savedOrder.status, "succeeded");
+  assert.equal(savedOrder.pagarReconciliationStatus, "manual_confirmed");
+  assert.equal(savedOrder.deliveryStatus, "queued");
+  assert.equal(typeof savedOrder.pagarManualConfirmedAt, "string");
 });
