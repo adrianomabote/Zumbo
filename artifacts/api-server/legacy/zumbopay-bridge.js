@@ -2146,6 +2146,33 @@ NOTAS
     }
   }
 
+  if (method === 'POST' && path === '/admin/confirm-mozpayment') {
+    if (!checkAdminCookie(req)) return json(res, { error:'Não autorizado.' }, 401)
+    let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
+    const rec = orders.find(o => o.txId === body.txId)
+    if (!rec || rec.type !== 'bundle') return json(res, { error:'Encomenda Megabyte não encontrada.' }, 404)
+    if (
+      rec.status !== 'pending' ||
+      rec.pagarProvider !== 'mozpayment' ||
+      rec.pagarReconciliationStatus !== 'manual_required' ||
+      !['mpesa', 'emola'].includes(String(rec.method).toLowerCase())
+    ) {
+      return json(res, { error:'Só pagamentos MozPayment pendentes que exigem confirmação manual podem ser confirmados aqui.' }, 409)
+    }
+    const confirmedAt = new Date().toISOString()
+    await updateOrderStatus(rec.txId, 'succeeded', {
+      pagarReconciliationStatus: 'manual_confirmed',
+      pagarReconciliationError: null,
+      pagarManualConfirmedAt: confirmedAt,
+    })
+    return json(res, {
+      ok: true,
+      status: rec.status,
+      reconciliationStatus: rec.pagarReconciliationStatus,
+      deliveryStatus: rec.deliveryStatus || null,
+    })
+  }
+
   if (method === 'POST' && path === '/admin/activate') {
     if (!checkAdminCookie(req)) return json(res, { error:'Não autorizado.' }, 401)
     let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
@@ -4567,7 +4594,12 @@ function adminDashboard(filter = 'all', requestedPage = 1, gatewayMode = false) 
         const isForOther = o.beneficiaryPhone && o.beneficiaryPhone !== o.phone
         const deliveryAttention = ['failed','manual_intervention'].includes(o.deliveryStatus)
         const forwardingAttention = ['pending','forwarding','failed'].includes(o.pagarForwardingStatus)
-        const reconciliationAttention = o.status === 'pending' && o.pagarReconciliationStatus === 'pending'
+        const reconciliationAttention = o.status === 'pending' &&
+          ['pending', 'manual_required'].includes(o.pagarReconciliationStatus)
+        const manualMozPaymentConfirmation = o.status === 'pending' &&
+          o.type === 'bundle' &&
+          o.pagarProvider === 'mozpayment' &&
+          o.pagarReconciliationStatus === 'manual_required'
         const canActivate = o.status === 'succeeded' && !o.deliveryStatus && !forwardingAttention
         const forwardingRetryAt = o.pagarForwardingNextRetryAt ? new Date(o.pagarForwardingNextRetryAt).toLocaleString('pt-MZ',{dateStyle:'short',timeStyle:'short'}) : null
         return `<div class="order-card" id="card-${o.txId}">
@@ -4614,8 +4646,9 @@ function adminDashboard(filter = 'all', requestedPage = 1, gatewayMode = false) 
     ${o.deliveryStatus && !deliveryAttention ? `<div class="delivery-state">Entrega USSD: ${o.deliveryStatus === 'queued' ? 'na fila' : o.deliveryStatus === 'leased' ? 'reservada pelo agente' : o.deliveryStatus}</div>` : ''}
   </div>
   ${reconciliationAttention ? `<div class="delivery-alert pagar-reconciliation-alert">
-     <strong>Pagamento em reconciliação</strong>
-     <span>${o.pagarReconciliationError || 'A confirmar o estado desta cobrança com o Pagar. O pagamento não foi marcado como falhado.'}</span>
+     <strong>${o.pagarReconciliationStatus === 'manual_required' ? 'Confirmação manual necessária' : 'Pagamento em reconciliação'}</strong>
+     <span>${escapeHtml(o.pagarReconciliationError || (o.pagarProvider === 'mozpayment' ? 'Confirme o estado no painel MozPayment. Não pague novamente.' : 'A confirmar o estado desta cobrança com o Pagar. O pagamento não foi marcado como falhado.'))}</span>
+     ${manualMozPaymentConfirmation ? `<button class="activate-btn" onclick="confirmMozPayment('${escapeHtml(o.txId)}',this)">Confirmar pagamento no MozPayment</button>` : ''}
    </div>` : ''}${forwardingAttention ? `<div class="delivery-alert pagar-forwarding-alert">
     <strong>${o.pagarForwardingStatus === 'failed' ? 'Encaminhamento Pagar falhou' : o.pagarForwardingStatus === 'forwarding' ? 'A encaminhar confirmação Pagar' : 'A aguardar encaminhamento Pagar'}</strong>
     <span>${o.pagarForwardingFailureReason ? escapeHtml(o.pagarForwardingFailureReason) : o.pagarForwardingStatus === 'failed' ? 'O bridge legado está indisponível.' : 'A confirmação de pagamento ficará na fila até o bridge estar disponível.'}</span>
@@ -5065,6 +5098,19 @@ async function activateOrder(txId,btn){
       }
     } else { showToast(d.error||'Erro ao guardar.',false); btn.disabled=false; btn.textContent='Marcar como Activado' }
   } catch { showToast('Erro de ligação.',false); btn.disabled=false; btn.textContent='Marcar como Activado' }
+}
+async function confirmMozPayment(txId,btn){
+  if(!confirm('Confirma que esta cobrança aparece como paga no painel MozPayment? Isto vai marcar a encomenda como paga e iniciar a entrega USSD.')) return
+  const originalText=btn.textContent
+  btn.disabled=true; btn.textContent='A confirmar…'
+  try {
+    const r=await fetch('/admin/confirm-mozpayment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({txId})})
+    const d=await r.json()
+    if(r.ok){
+      showToast(d.deliveryStatus==='queued' ? 'Pagamento confirmado; entrega colocada na fila.' : 'Pagamento confirmado; verifique o estado da entrega.')
+      setTimeout(()=>location.reload(),700)
+    } else { showToast(d.error||'Erro ao confirmar pagamento.',false); btn.disabled=false; btn.textContent=originalText }
+  } catch { showToast('Erro de ligação.',false); btn.disabled=false; btn.textContent=originalText }
 }
 async function retryDelivery(txId,btn){
   if(!confirm('Confirma que quer repetir a entrega deste pacote?')) return
