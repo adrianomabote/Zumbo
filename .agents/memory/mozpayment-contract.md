@@ -19,6 +19,14 @@ A documentação não apresenta consulta de estado C2B, callback/webhook nem cha
 
 **How to apply:** quando houver timeout, falha de comunicação ou resposta sem confirmação inequívoca, marcar revisão manual e não agendar novas tentativas.
 
+## Valor mínimo e mensagem de espera
+
+As ofertas da loja começam em 10 MT, por isso a validação MozPayment tem de aceitar esse valor. A tela de espera deve dizer que o pedido está a ser iniciado; não deve afirmar que o PIN foi enviado antes de a chamada ao provedor ser aceite. A loja responde ao browser antes de terminar a criação assíncrona da cobrança, e uma rejeição interna pode ocorrer antes de qualquer registo ou chamada externa.
+
+**Why:** uma janela de espera não prova que o pedido chegou ao M-Pesa; uma validação abaixo do catálogo pode deixar a encomenda pendente sem gerar solicitação de PIN.
+
+**How to apply:** manter o mínimo C2B alinhado ao preço mais baixo publicado, mostrar erros de cobrança no estado de espera e verificar o registo da operação antes de afirmar que o provedor recebeu o pedido.
+
 ## Reconciliação por provedor
 
 Cada operação guarda o provedor que a criou; reconciliações têm de usar esse valor, não `PAYMENT_PROVIDER` actual. Uma operação Vpay antiga só pode ser inferida com segurança quando tem `checkout_url` guardado. Outros registos antigos sem provedor identificado exigem confirmação manual.
