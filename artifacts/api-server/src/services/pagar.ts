@@ -30,11 +30,11 @@ function activeProvider(): PaymentProvider {
   throw new Error(`Provedor de pagamento não suportado: ${configuredProvider}.`);
 }
 
-function providerName() {
-  if (activeProvider() === "vpay") return "Vpay";
-  if (activeProvider() === "mozpayment") return "MozPayment";
-  if (activeProvider() === "paysuite") return "Paysuite";
-  return activeProvider() === "debitopay" ? "Debito Pay" : "Pagar";
+function providerName(provider: PaymentProvider = activeProvider()) {
+  if (provider === "vpay") return "Vpay";
+  if (provider === "mozpayment") return "MozPayment";
+  if (provider === "paysuite") return "Paysuite";
+  return provider === "debitopay" ? "Debito Pay" : "Pagar";
 }
 
 function normalizeDebitoPhone(phone: string) {
@@ -212,9 +212,13 @@ function providerAmount(operation: Record<string, unknown>) {
   return undefined;
 }
 
-function providerAmountMatches(value: number | undefined, localAmountMzn: number) {
+function providerAmountMatches(
+  value: number | undefined,
+  localAmountMzn: number,
+  provider: PaymentProvider = activeProvider(),
+) {
   if (value === undefined) return true;
-  return activeProvider() === "debitopay"
+  return provider === "debitopay"
     ? value === localAmountMzn || value === debitoProviderAmount(localAmountMzn)
     : value === localAmountMzn;
 }
@@ -241,8 +245,8 @@ export interface PagarPaymentInput {
   idempotencyKey: string;
 }
 
-function config() {
-  if (activeProvider() === "mozpayment") {
+function config(provider: PaymentProvider = activeProvider()) {
+  if (provider === "mozpayment") {
     const walletId = process.env.MOZPAYMENT_WALLET_ID?.trim();
     if (!walletId) {
       throw new Error("MozPayment não está configurado no servidor.");
@@ -254,7 +258,7 @@ function config() {
     };
   }
 
-  if (activeProvider() === "vpay") {
+  if (provider === "vpay") {
     const clientId = process.env.VPAY_CLIENT_ID;
     const clientSecret = process.env.VPAY_CLIENT_SECRET;
     if (!clientId || !clientSecret) {
@@ -268,7 +272,7 @@ function config() {
     };
   }
 
-  if (activeProvider() === "paysuite") {
+  if (provider === "paysuite") {
     const apiKey = process.env.PAYSUITE_API_KEY;
     if (!apiKey) {
       throw new Error("Paysuite API não está configurada no servidor.");
@@ -280,7 +284,7 @@ function config() {
     };
   }
 
-  if (activeProvider() === "debitopay") {
+  if (provider === "debitopay") {
     const apiKey = process.env.DEBITO_API_KEY;
     const baseUrl = process.env.DEBITO_API_BASE_URL;
     const merchantId = process.env.DEBITO_MERCHANT_ID;
@@ -404,8 +408,14 @@ async function vpayAccessToken(configuration: {
   }
 }
 
-async function request(method: "GET" | "POST", endpoint: string, body?: Record<string, unknown>, idempotencyKey?: string) {
-  const configuration = config();
+async function request(
+  method: "GET" | "POST",
+  endpoint: string,
+  body?: Record<string, unknown>,
+  idempotencyKey?: string,
+  provider: PaymentProvider = activeProvider(),
+) {
+  const configuration = config(provider);
   const { baseUrl } = configuration;
   const rawBody = body === undefined ? undefined : JSON.stringify(body);
   const url = new URL(`${baseUrl.replace(/\/$/, "")}${endpoint}`);
@@ -584,6 +594,7 @@ export async function ensurePagarTables() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS pagar_operations (
       internal_id text PRIMARY KEY,
+      provider text NOT NULL DEFAULT 'vpay',
       pagar_operation_id text UNIQUE,
       pagar_reference text NOT NULL UNIQUE,
       type text NOT NULL,
@@ -601,6 +612,7 @@ export async function ensurePagarTables() {
       created_at timestamptz NOT NULL DEFAULT now(),
       confirmed_at timestamptz
     );
+    ALTER TABLE pagar_operations ADD COLUMN IF NOT EXISTS provider text NOT NULL DEFAULT 'vpay';
     ALTER TABLE pagar_operations ADD COLUMN IF NOT EXISTS checkout_url text;
     CREATE TABLE IF NOT EXISTS pagar_webhook_events (
       event_id text PRIMARY KEY,
@@ -630,7 +642,8 @@ export async function ensurePagarTables() {
 
 export async function createPagarPayment(input: PagarPaymentInput) {
   const database = requirePool();
-  const normalizedInput = activeProvider() === "paysuite"
+  const provider = activeProvider();
+  const normalizedInput = provider === "paysuite"
     ? {
         ...input,
         reference: input.reference.replace(/[^A-Za-z0-9]/g, "").slice(0, 50),
@@ -638,27 +651,27 @@ export async function createPagarPayment(input: PagarPaymentInput) {
     : input;
   validateInput(normalizedInput);
   const existing = await database.query(
-    "SELECT internal_id, pagar_operation_id, pagar_reference, amount_mzn, status, checkout_url FROM pagar_operations WHERE local_transaction_id = $1 OR idempotency_key = $2",
+    "SELECT internal_id, provider, pagar_operation_id, pagar_reference, amount_mzn, status, checkout_url FROM pagar_operations WHERE local_transaction_id = $1 OR idempotency_key = $2",
     [input.localTransactionId, input.idempotencyKey],
   );
   if (existing.rows[0]) return existing.rows[0];
 
   const inserted = await database.query(
-    `INSERT INTO pagar_operations (internal_id, pagar_reference, type, amount_mzn, status, idempotency_key, source_id, local_transaction_id, title, method, payer_phone)
-     VALUES ($1,$2,'payment',$3,'PENDING',$4,$5,$6,$7,$8,$9) RETURNING *`,
-    [input.localTransactionId, normalizedInput.reference, input.amountMzn, input.idempotencyKey, input.sourceId, input.localTransactionId, input.title, input.method, input.payerPhone],
+    `INSERT INTO pagar_operations (internal_id, provider, pagar_reference, type, amount_mzn, status, idempotency_key, source_id, local_transaction_id, title, method, payer_phone)
+     VALUES ($1,$2,$3,'payment',$4,'PENDING',$5,$6,$7,$8,$9,$10) RETURNING *`,
+    [input.localTransactionId, provider, normalizedInput.reference, input.amountMzn, input.idempotencyKey, input.sourceId, input.localTransactionId, input.title, input.method, input.payerPhone],
   );
-  const isDebitoPay = activeProvider() === "debitopay";
-  const isPaysuite = activeProvider() === "paysuite";
-  const isVpay = activeProvider() === "vpay";
-  const isMozPayment = activeProvider() === "mozpayment";
+  const isDebitoPay = provider === "debitopay";
+  const isPaysuite = provider === "paysuite";
+  const isVpay = provider === "vpay";
+  const isMozPayment = provider === "mozpayment";
   try {
   let paysuiteContactId: string | undefined;
   if (isPaysuite) {
-    const contactData = await request("POST", "/contacts", {
+     const contactData = await request("POST", "/contacts", {
       name: "Cliente Megabyte",
       phone: normalizeDebitoPhone(input.payerPhone),
-    }, input.idempotencyKey);
+     }, input.idempotencyKey, provider);
     paysuiteContactId = providerOperationId(extractProviderOperation(contactData));
     if (!paysuiteContactId) {
       throw new Error("A Paysuite não devolveu o identificador do contacto.");
@@ -717,7 +730,7 @@ export async function createPagarPayment(input: PagarPaymentInput) {
         status: result.status,
       };
     } else {
-      data = await request("POST", isDebitoPay ? "/payment-orchestrator" : "/payments", body, input.idempotencyKey);
+      data = await request("POST", isDebitoPay ? "/payment-orchestrator" : "/payments", body, input.idempotencyKey, provider);
     }
     const operation = isVpay ? {} : extractProviderOperation(data);
     const status = isVpay
@@ -754,29 +767,32 @@ export async function createPagarPayment(input: PagarPaymentInput) {
   }
 }
 
-export async function getPagarPayment(identifier: { id?: string; reference?: string }) {
-  if (activeProvider() === "mozpayment") {
+export async function getPagarPayment(
+  identifier: { id?: string; reference?: string },
+  provider: PaymentProvider = activeProvider(),
+) {
+  if (provider === "mozpayment") {
     const error = new Error("A documentação pública do MozPayment não disponibiliza consulta de estado.");
     Object.assign(error, { status: 501 });
     throw error;
   }
-  if (activeProvider() === "vpay") {
+  if (provider === "vpay") {
     if (!identifier.id) {
       const error = new Error("Identificador Vpay em falta para consultar a encomenda.");
       Object.assign(error, { status: 404 });
       throw error;
     }
-    return request("GET", `/v1/orders/${encodeURIComponent(identifier.id)}/status`);
+    return request("GET", `/v1/orders/${encodeURIComponent(identifier.id)}/status`, undefined, undefined, provider);
   }
-  if (activeProvider() === "paysuite") {
+  if (provider === "paysuite") {
     if (!identifier.id) {
       const error = new Error("Identificador Paysuite em falta para consultar o pagamento.");
       Object.assign(error, { status: 404 });
       throw error;
     }
-    return request("GET", `/payments/${encodeURIComponent(identifier.id)}`);
+    return request("GET", `/payments/${encodeURIComponent(identifier.id)}`, undefined, undefined, provider);
   }
-  if (activeProvider() === "debitopay") {
+  if (provider === "debitopay") {
     const paymentId = identifier.id || identifier.reference;
     if (!paymentId) {
       throw new Error("Identificador Debito Pay em falta.");
@@ -785,18 +801,20 @@ export async function getPagarPayment(identifier: { id?: string; reference?: str
       "POST",
       "/payment-orchestrator",
       { action: "check-status", payment_id: paymentId },
+      undefined,
+      provider,
     );
   }
   const endpoint = identifier.id
     ? `/payments/${encodeURIComponent(identifier.id)}`
     : `/payments/by-reference/${encodeURIComponent(identifier.reference || "")}`;
-  return request("GET", endpoint);
+  return request("GET", endpoint, undefined, undefined, provider);
 }
 
 export async function reconcilePagarPayment(localTransactionId: string) {
   const database = requirePool();
   const localResult = await database.query(
-    `SELECT internal_id, pagar_operation_id, pagar_reference, amount_mzn, status
+    `SELECT internal_id, provider, pagar_operation_id, pagar_reference, amount_mzn, status
        FROM pagar_operations WHERE internal_id = $1`,
     [localTransactionId],
   );
@@ -806,7 +824,13 @@ export async function reconcilePagarPayment(localTransactionId: string) {
     Object.assign(error, { status: 404 });
     throw error;
   }
-  if (activeProvider() === "mozpayment") {
+  const provider = local.provider as PaymentProvider;
+  if (!["pagar", "debitopay", "paysuite", "vpay", "mozpayment"].includes(provider)) {
+    const error = new Error("O provedor original desta operação não está identificado; é necessária confirmação manual.");
+    Object.assign(error, { status: 409 });
+    throw error;
+  }
+  if (provider === "mozpayment") {
     if (terminalStates.has(normalizePaymentStatus(local.status) || "")) return local;
     const error = new Error(
       "O MozPayment não documenta consulta de estado; esta operação requer confirmação manual.",
@@ -818,21 +842,21 @@ export async function reconcilePagarPayment(localTransactionId: string) {
   const data = await getPagarPayment({
     id: local.pagar_operation_id || undefined,
     reference: local.pagar_reference,
-  });
-  const isVpay = activeProvider() === "vpay";
+  }, provider);
+  const isVpay = provider === "vpay";
   const operation = isVpay ? extractVpayOperation(data) : extractProviderOperation(data);
   const rawProviderStatus = providerStatus(operation);
-  const normalizedProviderStatus = activeProvider() === "debitopay"
+  const normalizedProviderStatus = provider === "debitopay"
     ? normalizeDebitoStatus(rawProviderStatus)
-    : activeProvider() === "paysuite"
+    : provider === "paysuite"
       ? normalizePaysuiteStatus(rawProviderStatus)
       : isVpay
         ? vpayResponseStatus(data)
         : normalizePaymentStatus(rawProviderStatus);
   if (!normalizedProviderStatus || (
-    (activeProvider() === "pagar" || isVpay) && !knownPaymentStates.has(normalizedProviderStatus)
+    (provider === "pagar" || isVpay) && !knownPaymentStates.has(normalizedProviderStatus)
   )) {
-    throw new Error(`O ${providerName()} devolveu um estado de pagamento desconhecido.`);
+    throw new Error(`O ${providerName(provider)} devolveu um estado de pagamento desconhecido.`);
   }
 
   const operationId = isVpay
@@ -844,16 +868,16 @@ export async function reconcilePagarPayment(localTransactionId: string) {
     throw new Error("A Vpay não confirmou o identificador da encomenda.");
   }
   if (local.pagar_operation_id && operationId && local.pagar_operation_id !== operationId) {
-    throw new Error(`A operação devolvida pelo ${providerName()} não corresponde ao pagamento local.`);
+    throw new Error(`A operação devolvida pelo ${providerName(provider)} não corresponde ao pagamento local.`);
   }
   if (local.pagar_reference && reference && local.pagar_reference !== reference) {
-    throw new Error(`A referência devolvida pelo ${providerName()} não corresponde ao pagamento local.`);
+    throw new Error(`A referência devolvida pelo ${providerName(provider)} não corresponde ao pagamento local.`);
   }
   const amountMatches = isVpay
     ? vpayOperationAmountMatches(data, local.amount_mzn)
-    : providerAmountMatches(providerAmount(operation), local.amount_mzn);
+    : providerAmountMatches(providerAmount(operation), local.amount_mzn, provider);
   if ((isVpay && normalizedProviderStatus === "PAID" && amountMatches !== true) || amountMatches === false) {
-    throw new Error(`O valor devolvido pelo ${providerName()} não corresponde ao pagamento local.`);
+    throw new Error(`O valor devolvido pelo ${providerName(provider)} não corresponde ao pagamento local.`);
   }
 
   const receipt = (operation.receipt || {}) as Record<string, unknown>;
