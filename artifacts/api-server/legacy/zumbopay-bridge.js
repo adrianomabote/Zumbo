@@ -1618,7 +1618,14 @@ self.addEventListener('fetch',e=>{
      const tx = transactions.get(txId)
      const order = orders.find(item => item.txId === txId)
      const current = tx || order
-     if (current) res.write(`data: ${JSON.stringify({ status:current.status, method:current.method, checkoutUrl:current.checkoutUrl || null, error:current.error || null })}\n\n`)
+      if (current) res.write(`data: ${JSON.stringify({
+        status:current.status,
+        method:current.method,
+        checkoutUrl:current.checkoutUrl || null,
+        error:current.error || null,
+        reconciliationRequired: order?.pagarReconciliationStatus === 'manual_required' ||
+          current.pagarReconciliationStatus === 'manual_required',
+      })}\n\n`)
     return
   }
 
@@ -3995,6 +4002,12 @@ function listenOrder(txId) {
   evtSrc = new EventSource('/events/'+txId)
   evtSrc.onmessage = e => {
     const d=JSON.parse(e.data)
+    if(d.status==='pending' && d.reconciliationRequired){
+      evtSrc.close()
+      const message=document.querySelector('#s-pending .voda-pin-msg')
+      if(message) message.textContent=d.error||'Não foi possível confirmar automaticamente. Não pague novamente; contacte o suporte para verificar a cobrança.'
+      return
+    }
     if(d.status==='pending' && d.checkoutUrl && !checkoutDispatched){
       try {
         const checkout = new URL(d.checkoutUrl, window.location.href)

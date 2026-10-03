@@ -456,7 +456,10 @@ async function request(
       "X-Pagar-Signature": `v1=${signature}`,
     });
   }
-  const response = await fetch(url, { method, headers, body: rawBody, signal: AbortSignal.timeout(15_000) });
+  // MozPayment's synchronous C2B response can wait while the customer confirms
+  // the wallet prompt. A short generic timeout can lose a paid result.
+  const timeoutMs = configuration.provider === "mozpayment" ? 120_000 : 15_000;
+  const response = await fetch(url, { method, headers, body: rawBody, signal: AbortSignal.timeout(timeoutMs) });
   return parseResponse(response);
 }
 
