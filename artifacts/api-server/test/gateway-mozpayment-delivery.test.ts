@@ -17,6 +17,8 @@ let baseUrl: string;
 let apiServer: Server | undefined;
 let paymentRequest: Record<string, unknown> | undefined;
 let deliveryRequest: Record<string, unknown> | undefined;
+let providerStatus = "PAID";
+let deliveryRequestCount = 0;
 
 async function findFreePort() {
   const probe = createServer();
@@ -67,7 +69,7 @@ before(async () => {
         paymentRequest = body;
         response.writeHead(202, { "Content-Type": "application/json" }).end(JSON.stringify({
           paymentId: "mozpayment-gateway-payment-test",
-          status: "PAID",
+          status: providerStatus,
           reference: body.reference,
           provider: "mozpayment",
         }));
@@ -76,6 +78,7 @@ before(async () => {
       if (request.method === "POST" && request.url === "/api/ussd-agent/internal/paid-deliveries") {
         assert.equal(request.headers["x-internal-delivery-key"], sessionSecret);
         deliveryRequest = body;
+        deliveryRequestCount += 1;
         response.writeHead(201, { "Content-Type": "application/json" }).end(JSON.stringify({
           delivery: { id: "mozpayment-gateway-delivery-test", status: "queued" },
         }));
@@ -190,4 +193,31 @@ test("MozPayment Gateway cobra exactamente 10 MT e inicia a entrega USSD", async
   assert.equal(status.amount, 10);
   assert.equal(status.megabytes, created.megabytes);
   assert.equal(status.deliveryStatus, "queued");
+
+  providerStatus = "FAILED";
+  const failedPaymentResponse = await fetch(`${baseUrl}/gateway/api/pay`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-api-key": masterKey },
+    body: JSON.stringify({
+      phone: "841234567",
+      amount: 10,
+      reference: "MozPayment insufficient balance gateway test",
+    }),
+  });
+  assert.equal(failedPaymentResponse.status, 202, bridgeOutput);
+  const failedPayment = await failedPaymentResponse.json() as Record<string, unknown>;
+  assert.equal(failedPayment.ok, true);
+  assert.equal(failedPayment.status, "failed");
+  assert.equal(failedPayment.deliveryStatus, undefined);
+  assert.equal(deliveryRequestCount, 1);
+
+  const failedStatusResponse = await fetch(
+    `${baseUrl}/gateway/api/status/${encodeURIComponent(String(failedPayment.txId))}`,
+    { headers: { "x-api-key": masterKey } },
+  );
+  assert.equal(failedStatusResponse.status, 200);
+  const failedStatus = await failedStatusResponse.json() as Record<string, unknown>;
+  assert.equal(failedStatus.status, "failed");
+  assert.equal(failedStatus.deliveryStatus, undefined);
+  assert.equal(deliveryRequestCount, 1);
 });
