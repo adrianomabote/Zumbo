@@ -114,7 +114,6 @@ before(async () => {
       ADMIN_PASS: "mozpayment-gateway-test-admin",
       SESSION_SECRET: sessionSecret,
       MOZPAYMENT_WALLET_ID: "mozpayment-test-wallet",
-      MOZPAYMENT_WEBHOOK_SECRET: "mozpayment-test-webhook-secret",
       GW_MASTER_KEY: masterKey,
       GW_MASTER_SECRET: "mozpayment-gateway-test-master-secret",
     },
@@ -145,6 +144,9 @@ test("MozPayment Gateway cobra exactamente 10 MT e inicia a entrega USSD", async
   assert.match(docs, /Recarga \[valor\] MT/);
   assert.match(docs, /entre 10 e 40000 MT/);
   assert.match(docs, /entrega USSD em fila automaticamente/i);
+  assert.match(docs, /cod: 200.*status: "success".*transacao/);
+  assert.match(docs, /não enviam callback\/webhook neste fluxo/i);
+  assert.match(docs, /callback_url.*notificação do Gateway Megabyte/i);
 
   const belowMinimum = await fetch(`${baseUrl}/gateway/api/pay`, {
     method: "POST",

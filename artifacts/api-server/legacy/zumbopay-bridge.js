@@ -886,6 +886,7 @@ async function refreshDeliveryStates() {
 }
 
 async function refreshPagarForwardingStates() {
+  if (PAYMENT_API_ROUTE === 'mozpayment') return
   const mainPort = process.env.MAIN_API_PORT
   const secret = process.env.SESSION_SECRET
   if (!mainPort || !secret) return
@@ -1092,7 +1093,7 @@ ${checkoutResponseField}  "reference": "pedido-123",
   "ts": "2026-09-21T12:00:00.000Z"
  }</pre><p>Consulte a cada 3–5 segundos enquanto o estado for <code class="inline">pending</code>. Pare quando chegar a <code class="inline">succeeded</code> ou <code class="inline">failed</code>. Quando disponível, <code class="inline">deliveryStatus</code> indica o estado da entrega USSD dos megas.</p></div></div></section>
 ${checkoutCallout}
-    <section class="section" id="callback"><h2>Callback assinado</h2><p>Se enviar <code class="inline">callback_url</code>, o Gateway fará um POST quando o pagamento terminar.</p><pre>Content-Type: application/json
+    <section class="section" id="callback"><h2>Callback assinado do Gateway</h2><p>Se enviar <code class="inline">callback_url</code>, o Gateway Megabyte fará um POST ao seu projecto quando o pagamento terminar. Este callback é enviado pelo Gateway; não é um webhook da MozPayment.</p><pre>Content-Type: application/json
 X-Gateway-Signature: assinatura_hmac_sha256</pre><pre>{
   "event": "payment.succeeded",
   "txId": "a1b2c3d4e5f6",

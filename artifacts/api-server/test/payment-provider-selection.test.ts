@@ -215,6 +215,20 @@ test("MozPayment C2B uses the documented endpoints and requires an explicit JSON
     });
     assert.deepEqual(emola, { status: "FAILED" });
 
+    globalThis.fetch = (async () => new Response(JSON.stringify({
+      cod: 401,
+      status: "error",
+      mensagem: "Falha",
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    })) as typeof fetch;
+    assert.deepEqual(await createMozPaymentC2B({
+      amountMzn: 40,
+      method: "MPESA",
+      payerPhone: "841234567",
+    }), { status: "FAILED" });
+
     assert.deepEqual(calls.map(({ url }) => url), [
       "https://mozpayment.co.mz/api/1.1/wf/pagamentorotativompesa",
       "https://mozpayment.co.mz/api/1.1/wf/pagamentorotativoemola",

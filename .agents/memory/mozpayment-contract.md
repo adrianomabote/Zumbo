@@ -13,11 +13,11 @@ O utilizador confirmou C2B: o cliente paga directamente à loja através da API,
 
 ## Resultados e estado pendente
 
-A documentação pública não descreve consulta de estado C2B, payload/autenticação de callback nem chave de idempotência. O utilizador confirmou que o painel MozPayment permite registar webhook e seleccionar `PAID`, `FAILED` e `EXPIRED`; isso confirma a configuração, não o contrato de entrega. A resposta explícita `cod: 200`, `status: "success"` e `transacao` é processada automaticamente; códigos documentados de falha também. Um timeout ou resposta incompleta não prova que a carteira ficou intacta. Não transformar uma resposta ambígua em `PAID` sem confirmação do provedor. A “Área de Testes” envia pedidos ao servidor real; nunca a usar para testes.
+A documentação pública e o utilizador confirmam que os pagamentos C2B de eMola e M-Pesa não oferecem callback/webhook nem consulta de estado. A resposta directa da cobrança é a confirmação: `cod: 200`, `status: "success"` e `transacao`; `cod: 409` ou `401` indicam falha. Um timeout ou resposta incompleta não prova que a carteira ficou intacta. Não transformar uma resposta ambígua em `PAID` nem criar outra cobrança sem confirmação manual. A “Área de Testes” envia pedidos ao servidor real; nunca a usar para testes.
 
-**Why:** o painel confirma que webhooks existem, mas payload e autenticação continuam sem documentação pública; aceitar campos ou callbacks não verificados pode entregar megas sem pagamento confirmado.
+**Why:** callbacks não fazem parte do contrato C2B publicado; um webhook inventado ou presumido pode marcar um pagamento sem confirmação do provedor.
 
-**How to apply:** manter a mensagem PIN original no ecrã do cliente; só processar callbacks com autenticação válida, uma cobrança MozPayment correspondente e valor exacto. Confirmar o payload e a autenticação por uma entrega de teste/histórico do painel antes de depender do webhook em produção. Nunca marcar como pago nem criar nova cobrança para respostas ambíguas.
+**How to apply:** confirmar apenas pela resposta C2B documentada. Se for preciso avisar a loja externa, o `callback_url` do Gateway Megabyte é uma notificação nossa separada, não um callback da MozPayment. Não expor nem usar uma rota de webhook MozPayment.
 
 ## Valor mínimo e mensagem do PIN
 
