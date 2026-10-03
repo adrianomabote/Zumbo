@@ -172,6 +172,8 @@ test("MozPayment Gateway cobra exactamente 10 MT e inicia a entrega USSD", async
   assert.equal(paymentRequest?.amountMzn, 10);
   assert.equal(paymentRequest?.method, "MPESA");
   assert.equal(paymentRequest?.payerPhone, "841234567");
+  assert.equal(paymentRequest?.title, "Recarga 10 MT");
+  assert.equal(paymentRequest?.description, "Recarga 10 MT");
   assert.equal(deliveryRequest?.beneficiaryPhone, "841234567");
   assert.equal(deliveryRequest?.paymentId, created.txId);
   assert.equal(deliveryRequest?.packageLabel, `${created.megabytes} MB`);
