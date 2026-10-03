@@ -431,6 +431,7 @@ async function request(
   body?: Record<string, unknown>,
   idempotencyKey?: string,
   provider: PaymentProvider = activeProvider(),
+  onMozPaymentHttpStatus?: (status: number) => void,
 ) {
   const configuration = config(provider);
   const { baseUrl } = configuration;
@@ -475,7 +476,7 @@ async function request(
   }
   // MozPayment's synchronous C2B response can wait while the customer confirms
   // the wallet prompt. A short generic timeout can lose a paid result.
-  const timeoutMs = configuration.provider === "mozpayment" ? 120_000 : 15_000;
+  const timeoutMs = configuration.provider === "mozpayment" ? 30_000 : 15_000;
   const startedAt = configuration.provider === "mozpayment" ? Date.now() : undefined;
   let response: Response;
   try {
@@ -516,13 +517,14 @@ async function request(
         data = { message: rawText.slice(0, 500) };
       }
     }
+    onMozPaymentHttpStatus?.(response.status);
     observeMozPaymentResponse?.({
       httpStatus: response.status,
       contentType: response.headers.get("content-type"),
       jsonParsed,
       data,
     });
-    if (!response.ok && parseMozPaymentC2BResponse(data).status !== "FAILED") {
+    if (!response.ok && parseMozPaymentC2BResponse(data, response.status).status !== "FAILED") {
       const error = new Error("MozPayment não confirmou o resultado da cobrança.");
       Object.assign(error, { status: response.status, mozPaymentAmbiguous: true });
       throw error;
@@ -566,7 +568,7 @@ export type MozPaymentC2BResult = {
   failureReason?: "EMOLA_PIN_INCORRECT";
 };
 
-export function parseMozPaymentC2BResponse(data: unknown): MozPaymentC2BResult {
+export function parseMozPaymentC2BResponse(data: unknown, httpStatus = 200): MozPaymentC2BResult {
   const records = mozPaymentResponseRecords(data);
   const response = records.find((record) => record.cod !== undefined) || records[0] || {};
   const rawOperationId = records
@@ -585,21 +587,27 @@ export function parseMozPaymentC2BResponse(data: unknown): MozPaymentC2BResult {
     : undefined;
 
   const codes = records
-    .map((record) => record.cod)
-    .filter((code): code is number => typeof code === "number");
+    .map((record) => mozPaymentNumericCode(record.cod))
+    .filter((code): code is number => code !== undefined);
   const hasSuccessResponse = records.some((record) =>
-    record.cod === 200 &&
+    mozPaymentNumericCode(record.cod) === 200 &&
     typeof record.status === "string" &&
     record.status.trim().toLowerCase() === "success"
   );
-  const failureReason = mozPaymentExplicitFailureReason(records);
-  if ((codes.includes(409) || codes.includes(401) || failureReason) && hasSuccessResponse) {
+  const rejectedStatus = records.some((record) =>
+    typeof record.status === "string" &&
+    ["cancelled", "canceled", "declined", "failed", "failure", "rejected"]
+      .includes(record.status.trim().toLowerCase())
+  );
+  const failureReason = mozPaymentExplicitFailureReason(records, httpStatus);
+  const explicitFailure = codes.includes(409) || codes.includes(401) || rejectedStatus || failureReason;
+  if (explicitFailure && hasSuccessResponse) {
     return {
       status: "RECONCILIATION_REQUIRED",
       ...(operationId ? { operationId } : {}),
     };
   }
-  if (codes.includes(409) || codes.includes(401) || failureReason) {
+  if (explicitFailure) {
     return {
       status: "FAILED",
       ...(operationId ? { operationId } : {}),
@@ -607,7 +615,7 @@ export function parseMozPaymentC2BResponse(data: unknown): MozPaymentC2BResult {
     };
   }
   if (
-    response.cod === 200 &&
+    mozPaymentNumericCode(response.cod) === 200 &&
     typeof response.status === "string" &&
     response.status.trim().toLowerCase() === "success" &&
     operationId
