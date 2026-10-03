@@ -131,9 +131,10 @@ MOZPAYMENT_WEBHOOK_SECRET=SEGREDO_CONFIGURADO_PARA_O_WEBHOOK_MOZPAYMENT
 
 Guardar: `Ctrl+X` → `Y` → `Enter`
 
-> Configure `MOZPAYMENT_WEBHOOK_SECRET` com o segredo partilhado que a
-> MozPayment associa ao webhook. Não use a chave C2B/B2C da carteira. O
-> endpoint recusa chamadas sem um segredo correspondente.
+> Configure `MOZPAYMENT_WEBHOOK_SECRET` com o segredo de callback associado ao
+> webhook pela MozPayment. Não use a chave C2B/B2C da carteira. O endpoint
+> recusa chamadas sem um segredo correspondente; confirme primeiro no painel
+> como esse segredo é enviado na chamada.
 
 > Na preview da Replit, o servidor usa automaticamente `mock` quando
 > `NODE_ENV` não é `production`; os pagamentos são simulados e não movimentam

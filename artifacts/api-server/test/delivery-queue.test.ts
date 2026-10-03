@@ -480,6 +480,74 @@ test("MozPayment webhook verifies its secret, confirms the matching amount and d
   }
 });
 
+test("MozPayment FAILED and EXPIRED events update only their matching payment", async () => {
+  const cases = [
+    { status: "FAILED", expectedStatus: "FAILED" },
+    { status: "EXPIRED", expectedStatus: "CANCELLED" },
+  ] as const;
+  const created: Array<{ txId: string; eventId: string }> = [];
+
+  try {
+    for (const { status, expectedStatus } of cases) {
+      const txId = `delivery-test-mozpayment-${status.toLowerCase()}-${testId}`;
+      const operationId = `mozpayment-operation-${status.toLowerCase()}-${testId}`;
+      const reference = `net-${txId}`;
+      const eventId = `mozpayment:${txId}:${expectedStatus}`;
+      created.push({ txId, eventId });
+      await insertPendingOperation(txId, operationId, reference, "mozpayment");
+
+      const rawBody = JSON.stringify({
+        amount: "20",
+        currency: "MZN",
+        payment_id: operationId,
+        reference,
+        status,
+        transaction_id: operationId,
+      });
+      const signature = createHmac("sha256", process.env.MOZPAYMENT_WEBHOOK_SECRET!)
+        .update(rawBody)
+        .digest("hex");
+      const response = await fetch(`${baseUrl}/api/mozpayment/webhook`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-webhook-signature": `sha256=${signature}` },
+        body: rawBody,
+      });
+
+      assert.equal(response.status, 204);
+      const payment = await pool!.query("SELECT status FROM pagar_operations WHERE internal_id = $1", [txId]);
+      assert.equal(payment.rows[0]?.status, expectedStatus);
+    }
+
+    const txId = `delivery-test-mozpayment-wrong-amount-${testId}`;
+    const operationId = `mozpayment-operation-wrong-amount-${testId}`;
+    await insertPendingOperation(txId, operationId, `net-${txId}`, "mozpayment");
+    created.push({ txId, eventId: "" });
+    const rawBody = JSON.stringify({
+      amount: "21",
+      currency: "MZN",
+      payment_id: operationId,
+      status: "PAID",
+      transaction_id: operationId,
+    });
+    const signature = createHmac("sha256", process.env.MOZPAYMENT_WEBHOOK_SECRET!)
+      .update(rawBody)
+      .digest("hex");
+    const response = await fetch(`${baseUrl}/api/mozpayment/webhook`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-webhook-signature": `sha256=${signature}` },
+      body: rawBody,
+    });
+    assert.equal(response.status, 409);
+    const payment = await pool!.query("SELECT status FROM pagar_operations WHERE internal_id = $1", [txId]);
+    assert.equal(payment.rows[0]?.status, "PENDING");
+  } finally {
+    for (const { txId, eventId } of created) {
+      if (eventId) await pool!.query("DELETE FROM pagar_webhook_events WHERE event_id = $1", [eventId]);
+      await pool!.query("DELETE FROM pagar_operations WHERE internal_id = $1", [txId]);
+    }
+  }
+});
+
 test("PAID Para Outro keeps the informed beneficiary and failed delivery can be retried from the panel", async () => {
   const txId = `delivery-test-other-${testId}`;
   const operationId = `pagar-other-${testId}`;

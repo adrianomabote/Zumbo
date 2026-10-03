@@ -13,11 +13,11 @@ O utilizador confirmou C2B: o cliente paga directamente à loja através da API,
 
 ## Resultados e estado pendente
 
-A documentação não apresenta consulta de estado C2B, callback/webhook nem chave de idempotência. A resposta explícita `cod: 200`, `status: "success"` e `transacao` é processada automaticamente; códigos documentados de falha também. Um timeout ou resposta incompleta não prova que a carteira ficou intacta. O utilizador pediu que os pagamentos sejam automáticos e que o checkout mantenha a mensagem PIN original, mas não se pode transformar uma resposta ambígua em `PAID` sem confirmação do provedor. A “Área de Testes” envia pedidos ao servidor real; nunca a usar para testes.
+A documentação pública não descreve consulta de estado C2B, payload/autenticação de callback nem chave de idempotência. O utilizador confirmou que o painel MozPayment permite registar webhook e seleccionar `PAID`, `FAILED` e `EXPIRED`; isso confirma a configuração, não o contrato de entrega. A resposta explícita `cod: 200`, `status: "success"` e `transacao` é processada automaticamente; códigos documentados de falha também. Um timeout ou resposta incompleta não prova que a carteira ficou intacta. Não transformar uma resposta ambígua em `PAID` sem confirmação do provedor. A “Área de Testes” envia pedidos ao servidor real; nunca a usar para testes.
 
-**Why:** repetir uma cobrança de resultado desconhecido pode debitar o cliente duas vezes, e entregar megas sem sucesso confirmado pode causar perda financeira.
+**Why:** o painel confirma que webhooks existem, mas payload e autenticação continuam sem documentação pública; aceitar campos ou callbacks não verificados pode entregar megas sem pagamento confirmado.
 
-**How to apply:** manter a mensagem PIN original no ecrã do cliente e processar automaticamente respostas inequívocas; não mostrar ao cliente o erro interno de revisão nem marcar como pago ou criar nova cobrança para respostas ambíguas. Para eliminar estados pendentes ambíguos, é necessário um endpoint de consulta ou callback oficial da MozPayment.
+**How to apply:** manter a mensagem PIN original no ecrã do cliente; só processar callbacks com autenticação válida, uma cobrança MozPayment correspondente e valor exacto. Confirmar o payload e a autenticação por uma entrega de teste/histórico do painel antes de depender do webhook em produção. Nunca marcar como pago nem criar nova cobrança para respostas ambíguas.
 
 ## Valor mínimo e mensagem do PIN
 
