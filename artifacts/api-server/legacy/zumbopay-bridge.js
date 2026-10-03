@@ -1260,7 +1260,12 @@ async function initiateCharge(tx, customerName) {
       if (providerStatus === 'PAID') {
         await applyPagarProviderStatus(tx, providerStatus, { reference: tx.ref })
       } else if (['FAILED','CANCELLED','REFUNDED'].includes(providerStatus)) {
-        await applyPagarProviderStatus(tx, providerStatus, { reference: tx.ref })
+        await applyPagarProviderStatus(tx, providerStatus, {
+          reference: tx.ref,
+          ...(data.failureReason === 'EMOLA_PIN_INCORRECT'
+            ? { failureReason: 'EMOLA_PIN_INCORRECT' }
+            : {}),
+        })
       } else {
         tx.status = 'pending'
         notifyTx(tx.id, { status:'pending', method:tx.method, checkoutUrl:tx.checkoutUrl || null })
@@ -1361,7 +1366,9 @@ async function applyPagarProviderStatus(tx, providerStatus, details = {}) {
     tx.error = details.error || (isMozPayment
       ? 'O pagamento foi recusado pelo operador. Verifique os dados antes de tentar novamente.'
       : status === 'FAILED' ? 'Pagamento recusado.' : `Pagamento ${status.toLowerCase()}.`)
-    const retryCaution = isMozPayment && tx.method === 'emola'
+    const retryCaution = isMozPayment &&
+      tx.method === 'emola' &&
+      details.failureReason === 'EMOLA_PIN_INCORRECT'
       ? 'Antes de tentar novamente, confirme o PIN. Tentativas erradas repetidas podem bloquear a conta.'
       : null
     await updateOrderStatus(tx.id, 'failed', {

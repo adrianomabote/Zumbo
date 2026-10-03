@@ -215,7 +215,7 @@ test("MozPayment C2B uses the documented endpoints and requires an explicit JSON
       payerPhone: "+258 841 234 567",
     });
     assert.deepEqual(mpesa, { status: "PAID", operationId: "moz-txn-test-1" });
-    assert.equal(timeoutValues[0], 120_000);
+    assert.equal(timeoutValues[0], 30_000);
 
     responseCode = 409;
     const emola = await createMozPaymentC2B({
@@ -316,6 +316,23 @@ test("MozPayment C2B uses the documented endpoints and requires an explicit JSON
       status: "error",
       mensagem: "Saldo insuficiente.",
     }), { status: "FAILED" });
+    assert.deepEqual(parseMozPaymentC2BResponse({
+      cod: "409",
+      status: "rejected",
+      mensagem: "Saldo insuficiente.",
+    }), { status: "FAILED" });
+    assert.deepEqual(parseMozPaymentC2BResponse({
+      status: "success",
+      response: { cod: 409, status: "failed" },
+      transacao: "moz-txn-contradictory",
+    }), { status: "RECONCILIATION_REQUIRED", operationId: "moz-txn-contradictory" });
+    assert.deepEqual(parseMozPaymentC2BResponse({
+      emola_response: { message: "Saldo insuficiente." },
+    }), { status: "FAILED" });
+    assert.deepEqual(parseMozPaymentC2BResponse({
+      statusCode: 400,
+      emola_response: { message: "The PIN is incorrect." },
+    }, 200), { status: "FAILED", failureReason: "EMOLA_PIN_INCORRECT" });
     assert.deepEqual(parseMozPaymentC2BResponse({
       cod: 503,
       status: "error",
