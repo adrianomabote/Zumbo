@@ -1147,7 +1147,7 @@ export async function processMozPaymentWebhook(rawBody: Buffer) {
   const records = mozPaymentWebhookRecords(payload);
   if (!records.length) throw mozPaymentWebhookFailure("O webhook MozPayment não contém um evento válido.");
 
-  const rawStatus = mozPaymentWebhookText(records, ["status", "statuspago", "payment_status", "paymentStatus", "event"]);
+  const rawStatus = mozPaymentWebhookText(records, ["status", "statuspago", "payment_status", "paymentStatus", "event", "type"]);
   const status = rawStatus?.toUpperCase().replace(/[ .-]+/g, "_");
   const eventStatus = [
     "PAID",
@@ -1200,6 +1200,9 @@ export async function processMozPaymentWebhook(rawBody: Buffer) {
   }
 
   const reportedAmountMzn = mozPaymentWebhookAmount(records);
+  if (reportedAmountMzn === undefined) {
+    throw mozPaymentWebhookFailure("O webhook MozPayment não contém o valor pago.");
+  }
   const currency = mozPaymentWebhookText(records, ["currency", "currency_code"])?.toUpperCase();
   if (currency && currency !== "MZN" && currency !== "MT") {
     throw mozPaymentWebhookFailure("A moeda do evento MozPayment não é MZN.");
@@ -1227,10 +1230,10 @@ export async function processMozPaymentWebhook(rawBody: Buffer) {
     );
   }
   const local = localResult.rows[0];
-  if (reportedAmountMzn !== undefined && Number(local.amount_mzn) !== reportedAmountMzn) {
+  if (Number(local.amount_mzn) !== reportedAmountMzn) {
     throw mozPaymentWebhookFailure("O valor do webhook MozPayment não corresponde à cobrança.", 409);
   }
-  const amountMzn = reportedAmountMzn ?? Number(local.amount_mzn);
+  const amountMzn = reportedAmountMzn;
 
   const explicitEventId = mozPaymentWebhookText(records, ["event_id", "eventId", "webhook_id", "webhookId"]);
   const eventId = `mozpayment:${explicitEventId || `${local.internal_id}:${eventStatus}`}`;
