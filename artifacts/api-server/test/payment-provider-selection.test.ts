@@ -201,7 +201,7 @@ test("MozPayment C2B uses the documented endpoints and requires an explicit JSON
     process.env.MOZPAYMENT_WALLET_ID = "wallet-test-id";
 
     const mpesa = await createMozPaymentC2B({
-      amountMzn: 25,
+      amountMzn: 10,
       method: "MPESA",
       payerPhone: "+258 841 234 567",
     });
@@ -222,8 +222,8 @@ test("MozPayment C2B uses the documented endpoints and requires an explicit JSON
     assert.deepEqual(calls[0]?.body, {
       carteira: "wallet-test-id",
       numero: "841234567",
-      cliente: "Recarga 25 MT",
-      valor: "25",
+      cliente: "Recarga 10 MT",
+      valor: "10",
     });
     assert.deepEqual(calls[1]?.body, {
       carteira: "wallet-test-id",
