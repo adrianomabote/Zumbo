@@ -49,4 +49,3 @@ PAYSUITE_API_BASE_URL = "https://paysuite.tech/api/v1"
 PAYSUITE_WEBHOOK_URL = "https://megabyte.live/api/paysuite/webhook"
 
 [userenv.shared]
-MOZPAYMENT_WALLET_ID = "TP;67JPV{KS8/?}"
