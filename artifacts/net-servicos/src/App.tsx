@@ -68,7 +68,7 @@ const SEO_PAGES: Record<string, SeoPage> = {
   "/pacotes-diarios": {
     title: "Pacotes Diários Vodacom a partir de 10 MT | Megabyte",
     description:
-      "Veja os pacotes diários de internet Vodacom da Megabyte, a partir de 10 MT com saldo. Recarregue a partir de 20 MT com M-Pesa ou e-Mola.",
+      "Veja os pacotes diários de internet Vodacom da Megabyte, a partir de 10 MT. Pague com M-Pesa, e-Mola ou saldo Megabyte.",
     canonical: "https://megabyte.live/pacotes-diarios/",
     eyebrow: "Pacotes Vodacom",
     heading: "Pacotes diários de internet Vodacom",
@@ -76,7 +76,7 @@ const SEO_PAGES: Record<string, SeoPage> = {
       "Precisa de megas para hoje? Encontre na Megabyte pacotes diários a partir de 10 MT para o seu número ou para outro número Vodacom.",
     sectionHeading: "Compra rápida e simples",
     paragraphs: [
-      "Abra a loja, escolha o pacote diário e informe o número beneficiário. Ofertas abaixo de 20 MT usam saldo; recarregue a partir de 20 MT com M-Pesa ou e-Mola.",
+      "Abra a loja, escolha o pacote diário e informe o número beneficiário. Pode pagar directamente por M-Pesa ou e-Mola, ou usar o seu saldo.",
     ],
     cta: "Ver pacotes diários",
   },
@@ -196,21 +196,21 @@ const SEO_PAGES: Record<string, SeoPage> = {
   "/megas-baratos-vodacom": {
     title: "Megas Baratos Vodacom a partir de 10 MT | Megabyte",
     description:
-      "Procura megas baratos em Moçambique? Veja opções de internet Vodacom a partir de 10 MT com saldo. Recarregue a partir de 20 MT usando M-Pesa ou e-Mola.",
+      "Procura megas baratos em Moçambique? Veja opções de internet Vodacom a partir de 10 MT. Pague com M-Pesa, e-Mola ou saldo Megabyte.",
     canonical: "https://megabyte.live/megas-baratos-vodacom/",
     eyebrow: "Pacotes acessíveis",
     heading: "Megas baratos Vodacom a partir de 10 MT",
     lead:
-      "Compare as opções de megas Vodacom disponíveis na Megabyte. As ofertas abaixo de 20 MT são pagas somente com saldo de crédito.",
+      "Compare as opções de megas Vodacom disponíveis na Megabyte. Pode pagar os pacotes a partir de 10 MT com M-Pesa, e-Mola ou saldo de crédito.",
     sectionHeading: "Opções de internet a partir de 10 MT",
     paragraphs: [
-      "O catálogo da Megabyte inclui pacotes de internet Vodacom a partir de 10 MT. Para usar as ofertas abaixo de 20 MT, recarregue o saldo a partir de 20 MT com M-Pesa ou e-Mola.",
+      "O catálogo da Megabyte inclui pacotes de internet Vodacom a partir de 10 MT, com pagamento directo por M-Pesa ou e-Mola.",
       "Se pesquisou por “Vodacom megas”, “megas baratos” ou “internet móvel barata”, abra a loja para ver as ofertas actuais.",
     ],
     steps: [
       "Compare o preço, a quantidade de megas e o período de validade.",
       "Escolha o número Vodacom que deve receber o pacote.",
-      "Use saldo de crédito para ofertas abaixo de 20 MT; pacotes a partir de 20 MT também aceitam M-Pesa ou e-Mola.",
+      "Escolha o pacote e pague directamente por M-Pesa, e-Mola ou com o saldo da sua conta.",
     ],
     cta: "Ver megas disponíveis",
   },
