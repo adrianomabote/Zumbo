@@ -19,4 +19,4 @@
 - [Modo de oferta gratuita](free-offer-mode.md) — `free` aceita a encomenda, envia ao USSD com idempotência e deve identificar claramente a oferta como gratuita
 - [Contrato Pay.co.mz](payco-contract.md) — API pública é live-only; cobranças exigem headers de conta e e-Mola não está activo
 - [Checkout hospedado Vpay](vpay-contract.md) — criar encomendas pela API, abrir o checkout oficial e só entregar após validar estado e valor
-- [Escopo MozPayment](mozpayment-contract.md) — o pedido é B2C; a documentação pública consultada só descreve C2B, que não deve ser activado como substituto
+- [Contrato MozPayment C2B](mozpayment-contract.md) — cliente paga directamente à loja; respostas ambíguas ficam para confirmação manual e reconciliações usam o provedor gravado

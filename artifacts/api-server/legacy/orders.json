@@ -21,7 +21,8 @@
     "userId": "842540b5cf36",
     "checkoutUrl": "https://checkout.vpay.co.mz/620017a7-4e40-44c6-be61-28fe9bb96283",
     "pagarReconciliationStatus": "pending",
-    "pagarReconciliationError": "A confirmação continua pendente."
+    "pagarReconciliationError": "A confirmação continua pendente.",
+    "pagarProvider": "vpay"
   },
   {
     "txId": "bc33ffd18c5b",
@@ -45,7 +46,8 @@
     "userId": "842540b5cf36",
     "checkoutUrl": "https://checkout.vpay.co.mz/66c15518-c1c6-42f3-9775-05188cc38554",
     "pagarReconciliationStatus": "pending",
-    "pagarReconciliationError": "A confirmação continua pendente."
+    "pagarReconciliationError": "A confirmação continua pendente.",
+    "pagarProvider": "vpay"
   },
   {
     "txId": "ac94fe7cf37b",
@@ -69,7 +71,8 @@
     "userId": "842540b5cf36",
     "checkoutUrl": "https://checkout.vpay.co.mz/d15b3810-3a25-4b47-9d41-7562637f8e25",
     "pagarReconciliationStatus": "pending",
-    "pagarReconciliationError": "A confirmação continua pendente."
+    "pagarReconciliationError": "A confirmação continua pendente.",
+    "pagarProvider": "vpay"
   },
   {
     "txId": "bbfbabe3e166",
@@ -93,7 +96,8 @@
     "userId": "842540b5cf36",
     "checkoutUrl": "https://checkout.vpay.co.mz/6129bea1-26a6-4bbd-9335-6e94a865ba40",
     "pagarReconciliationStatus": "pending",
-    "pagarReconciliationError": "A confirmação continua pendente."
+    "pagarReconciliationError": "A confirmação continua pendente.",
+    "pagarProvider": "vpay"
   },
   {
     "txId": "b9856f4917ce",
@@ -117,7 +121,8 @@
     "userId": "842540b5cf36",
     "checkoutUrl": "https://checkout.vpay.co.mz/8c8e7c59-db9a-4672-be82-30830f463c02",
     "pagarReconciliationStatus": "pending",
-    "pagarReconciliationError": "A confirmação continua pendente."
+    "pagarReconciliationError": "A confirmação continua pendente.",
+    "pagarProvider": "vpay"
   },
   {
     "txId": "b8a6a359ea94",
@@ -141,7 +146,8 @@
     "userId": "842540b5cf36",
     "checkoutUrl": "https://checkout.vpay.co.mz/bb5c2716-3665-442d-acff-c29c864abd15",
     "pagarReconciliationStatus": "pending",
-    "pagarReconciliationError": "A confirmação continua pendente."
+    "pagarReconciliationError": "A confirmação continua pendente.",
+    "pagarProvider": "vpay"
   },
   {
     "txId": "00426e856133",
