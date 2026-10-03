@@ -84,6 +84,7 @@ router.post(["/pagar/internal/payments", "/debitopay/internal/payments", "/paysu
       status: payment.status,
       reference: payment.pagar_reference,
       checkoutUrl: payment.checkout_url || null,
+      provider: payment.provider,
     });
   } catch (error) {
     return res.status(400).json({ error: error instanceof Error ? error.message : "Pagamento inválido." });

@@ -35,6 +35,7 @@ const PAYMENT_API_ROUTE    = configuredPaymentProvider === 'paysuite'
       : configuredPaymentProvider === 'mozpayment'
         ? 'mozpayment'
         : 'pagar'
+const PAYMENT_PROVIDERS = new Set(['pagar', 'debitopay', 'paysuite', 'vpay', 'mozpayment'])
 const DATA_DIR             = process.env.NET_SERVICOS_DATA_DIR || '.'
 const ORDERS_FILE          = join(DATA_DIR, 'orders.json')
 const USERS_FILE           = join(DATA_DIR, 'users.json')
@@ -677,6 +678,7 @@ function trackOrder(tx, extra = {}) {
     amount: tx.amount, method: tx.method, status: 'pending',
     sourceId: tx.sourceId || null,
     pagarRef: tx.pagarRef || pagarReferenceFor(tx),
+    pagarProvider: tx.pagarProvider || PAYMENT_API_ROUTE,
     pagarTitle: tx.pagarTitle || null,
     pagarDescription: tx.pagarDescription || null,
      idempotencyKey: tx.idempotencyKey || null,
@@ -689,7 +691,12 @@ function trackOrder(tx, extra = {}) {
 async function updateOrderStatus(txId, status, extra = {}) {
   const rec = orders.find(o => o.txId === txId)
   if (!rec) return
-  Object.assign(rec, { status, ...extra })
+  const tx = transactions.get(txId)
+  Object.assign(rec, {
+    status,
+    ...(tx?.pagarProvider ? { pagarProvider: tx.pagarProvider } : {}),
+    ...extra,
+  })
   await saveOrders()
   if (status !== 'succeeded' || rec.type !== 'bundle') return
 
@@ -1151,6 +1158,7 @@ function notifyTx(txId, data) {
 }
 
 async function initiateCharge(tx, customerName) {
+  tx.pagarProvider = PAYMENT_API_ROUTE
   const pagarReference = PAYMENT_API_ROUTE === 'paysuite'
     ? String(tx.pagarRef || pagarReferenceFor(tx)).replace(/[^A-Za-z0-9]/g, '').slice(0, 50)
     : (tx.pagarRef || pagarReferenceFor(tx))
@@ -1164,6 +1172,7 @@ async function initiateCharge(tx, customerName) {
     await updateOrderStatus(tx.id, 'succeeded', {
       zumboRef: tx.ref,
       pagarRef: tx.pagarRef,
+      pagarProvider: tx.pagarProvider,
       pagarTitle: tx.pagarTitle,
       pagarDescription: tx.pagarDescription,
     })
@@ -1190,6 +1199,7 @@ async function initiateCharge(tx, customerName) {
     })
     const data = await resp.json().catch(()=>({}))
     console.log(`[${PAYMENT_API_ROUTE}] POST /payments → ${resp.status}`, JSON.stringify({ status:data.status, paymentId:data.paymentId, reference:data.reference }))
+    if (PAYMENT_PROVIDERS.has(data.provider)) tx.pagarProvider = data.provider
     if (resp.status === 202) {
       tx.ref = data.reference || tx.ref || pagarReference
       if (PAYMENT_API_ROUTE === 'vpay' && typeof data.checkoutUrl === 'string') {
@@ -1203,16 +1213,7 @@ async function initiateCharge(tx, customerName) {
       const providerStatus = String(data.status || 'PENDING').toUpperCase()
       if (PAYMENT_API_ROUTE === 'mozpayment' && providerStatus === 'RECONCILIATION_REQUIRED') {
         const message = 'Não foi possível confirmar o resultado automaticamente. Não tente pagar novamente enquanto a confirmação estiver em análise; contacte o suporte.'
-        tx.status = 'pending'
-        tx.error = message
-        await updateOrderStatus(tx.id, 'pending', {
-          pagarRef: tx.ref,
-          pagarTitle: tx.pagarTitle,
-          pagarDescription: tx.pagarDescription,
-          pagarReconciliationStatus: 'manual_required',
-          pagarReconciliationError: message,
-        })
-        notifyTx(tx.id, { status:'pending', method:tx.method, error:message, reconciliationRequired:true })
+        await requireManualPagarReconciliation(tx, message)
         return
       }
       if (providerStatus === 'PAID') {
@@ -1235,12 +1236,26 @@ async function initiateCharge(tx, customerName) {
       return
     }
     const msg = data.error || data.message || `Erro ${resp.status}`
+    if (tx.pagarProvider === 'mozpayment') {
+      await requireManualPagarReconciliation(
+        tx,
+        'Não foi possível confirmar o resultado automaticamente. Não tente pagar novamente enquanto a confirmação estiver em análise; contacte o suporte.',
+      )
+      return
+    }
     tx.status = 'failed'; tx.error = msg
     notifyTx(tx.id, { status:'failed', error:msg, method:tx.method })
     await updateOrderStatus(tx.id, 'failed'); gwFinalize(tx)
   } catch (err) {
     console.error(`[${PAYMENT_API_ROUTE}]`, err.message)
     tx.ref = tx.ref || pagarReference
+    if (tx.pagarProvider === 'mozpayment') {
+      await requireManualPagarReconciliation(
+        tx,
+        'Não foi possível confirmar o resultado automaticamente. Não tente pagar novamente enquanto a confirmação estiver em análise; contacte o suporte.',
+      )
+      return
+    }
     tx.status = 'pending'
     tx.error = `A confirmar o pagamento com o ${PAYMENT_API_ROUTE}.`
     notifyTx(tx.id, { status:'pending', method:tx.method })
@@ -1255,6 +1270,25 @@ async function initiateCharge(tx, customerName) {
   }
 }
 
+async function requireManualPagarReconciliation(tx, message) {
+  tx.status = 'pending'
+  tx.error = message
+  await updateOrderStatus(tx.id, 'pending', {
+    pagarProvider: tx.pagarProvider || PAYMENT_API_ROUTE,
+    pagarRef: tx.ref || tx.pagarRef || pagarReferenceFor(tx),
+    pagarTitle: tx.pagarTitle,
+    pagarDescription: tx.pagarDescription,
+    pagarReconciliationStatus: 'manual_required',
+    pagarReconciliationError: message,
+  })
+  notifyTx(tx.id, {
+    status: 'pending',
+    method: tx.method,
+    error: message,
+    reconciliationRequired: true,
+  })
+}
+
 async function applyPagarProviderStatus(tx, providerStatus, details = {}) {
   const status = String(providerStatus || '').toUpperCase()
   if (status === 'PAID') {
@@ -1264,6 +1298,7 @@ async function applyPagarProviderStatus(tx, providerStatus, details = {}) {
     tx.error = null
     await updateOrderStatus(tx.id, 'succeeded', {
       pagarRef: tx.ref,
+      pagarProvider: tx.pagarProvider || PAYMENT_API_ROUTE,
       pagarTitle: tx.pagarTitle,
       pagarDescription: tx.pagarDescription,
       pagarReconciliationStatus: 'confirmed',
@@ -1284,6 +1319,7 @@ async function applyPagarProviderStatus(tx, providerStatus, details = {}) {
     tx.error = details.error || (status === 'FAILED' ? 'Pagamento recusado.' : `Pagamento ${status.toLowerCase()}.`)
     await updateOrderStatus(tx.id, 'failed', {
       pagarRef: tx.ref,
+      pagarProvider: tx.pagarProvider || PAYMENT_API_ROUTE,
       pagarTitle: tx.pagarTitle,
       pagarDescription: tx.pagarDescription,
       pagarReconciliationStatus: 'failed',
@@ -1302,7 +1338,7 @@ async function reconcilePagarTransaction(tx) {
   if (!mainPort || !secret) return 'pending'
   try {
     const res = await fetch(
-      `http://localhost:${mainPort}/api/${PAYMENT_API_ROUTE}/internal/payments/${encodeURIComponent(tx.id)}/reconcile`,
+      `http://localhost:${mainPort}/api/${tx.pagarProvider || PAYMENT_API_ROUTE}/internal/payments/${encodeURIComponent(tx.id)}/reconcile`,
       {
         method: 'POST',
         headers: { 'x-internal-payment-key': secret },
@@ -1319,6 +1355,7 @@ async function reconcilePagarTransaction(tx) {
     tx.status = 'pending'
     tx.error = null
     await updateOrderStatus(tx.id, 'pending', {
+      pagarProvider: tx.pagarProvider || PAYMENT_API_ROUTE,
       pagarRef: data.reference || tx.ref || tx.pagarRef || pagarReferenceFor(tx),
       pagarTitle: tx.pagarTitle,
       pagarDescription: tx.pagarDescription,
@@ -1328,7 +1365,13 @@ async function reconcilePagarTransaction(tx) {
     return 'pending'
   } catch (error) {
     console.error('[Pagar] Falha na reconciliação:', error.message)
+    if (tx.pagarProvider === 'mozpayment') {
+      const message = 'O MozPayment não disponibiliza consulta de estado; confirme esta cobrança manualmente antes de qualquer nova tentativa.'
+      await requireManualPagarReconciliation(tx, message)
+      return 'manual_required'
+    }
     await updateOrderStatus(tx.id, 'pending', {
+      pagarProvider: tx.pagarProvider || PAYMENT_API_ROUTE,
       pagarRef: tx.ref || tx.pagarRef || pagarReferenceFor(tx),
       pagarTitle: tx.pagarTitle,
       pagarDescription: tx.pagarDescription,
@@ -1340,7 +1383,7 @@ async function reconcilePagarTransaction(tx) {
 }
 
 function schedulePagarReconciliation(tx, delayMs = 30_000) {
-  if (tx.status !== 'pending' || pagarReconciliationTimers.has(tx.id)) return
+  if (tx.status !== 'pending' || tx.pagarProvider === 'mozpayment' || pagarReconciliationTimers.has(tx.id)) return
   const timer = setTimeout(async () => {
     pagarReconciliationTimers.delete(tx.id)
     if (tx.status !== 'pending') return
@@ -1350,6 +1393,7 @@ function schedulePagarReconciliation(tx, delayMs = 30_000) {
       const message = 'Pagamento não localizado no Debito Pay; não foi criada uma nova cobrança automaticamente.'
       tx.error = message
       await updateOrderStatus(tx.id, 'pending', {
+        pagarProvider: tx.pagarProvider || PAYMENT_API_ROUTE,
         pagarRef: tx.ref || tx.pagarRef || pagarReferenceFor(tx),
         pagarTitle: tx.pagarTitle,
         pagarDescription: tx.pagarDescription,
@@ -1379,6 +1423,7 @@ function restorePendingPagarReconciliations() {
       beneficiaryPhone: order.beneficiaryPhone,
       amount: order.amount,
       method: order.method,
+      pagarProvider: order.pagarProvider || 'vpay',
       status: 'pending',
       ref: order.pagarRef || pagarReferenceFor(order),
       pagarRef: order.pagarRef || pagarReferenceFor(order),
@@ -1394,6 +1439,11 @@ function restorePendingPagarReconciliations() {
       checkoutUrl: order.checkoutUrl || null,
     }
     transactions.set(tx.id, tx)
+    if (tx.pagarProvider === 'mozpayment') {
+      const message = 'O MozPayment não disponibiliza consulta de estado; confirme esta cobrança manualmente antes de qualquer nova tentativa.'
+      void requireManualPagarReconciliation(tx, message)
+      continue
+    }
     schedulePagarReconciliation(tx, 1_000)
   }
 }
