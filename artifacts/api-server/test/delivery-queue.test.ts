@@ -414,7 +414,7 @@ test("PAID Para Mim reaches the account number and repeated equivalent webhooks 
   const txId = `delivery-test-self-${testId}`;
   const operationId = `pagar-self-${testId}`;
   const reference = `net-${txId}`;
-  await insertPendingOperation(txId, operationId, reference, "vpay");
+  await insertPendingOperation(txId, operationId, reference);
 
   assert.equal((await webhookRequest(`delivery-test-self-event-${testId}`, operationId, reference)).status, 204);
   let deliveries = await listDeliveries();
@@ -570,7 +570,7 @@ test("Vpay operations keep reconciling through Vpay after the active provider ch
   const txId = `delivery-test-vpay-provider-${testId}`;
   const operationId = `vpay-reconcile-${testId}`;
   const reference = `net-${txId}`;
-  await insertPendingOperation(txId, operationId, reference);
+  await insertPendingOperation(txId, operationId, reference, "vpay");
   const originalFetch = globalThis.fetch;
   const previousProvider = process.env.PAYMENT_PROVIDER;
   const previousClientId = process.env.VPAY_CLIENT_ID;
