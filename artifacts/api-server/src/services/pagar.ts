@@ -1238,7 +1238,7 @@ function mozPaymentExplicitFailureReason(
       .map((value) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase())
   );
   if (messages.some((message) =>
-    /\b(?:pin.{0,40}(?:incorrect|wrong|invalid|errado|errada|incorreto|incorreta)|(?:incorrect|wrong|invalid|errado|errada|incorreto|incorreta).{0,40}pin)\b/.test(message)
+    /\b(?:pin.{0,40}(?:incorrect|wrong|invalid|not correct|errado|errada|incorreto|incorreta)|(?:incorrect|wrong|invalid|not correct|errado|errada|incorreto|incorreta).{0,40}pin)\b/.test(message)
   )) {
     return "EMOLA_PIN_INCORRECT";
   }
@@ -1247,7 +1247,10 @@ function mozPaymentExplicitFailureReason(
     ["code", "error_code", "errorCode", "codigo", "response_code", "responseCode"]
       .some((key) => typeof record[key] === "string" && (record[key] as string).trim().toUpperCase() === "INS-6")
   );
-  if (hasMpesaFailureCode && messages.some((message) => /transaction failed/.test(message))) {
+  if (
+    (hasMpesaFailureCode || messages.some((message) => /\bins-6\b/.test(message))) &&
+    messages.some((message) => /transaction failed/.test(message))
+  ) {
     return "PROVIDER_DECLINED";
   }
   return undefined;

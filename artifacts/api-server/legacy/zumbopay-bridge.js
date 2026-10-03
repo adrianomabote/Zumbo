@@ -1357,7 +1357,13 @@ async function applyPagarProviderStatus(tx, providerStatus, details = {}) {
     const duplicate = tx.status === 'failed'
     tx.status = 'failed'
     tx.ref = details.reference || tx.ref || tx.pagarRef || pagarReferenceFor(tx)
-    tx.error = details.error || (status === 'FAILED' ? 'Pagamento recusado.' : `Pagamento ${status.toLowerCase()}.`)
+    const isMozPayment = tx.pagarProvider === 'mozpayment'
+    tx.error = details.error || (isMozPayment
+      ? 'O pagamento foi recusado pelo operador. Verifique os dados antes de tentar novamente.'
+      : status === 'FAILED' ? 'Pagamento recusado.' : `Pagamento ${status.toLowerCase()}.`)
+    const retryCaution = isMozPayment && tx.method === 'emola'
+      ? 'Antes de tentar novamente, confirme o PIN. Tentativas erradas repetidas podem bloquear a conta.'
+      : null
     await updateOrderStatus(tx.id, 'failed', {
       pagarRef: tx.ref,
       pagarProvider: tx.pagarProvider || PAYMENT_API_ROUTE,
@@ -1365,8 +1371,15 @@ async function applyPagarProviderStatus(tx, providerStatus, details = {}) {
       pagarDescription: tx.pagarDescription,
       pagarReconciliationStatus: 'failed',
       pagarReconciliationError: tx.error,
+      pagarRetryAllowed: true,
     })
-    if (!duplicate) notifyTx(tx.id, { status:'failed', error:tx.error, method:tx.method })
+    if (!duplicate) notifyTx(tx.id, {
+      status:'failed',
+      error:tx.error,
+      method:tx.method,
+      retryAllowed:true,
+      ...(retryCaution ? { retryCaution } : {}),
+    })
     gwFinalize(tx)
     return 'failed'
   }
