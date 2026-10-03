@@ -19,6 +19,14 @@ A documentação pública e o utilizador confirmam que os pagamentos C2B de eMol
 
 **How to apply:** confirmar apenas pela resposta C2B documentada. Se for preciso avisar a loja externa, o `callback_url` do Gateway Megabyte é uma notificação nossa separada, não um callback da MozPayment. Não expor nem usar uma rota de webhook MozPayment.
 
+## Resposta ambígua no checkout
+
+Uma resposta C2B incompleta deve manter a compra num estado neutro de espera, sem mostrar falha nem fechar o canal de eventos antes de chegar um estado final. Não repetir a cobrança. Como não existe callback nem consulta de estado neste contrato, uma operação ambígua não se resolverá automaticamente pela MozPayment; exige uma confirmação manual verificada.
+
+**Why:** o utilizador pediu que a loja continue à espera de uma resposta explícita de sucesso ou falha, em vez de apresentar uma resposta ambígua como erro.
+
+**How to apply:** manter o estado pendente e a escuta de eventos aberta; só apresentar sucesso ou falha quando o sistema receber um resultado terminal válido.
+
 ## Valor mínimo e mensagem do PIN
 
 As ofertas da loja começam em 10 MT, por isso a validação MozPayment tem de aceitar esse valor. O checkout mantém a mensagem antiga: “Confirme a ativação da oferta introduzindo o PIN ... no seu telemóvel”. Não a substituir por uma mensagem de notificação diferente.

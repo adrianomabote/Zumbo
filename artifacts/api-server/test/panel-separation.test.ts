@@ -490,7 +490,16 @@ test("confirma só pagamentos MozPayment elegíveis e enfileira uma entrega", as
   assert.equal(unauthorized.status, 401);
   assert.equal(deliveryRequests.some((delivery) => delivery.paymentId === manualMozPaymentId), false);
 
+  const eventStream = await fetch(`${baseUrl}/events/${encodeURIComponent(manualMozPaymentId)}`);
+  assert.equal(eventStream.status, 200);
+  const eventReader = eventStream.body?.getReader();
+  assert.ok(eventReader);
+  const pendingEvent = await eventReader.read();
+  assert.equal(pendingEvent.done, false);
+  assert.match(new TextDecoder().decode(pendingEvent.value), /"status":"pending".*"reconciliationRequired":true/);
+
   const beforeDeliveries = deliveryRequests.length;
+  const terminalEventPromise = eventReader.read();
   const confirmed = await fetch(endpoint, {
     ...request,
     headers: { ...request.headers, cookie: adminCookie },
@@ -502,6 +511,10 @@ test("confirma só pagamentos MozPayment elegíveis e enfileira uma entrega", as
     reconciliationStatus: "manual_confirmed",
     deliveryStatus: "queued",
   });
+  const terminalEvent = await terminalEventPromise;
+  assert.equal(terminalEvent.done, false);
+  assert.match(new TextDecoder().decode(terminalEvent.value), /"status":"succeeded"/);
+  await eventReader.cancel();
 
   const matchingDeliveries = deliveryRequests.filter((delivery) => delivery.paymentId === manualMozPaymentId);
   assert.equal(deliveryRequests.length, beforeDeliveries + 1);

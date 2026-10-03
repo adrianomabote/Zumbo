@@ -2165,6 +2165,13 @@ NOTAS
       pagarReconciliationError: null,
       pagarManualConfirmedAt: confirmedAt,
     })
+    const tx = transactions.get(rec.txId)
+    if (tx) {
+      tx.status = 'succeeded'
+      tx.error = null
+      tx.pagarReconciliationStatus = 'manual_confirmed'
+    }
+    notifyTx(rec.txId, { status:'succeeded', method:rec.method })
     return json(res, {
       ok: true,
       status: rec.status,
@@ -4030,9 +4037,8 @@ function listenOrder(txId) {
   evtSrc.onmessage = e => {
     const d=JSON.parse(e.data)
     if(d.status==='pending' && d.reconciliationRequired){
-      evtSrc.close()
       const message=document.querySelector('#s-pending .voda-pin-msg')
-      if(message) message.textContent=d.error||'Não foi possível confirmar automaticamente. Não pague novamente; contacte o suporte para verificar a cobrança.'
+      if(message) message.textContent='O pagamento está pendente de confirmação. Não tente pagar novamente.'
       return
     }
     if(d.status==='pending' && d.checkoutUrl && !checkoutDispatched){
