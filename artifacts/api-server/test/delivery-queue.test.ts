@@ -454,7 +454,7 @@ test("MozPayment webhook verifies its secret, confirms the matching amount and d
     currency: "MZN",
     payment_id: operationId,
     reference,
-    status: "PAID",
+    status: "success",
     transaction_id: operationId,
   });
   const signature = createHmac("sha256", process.env.MOZPAYMENT_WEBHOOK_SECRET!)
@@ -540,6 +540,33 @@ test("MozPayment FAILED and EXPIRED events update only their matching payment", 
     assert.equal(response.status, 409);
     const payment = await pool!.query("SELECT status FROM pagar_operations WHERE internal_id = $1", [txId]);
     assert.equal(payment.rows[0]?.status, "PENDING");
+
+    const missingAmountTxId = `delivery-test-mozpayment-missing-amount-${testId}`;
+    const missingAmountOperationId = `mozpayment-operation-missing-amount-${testId}`;
+    await insertPendingOperation(missingAmountTxId, missingAmountOperationId, `net-${missingAmountTxId}`, "mozpayment");
+    created.push({ txId: missingAmountTxId, eventId: "" });
+    const missingAmountBody = JSON.stringify({
+      currency: "MZN",
+      payment_id: missingAmountOperationId,
+      status: "PAID",
+    });
+    const missingAmountSignature = createHmac("sha256", process.env.MOZPAYMENT_WEBHOOK_SECRET!)
+      .update(missingAmountBody)
+      .digest("hex");
+    const missingAmountResponse = await fetch(`${baseUrl}/api/mozpayment/webhook`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-webhook-signature": `sha256=${missingAmountSignature}`,
+      },
+      body: missingAmountBody,
+    });
+    assert.equal(missingAmountResponse.status, 400);
+    const missingAmountPayment = await pool!.query(
+      "SELECT status FROM pagar_operations WHERE internal_id = $1",
+      [missingAmountTxId],
+    );
+    assert.equal(missingAmountPayment.rows[0]?.status, "PENDING");
   } finally {
     for (const { txId, eventId } of created) {
       if (eventId) await pool!.query("DELETE FROM pagar_webhook_events WHERE event_id = $1", [eventId]);

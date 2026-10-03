@@ -222,13 +222,13 @@ test("MozPayment C2B uses the documented endpoints and requires an explicit JSON
     assert.deepEqual(calls[0]?.body, {
       carteira: "wallet-test-id",
       numero: "841234567",
-      cliente: "Cliente Megabyte",
+      cliente: "Recarga 25 MT",
       valor: "25",
     });
     assert.deepEqual(calls[1]?.body, {
       carteira: "wallet-test-id",
       numero: "868765432",
-      cliente: "Cliente Megabyte",
+      cliente: "Recarga 40 MT",
       valor: "40",
     });
     assert.equal(calls[0]?.headers.get("content-type"), "application/json");
@@ -244,6 +244,11 @@ test("MozPayment C2B uses the documented endpoints and requires an explicit JSON
       status: "success",
       transacao: "moz-txn-test-2",
     }), { status: "RECONCILIATION_REQUIRED", operationId: "moz-txn-test-2" });
+    assert.deepEqual(parseMozPaymentC2BResponse({
+      cod: 200,
+      status: "success",
+      transacao: 123456,
+    }), { status: "PAID", operationId: "123456" });
   } finally {
     globalThis.fetch = previousFetch;
     if (previousProvider === undefined) delete process.env.PAYMENT_PROVIDER;
