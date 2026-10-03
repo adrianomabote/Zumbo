@@ -698,19 +698,25 @@ async function updateOrderStatus(txId, status, extra = {}) {
     ...extra,
   })
   await saveOrders()
-  if (status !== 'succeeded' || rec.type !== 'bundle') return
+  if (status !== 'succeeded' || !['bundle', 'gateway'].includes(rec.type)) return
 
   try {
     const delivery = await enqueueUssdDelivery(rec)
-    Object.assign(rec, {
+    const deliveryFields = {
       deliveryId: delivery.id,
       deliveryStatus: delivery.status,
       deliveryFailureReason: delivery.failureReason || null,
-    })
+    }
+    Object.assign(rec, deliveryFields)
+    if (tx) Object.assign(tx, deliveryFields)
     await saveOrders()
   } catch (e) {
     rec.deliveryStatus = 'failed'
     rec.deliveryFailureReason = e.message || 'Não foi possível enfileirar a entrega USSD.'
+    if (tx) Object.assign(tx, {
+      deliveryStatus: rec.deliveryStatus,
+      deliveryFailureReason: rec.deliveryFailureReason,
+    })
     await saveOrders()
     console.error('[USSD] enqueue error:', rec.deliveryFailureReason)
   }
@@ -760,19 +766,31 @@ function bundleUssdSequence(bundleLabel, beneficiaryPhone) {
   return [`*111#`, `Enviar pacote ${bundleLabel} para ${beneficiaryPhone}`]
 }
 
+function deliveryPackageLabel(order) {
+  if (order.type === 'gateway') {
+    const megabytes = Math.max(
+      1,
+      Math.round(Number(order.megabytes) || megaDetailsForAmount(order.amount).megabytes),
+    )
+    return `${megabytes} MB`
+  }
+  return order.bundleLabel || 'Pacote de dados'
+}
+
 async function enqueueUssdDelivery(order) {
   const mainPort = process.env.MAIN_API_PORT
   const secret   = process.env.SESSION_SECRET
   if (!mainPort || !secret) throw new Error('Servidor de entregas USSD não configurado.')
   const beneficiaryPhone = order.beneficiaryPhone || order.phone
   if (!beneficiaryPhone) throw new Error('Número do beneficiário ausente.')
+  const packageLabel = deliveryPackageLabel(order)
   const body = JSON.stringify({
     paymentId:           order.txId,
     idempotencyKey:      `order-${order.txId}`,
     beneficiaryPhone,
-    packageLabel:        order.bundleLabel || 'Pacote de dados',
+    packageLabel,
     createdAt:           order.ts,
-    ussdSequence:        bundleUssdSequence(order.bundleLabel || 'Pacote de dados', beneficiaryPhone),
+    ussdSequence:        bundleUssdSequence(packageLabel, beneficiaryPhone),
   })
   try {
     const res = await fetch(`http://localhost:${mainPort}/api/ussd-agent/internal/paid-deliveries`, {
@@ -804,14 +822,15 @@ async function retryUssdDelivery(order) {
   const endpoint = hasExistingDelivery
     ? `/api/ussd-agent/admin/deliveries/${encodeURIComponent(order.deliveryId)}/retry`
     : '/api/ussd-agent/internal/paid-deliveries'
+  const packageLabel = deliveryPackageLabel(order)
   const body = hasExistingDelivery
     ? undefined
     : JSON.stringify({
       paymentId: order.txId,
       idempotencyKey: `order-${order.txId}`,
       beneficiaryPhone: order.beneficiaryPhone || order.phone,
-      packageLabel: order.bundleLabel || 'Pacote de dados',
-      ussdSequence: bundleUssdSequence(order.bundleLabel || 'Pacote de dados', order.beneficiaryPhone || order.phone),
+      packageLabel,
+      ussdSequence: bundleUssdSequence(packageLabel, order.beneficiaryPhone || order.phone),
     })
   const res = await fetch(`http://localhost:${mainPort}${endpoint}`, {
     method: 'POST',
@@ -1781,8 +1800,9 @@ self.addEventListener('fetch',e=>{
     const user = checkUserCookie(req)
     if (!user) return json(res, { error:'Faça login para recarregar.' }, 401)
     let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
-    const amount = parseInt(body.amount)
-    if (!amount || amount < 20) return json(res, { error:'O valor mínimo para recarregar é 20 MT.' }, 400)
+    const amount = Number(body.amount)
+    if (!Number.isInteger(amount) || amount < 10 || amount > 40000)
+      return json(res, { error:'O valor da recarga deve ser um número inteiro entre 10 e 40000 MT.' }, 400)
     const msisdn = normalizeMsisdn(user.phone), meth = detectMethod(msisdn)
     if (!meth) return json(res, { error:'Número de conta inválido para STK Push.' }, 400)
     const txId = randomBytes(6).toString('hex')
@@ -1933,8 +1953,8 @@ NOTAS
     if (!gk) return json(res, { error:'Chave de API inválida ou inactiva. Use o header X-API-Key.' }, 401)
     const amountNumber = Number(body.amount)
     const amount = Math.round(amountNumber)
-    if (!Number.isInteger(amountNumber) || amount < 20 || amount > 40000)
-      return json(res, { error:'O valor (amount) deve ser um número inteiro entre 20 e 40000 MT.' }, 400)
+    if (!Number.isInteger(amountNumber) || amount < 10 || amount > 40000)
+      return json(res, { error:'O valor (amount) deve ser um número inteiro entre 10 e 40000 MT.' }, 400)
     const msisdn = normalizeMsisdn(body.phone), meth = detectMethod(msisdn)
     if (!meth) return json(res, { error:'Número inválido. Use M-Pesa 84/85 ou e-Mola 86/87.' }, 400)
     let callbackUrl = null
@@ -1961,13 +1981,19 @@ NOTAS
     })
     console.log(`[Gateway] cobrança ${txId} (${amount} MT, ${meth}) via ${gk.name}`)
     await initiateCharge(tx, tx.extDesc || tx.extRef || 'Pagamento Megabyte')
-    const publicStatus = tx.status === 'failed' ? 'failed' : 'pending'
+    const publicStatus = tx.status === 'succeeded'
+      ? 'succeeded'
+      : tx.status === 'failed'
+        ? 'failed'
+        : 'pending'
     return json(res, {
       ok: true,
       txId,
       status: publicStatus,
       method: meth,
+      megabytes: tx.megabytes,
       ...(tx.checkoutUrl ? { checkoutUrl: tx.checkoutUrl } : {}),
+      ...(tx.deliveryStatus ? { deliveryStatus: tx.deliveryStatus } : {}),
       statusUrl: `${SITE_URL}/gateway/api/status/${txId}`,
       ...(tx.error ? { error: tx.error } : {}),
     }, 202)
@@ -1980,11 +2006,11 @@ NOTAS
     if (!gk) return json(res, { error:'Chave de API inválida ou inactiva. Use o header X-API-Key.' }, 401)
     const tx = transactions.get(gwStP.txId)
     if (tx && tx.type === 'gateway' && tx.gwKeyId === gk.id)
-      return json(res, { ok:true, txId:tx.id, status:tx.status, amount:tx.amount, megabytes:tx.megabytes || megaDetailsForAmount(tx.amount).megabytes, phone:tx.phone, method:tx.method, ...(tx.checkoutUrl ? { checkoutUrl:tx.checkoutUrl } : {}), reference:tx.extRef, error:tx.error||null, ts:tx.ts })
+      return json(res, { ok:true, txId:tx.id, status:tx.status, amount:tx.amount, megabytes:tx.megabytes || megaDetailsForAmount(tx.amount).megabytes, phone:tx.phone, method:tx.method, ...(tx.checkoutUrl ? { checkoutUrl:tx.checkoutUrl } : {}), ...(tx.deliveryStatus ? { deliveryStatus:tx.deliveryStatus } : {}), reference:tx.extRef, error:tx.error||null, ts:tx.ts })
     // fallback: após reinício do servidor, procura no registo persistente
     const rec = orders.find(o => o.txId === gwStP.txId && o.type === 'gateway' && o.gwKeyId === gk.id)
     if (!rec) return json(res, { error:'Transacção não encontrada.' }, 404)
-    return json(res, { ok:true, txId:rec.txId, status:rec.status, amount:rec.amount, megabytes:rec.megabytes || megaDetailsForAmount(rec.amount).megabytes, phone:rec.phone, method:rec.method, ...(rec.checkoutUrl ? { checkoutUrl:rec.checkoutUrl } : {}), reference:rec.extRef||null, error:null, ts:rec.ts })
+    return json(res, { ok:true, txId:rec.txId, status:rec.status, amount:rec.amount, megabytes:rec.megabytes || megaDetailsForAmount(rec.amount).megabytes, phone:rec.phone, method:rec.method, ...(rec.checkoutUrl ? { checkoutUrl:rec.checkoutUrl } : {}), ...(rec.deliveryStatus ? { deliveryStatus:rec.deliveryStatus } : {}), reference:rec.extRef||null, error:rec.pagarReconciliationError||null, ts:rec.ts })
   }
 
   // ── Admin: gestão de chaves do gateway ────────────────────────────────────
