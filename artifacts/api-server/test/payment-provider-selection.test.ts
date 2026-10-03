@@ -195,7 +195,7 @@ test("MozPayment C2B uses the documented endpoints and requires an explicit JSON
     calls.push({ url: url.href, headers, body });
     const response = responseCode === 200
       ? { cod: 200, status: "success", transacao: "moz-txn-test-1" }
-      : { cod: 409, status: "error", mensagem: "Pagamento rejeitado." };
+      : { cod: 409, status: "error", mensagem: "Saldo insuficiente." };
     return new Response(JSON.stringify(response), {
       status: 200,
       headers: { "Content-Type": "application/json" },
@@ -270,6 +270,16 @@ test("MozPayment C2B uses the documented endpoints and requires an explicit JSON
       status: "success",
       transacao: 123456,
     }), { status: "PAID", operationId: "123456" });
+    assert.deepEqual(parseMozPaymentC2BResponse({
+      cod: 409,
+      status: "error",
+      mensagem: "Saldo insuficiente.",
+    }), { status: "FAILED" });
+    assert.deepEqual(parseMozPaymentC2BResponse({
+      cod: 503,
+      status: "error",
+      mensagem: "Resposta inesperada.",
+    }), { status: "RECONCILIATION_REQUIRED" });
   } finally {
     globalThis.fetch = previousFetch;
     AbortSignal.timeout = previousTimeout;
