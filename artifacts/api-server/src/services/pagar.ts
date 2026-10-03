@@ -460,23 +460,28 @@ async function request(
   return parseResponse(response);
 }
 
-function validateInput(input: PagarPaymentInput) {
-  const referencePattern = activeProvider() === "paysuite"
+function validateInput(input: PagarPaymentInput, provider: PaymentProvider) {
+  const referencePattern = provider === "paysuite"
     ? /^[A-Za-z0-9]{1,50}$/
     : /^[A-Za-z0-9._:-]{1,120}$/;
   if (!referencePattern.test(input.reference)) {
-    throw new Error(activeProvider() === "paysuite"
+    throw new Error(provider === "paysuite"
       ? "A referência Paysuite deve conter apenas letras e números."
       : "Referência de pagamento inválida.");
   }
   if (input.title.length < 5 || input.title.length > 120) throw new Error("Título de pagamento inválido.");
-  if (!Number.isInteger(input.amountMzn) || input.amountMzn < 20 || input.amountMzn > 40_000) {
-    throw new Error("O valor deve ser um número inteiro entre 20 e 40000 MZN.");
+  const minimumAmountMzn = provider === "mozpayment" ? 10 : 20;
+  if (!Number.isInteger(input.amountMzn) || input.amountMzn < minimumAmountMzn || input.amountMzn > 40_000) {
+    throw new Error(`O valor deve ser um número inteiro entre ${minimumAmountMzn} e 40000 MZN.`);
   }
   const digits = input.payerPhone.replace(/\D/g, "");
   const local = digits.startsWith("258") ? digits.slice(3) : digits;
    const valid = input.method === "MPESA" ? /^(84|85)\d{7}$/.test(local) : /^(86|87)\d{7}$/.test(local);
   if (!valid) throw new Error("O telefone não corresponde ao método de pagamento.");
+}
+
+export function validatePagarPaymentInput(input: PagarPaymentInput) {
+  validateInput(input, activeProvider());
 }
 
 export type MozPaymentC2BStatus = "PAID" | "FAILED" | "RECONCILIATION_REQUIRED";
@@ -657,7 +662,7 @@ export async function createPagarPayment(input: PagarPaymentInput) {
         reference: input.reference.replace(/[^A-Za-z0-9]/g, "").slice(0, 50),
       }
     : input;
-  validateInput(normalizedInput);
+  validateInput(normalizedInput, provider);
   const existing = await database.query(
     "SELECT internal_id, provider, pagar_operation_id, pagar_reference, amount_mzn, status, checkout_url FROM pagar_operations WHERE local_transaction_id = $1 OR idempotency_key = $2",
     [input.localTransactionId, input.idempotencyKey],

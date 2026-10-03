@@ -5,6 +5,7 @@ import {
   createVpayHostedOrder,
   getPagarPayment,
   parseMozPaymentC2BResponse,
+  validatePagarPaymentInput,
   vpayOperationIdentityMatches,
   vpayOperationAmountMatches,
   vpayResponseStatus,
@@ -134,6 +135,41 @@ test("unknown payment providers fail closed instead of falling back to Pagar", a
     assert.equal(providerRequestMade, false);
   } finally {
     globalThis.fetch = previousFetch;
+    if (previousProvider === undefined) delete process.env.PAYMENT_PROVIDER;
+    else process.env.PAYMENT_PROVIDER = previousProvider;
+  }
+});
+
+test("MozPayment accepts the storefront's 10 MZN minimum without lowering other provider limits", () => {
+  const previousProvider = process.env.PAYMENT_PROVIDER;
+  const input = {
+    localTransactionId: "moz-minimum-test",
+    sourceId: "moz-minimum-source",
+    reference: "mozminimumtest",
+    title: "Compra teste",
+    description: "Teste de validação",
+    amountMzn: 10,
+    method: "MPESA" as const,
+    payerPhone: "841234567",
+    idempotencyKey: "moz-minimum-test",
+  };
+
+  try {
+    process.env.PAYMENT_PROVIDER = "mozpayment";
+    for (const amountMzn of [10, 13, 17, 20]) {
+      assert.doesNotThrow(() => validatePagarPaymentInput({ ...input, amountMzn }));
+    }
+    assert.throws(
+      () => validatePagarPaymentInput({ ...input, amountMzn: 9 }),
+      /entre 10 e 40000 MZN/,
+    );
+
+    process.env.PAYMENT_PROVIDER = "vpay";
+    assert.throws(
+      () => validatePagarPaymentInput({ ...input, amountMzn: 10 }),
+      /entre 20 e 40000 MZN/,
+    );
+  } finally {
     if (previousProvider === undefined) delete process.env.PAYMENT_PROVIDER;
     else process.env.PAYMENT_PROVIDER = previousProvider;
   }

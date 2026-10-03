@@ -3218,7 +3218,7 @@ ${allListHtml}
     <div class="sh-top"><button class="sh-close" onclick="closeSheet()">✕</button></div>
     <div class="sh-state">
       <img src="/static/voda-anim.gif" class="voda-gif" alt="Aguardando">
-       <p class="voda-pin-msg">${isFreeMode ? 'A concluir a sua encomenda. Aguarde um momento…' : 'Confirme a ativação da oferta introduzindo o PIN <span id="sh-method-lbl">M-Pesa</span> no seu telemóvel'}</p>
+       <p class="voda-pin-msg">${isFreeMode ? 'A concluir a sua encomenda. Aguarde um momento…' : 'A iniciar o pagamento. Se for aceite, receberá um pedido para introduzir o PIN <span id="sh-method-lbl">M-Pesa</span> no seu telemóvel.'}</p>
     </div>
   </div>
 
@@ -3956,6 +3956,10 @@ function listenOrder(txId) {
   evtSrc = new EventSource('/events/'+txId)
   evtSrc.onmessage = e => {
     const d=JSON.parse(e.data)
+    if(d.status==='pending' && typeof d.error==='string' && d.error.trim()){
+      const message=document.querySelector('#s-pending .voda-pin-msg')
+      if(message) message.textContent=d.error
+    }
     if(d.status==='pending' && d.checkoutUrl && !checkoutDispatched){
       try {
         const checkout = new URL(d.checkoutUrl, window.location.href)
