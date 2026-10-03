@@ -612,6 +612,51 @@ test("Vpay operations keep reconciling through Vpay after the active provider ch
   }
 });
 
+test("unknown Vpay statuses require manual review instead of endless polling", async () => {
+  const txId = `delivery-test-vpay-unknown-status-${testId}`;
+  const operationId = `vpay-unknown-status-${testId}`;
+  const reference = `net-${txId}`;
+  await insertPendingOperation(txId, operationId, reference, "vpay");
+  const originalFetch = globalThis.fetch;
+  const previousProvider = process.env.PAYMENT_PROVIDER;
+  const previousClientId = process.env.VPAY_CLIENT_ID;
+  const previousClientSecret = process.env.VPAY_CLIENT_SECRET;
+  try {
+    process.env.PAYMENT_PROVIDER = "mozpayment";
+    process.env.VPAY_CLIENT_ID = "test-vpay-client";
+    process.env.VPAY_CLIENT_SECRET = "test-vpay-secret";
+    globalThis.fetch = (async (input) => {
+      const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
+      if (url.pathname === "/v1/auth/token") {
+        return new Response(JSON.stringify({ access_token: "test-vpay-token", expires_in: 3600 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.pathname === `/v1/orders/${operationId}/status`) {
+        return new Response(JSON.stringify({
+          data: { order: { orderId: operationId, status: "AWAITING_CONFIRMATION", amount: 2000 } },
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      throw new Error(`Unexpected provider path: ${url.pathname}`);
+    }) as typeof fetch;
+
+    await assert.rejects(
+      () => reconcilePagarPayment(txId),
+      (error: unknown) => (error as { status?: number }).status === 409,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (previousProvider === undefined) delete process.env.PAYMENT_PROVIDER;
+    else process.env.PAYMENT_PROVIDER = previousProvider;
+    if (previousClientId === undefined) delete process.env.VPAY_CLIENT_ID;
+    else process.env.VPAY_CLIENT_ID = previousClientId;
+    if (previousClientSecret === undefined) delete process.env.VPAY_CLIENT_SECRET;
+    else process.env.VPAY_CLIENT_SECRET = previousClientSecret;
+    await pool!.query("DELETE FROM pagar_operations WHERE internal_id = $1", [txId]);
+  }
+});
+
 test("an operation without a known provider is not sent to the currently selected provider", async () => {
   const txId = `delivery-test-unknown-provider-${testId}`;
   const operationId = `unknown-provider-${testId}`;

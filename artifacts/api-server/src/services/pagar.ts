@@ -864,7 +864,9 @@ export async function reconcilePagarPayment(localTransactionId: string) {
   if (!normalizedProviderStatus || (
     (provider === "pagar" || isVpay) && !knownPaymentStates.has(normalizedProviderStatus)
   )) {
-    throw new Error(`O ${providerName(provider)} devolveu um estado de pagamento desconhecido.`);
+    const error = new Error(`O ${providerName(provider)} devolveu um estado de pagamento desconhecido.`);
+    Object.assign(error, { status: 409 });
+    throw error;
   }
 
   const operationId = isVpay
