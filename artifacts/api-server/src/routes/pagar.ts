@@ -105,7 +105,7 @@ router.post(["/pagar/internal/payments/:localTransactionId/reconcile", "/debitop
     });
   } catch (error) {
     const errorStatus = (error as { status?: unknown })?.status;
-    const status = errorStatus === 404 ? 404 : errorStatus === 501 ? 501 : 502;
+    const status = errorStatus === 404 || errorStatus === 409 ? errorStatus : errorStatus === 501 ? 501 : 502;
     return res.status(status).json({ error: error instanceof Error ? error.message : "Não foi possível reconciliar o pagamento." });
   }
 });

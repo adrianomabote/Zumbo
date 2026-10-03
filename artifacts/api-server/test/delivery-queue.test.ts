@@ -622,15 +622,21 @@ test("an operation without a known provider is not sent to the currently selecte
   let providerRequestMade = false;
   try {
     process.env.PAYMENT_PROVIDER = "mozpayment";
-    globalThis.fetch = (async () => {
+    globalThis.fetch = (async (input, init) => {
+      const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
+      if (url.origin === baseUrl) return originalFetch(input, init);
       providerRequestMade = true;
       throw new Error("An unknown operation must not reach any provider.");
     }) as typeof fetch;
 
-    await assert.rejects(
-      () => reconcilePagarPayment(txId),
-      (error: unknown) => (error as { status?: number }).status === 409,
+    const response = await fetch(
+      `${baseUrl}/api/mozpayment/internal/payments/${encodeURIComponent(txId)}/reconcile`,
+      {
+        method: "POST",
+        headers: { "x-internal-payment-key": process.env.SESSION_SECRET! },
+      },
     );
+    assert.equal(response.status, 409);
     assert.equal(providerRequestMade, false);
   } finally {
     globalThis.fetch = originalFetch;
