@@ -1622,7 +1622,7 @@ self.addEventListener('fetch',e=>{
         status:current.status,
         method:current.method,
         checkoutUrl:current.checkoutUrl || null,
-        error:current.error || null,
+        error:current.error || order?.pagarReconciliationError || null,
         reconciliationRequired: order?.pagarReconciliationStatus === 'manual_required' ||
           current.pagarReconciliationStatus === 'manual_required',
       })}\n\n`)
