@@ -11,21 +11,21 @@ O utilizador confirmou C2B: o cliente paga directamente à loja através da API,
 
 **How to apply:** manter o fluxo C2B, interpretar o JSON mesmo quando a resposta HTTP é 200 e nunca substituir por um fluxo B2C.
 
-## Respostas ambíguas
+## Resultados e estado pendente
 
-A documentação não apresenta consulta de estado C2B, callback/webhook nem chave de idempotência. A “Área de Testes” envia pedidos ao servidor real; nunca a usar para testes. Um timeout ou resposta incompleta pode acontecer depois de a carteira do cliente ser debitada; não repetir cobranças automaticamente nem entregar o produto. Manter a encomenda pendente para confirmação manual. Só respostas terminais explícitas podem marcar a cobrança como paga ou falhada.
+A documentação não apresenta consulta de estado C2B, callback/webhook nem chave de idempotência. A resposta explícita `cod: 200`, `status: "success"` e `transacao` é processada automaticamente; códigos documentados de falha também. Um timeout ou resposta incompleta não prova que a carteira ficou intacta. O utilizador pediu que os pagamentos sejam automáticos e que o checkout mantenha a mensagem PIN original, mas não se pode transformar uma resposta ambígua em `PAID` sem confirmação do provedor. A “Área de Testes” envia pedidos ao servidor real; nunca a usar para testes.
 
-**Why:** repetir uma cobrança de resultado desconhecido pode debitar o cliente duas vezes.
+**Why:** repetir uma cobrança de resultado desconhecido pode debitar o cliente duas vezes, e entregar megas sem sucesso confirmado pode causar perda financeira.
 
-**How to apply:** quando houver timeout, falha de comunicação ou resposta sem confirmação inequívoca, marcar revisão manual e não agendar novas tentativas.
+**How to apply:** manter a mensagem PIN original no ecrã do cliente e processar automaticamente respostas inequívocas; não mostrar ao cliente o erro interno de revisão nem marcar como pago ou criar nova cobrança para respostas ambíguas. Para eliminar estados pendentes ambíguos, é necessário um endpoint de consulta ou callback oficial da MozPayment.
 
-## Valor mínimo e mensagem de espera
+## Valor mínimo e mensagem do PIN
 
-As ofertas da loja começam em 10 MT, por isso a validação MozPayment tem de aceitar esse valor. A tela de espera deve dizer que o pedido está a ser iniciado; não deve afirmar que o PIN foi enviado antes de a chamada ao provedor ser aceite. A loja responde ao browser antes de terminar a criação assíncrona da cobrança, e uma rejeição interna pode ocorrer antes de qualquer registo ou chamada externa.
+As ofertas da loja começam em 10 MT, por isso a validação MozPayment tem de aceitar esse valor. O checkout mantém a mensagem antiga: “Confirme a ativação da oferta introduzindo o PIN ... no seu telemóvel”. Não a substituir por uma mensagem de notificação diferente.
 
-**Why:** uma janela de espera não prova que o pedido chegou ao M-Pesa; uma validação abaixo do catálogo pode deixar a encomenda pendente sem gerar solicitação de PIN.
+**Why:** o utilizador pediu manter a mensagem anterior; um mínimo genérico de 20 MT rejeitava os pacotes de 10, 13 e 17 MT antes da chamada ao provedor.
 
-**How to apply:** manter o mínimo C2B alinhado ao preço mais baixo publicado, mostrar erros de cobrança no estado de espera e verificar o registo da operação antes de afirmar que o provedor recebeu o pedido.
+**How to apply:** manter o mínimo C2B alinhado ao preço mais baixo publicado e preservar a mensagem PIN acordada.
 
 ## Reconciliação por provedor
 
