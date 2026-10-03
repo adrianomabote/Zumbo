@@ -490,15 +490,21 @@ export function parseMozPaymentC2BResponse(data: unknown): {
   status: MozPaymentC2BStatus;
   operationId?: string;
 } {
-  const response = data && typeof data === "object" && !Array.isArray(data)
-    ? data as Record<string, unknown>
-    : {};
-  const rawOperationId = response.transacao;
-  const operationId = typeof rawOperationId === "string" &&
-      rawOperationId.trim().length > 0 &&
-      rawOperationId.trim().length <= 200 &&
-      !/[\u0000-\u001f\u007f]/.test(rawOperationId)
-    ? rawOperationId.trim()
+  const records = mozPaymentWebhookRecords(data);
+  const response = records.find((record) => record.cod !== undefined) || records[0] || {};
+  const rawOperationId = records
+    .map((record) => record.transacao)
+    .find((value) => value !== undefined);
+  const normalizedOperationId = typeof rawOperationId === "number" &&
+      Number.isSafeInteger(rawOperationId) &&
+      rawOperationId >= 0
+    ? String(rawOperationId)
+    : rawOperationId;
+  const operationId = typeof normalizedOperationId === "string" &&
+      normalizedOperationId.trim().length > 0 &&
+      normalizedOperationId.trim().length <= 200 &&
+      !/[\u0000-\u001f\u007f]/.test(normalizedOperationId)
+    ? normalizedOperationId.trim()
     : undefined;
 
   if (response.cod === 409 || response.cod === 401) {
@@ -534,7 +540,7 @@ export async function createMozPaymentC2B(input: Pick<
   const data = await request("POST", endpoint, {
     carteira: configuration.walletId,
     numero: localPhone,
-    cliente: "Cliente Megabyte",
+    cliente: `Recarga ${input.amountMzn} MT`,
     valor: String(input.amountMzn),
   });
   return parseMozPaymentC2BResponse(data);
@@ -1143,9 +1149,30 @@ export async function processMozPaymentWebhook(rawBody: Buffer) {
 
   const rawStatus = mozPaymentWebhookText(records, ["status", "statuspago", "payment_status", "paymentStatus", "event"]);
   const status = rawStatus?.toUpperCase().replace(/[ .-]+/g, "_");
-  const eventStatus = status === "PAID" || status === "PAYMENT_PAID" || status === "PAYMENT_SUCCESS"
+  const eventStatus = [
+    "PAID",
+    "PAYMENT_PAID",
+    "PAYMENT_SUCCESS",
+    "PAYMENT_SUCCEEDED",
+    "PAYMENT_COMPLETED",
+    "SUCCESS",
+    "SUCCEEDED",
+    "COMPLETED",
+    "CONFIRMED",
+    "APPROVED",
+  ].includes(status || "")
     ? "PAID"
-    : status === "FAILED" || status === "PAYMENT_FAILED"
+    : [
+        "FAILED",
+        "PAYMENT_FAILED",
+        "DECLINED",
+        "PAYMENT_DECLINED",
+        "REJECTED",
+        "PAYMENT_REJECTED",
+        "CANCELLED",
+        "CANCELED",
+        "PAYMENT_CANCELLED",
+      ].includes(status || "")
       ? "FAILED"
       : status === "EXPIRED" || status === "PAYMENT_EXPIRED"
         ? "CANCELLED"
@@ -1172,8 +1199,7 @@ export async function processMozPaymentWebhook(rawBody: Buffer) {
     throw mozPaymentWebhookFailure("O webhook MozPayment não contém um identificador de transacção.");
   }
 
-  const amountMzn = mozPaymentWebhookAmount(records);
-  if (amountMzn === undefined) throw mozPaymentWebhookFailure("O webhook MozPayment não contém o valor pago.");
+  const reportedAmountMzn = mozPaymentWebhookAmount(records);
   const currency = mozPaymentWebhookText(records, ["currency", "currency_code"])?.toUpperCase();
   if (currency && currency !== "MZN" && currency !== "MT") {
     throw mozPaymentWebhookFailure("A moeda do evento MozPayment não é MZN.");
@@ -1201,9 +1227,10 @@ export async function processMozPaymentWebhook(rawBody: Buffer) {
     );
   }
   const local = localResult.rows[0];
-  if (Number(local.amount_mzn) !== amountMzn) {
+  if (reportedAmountMzn !== undefined && Number(local.amount_mzn) !== reportedAmountMzn) {
     throw mozPaymentWebhookFailure("O valor do webhook MozPayment não corresponde à cobrança.", 409);
   }
+  const amountMzn = reportedAmountMzn ?? Number(local.amount_mzn);
 
   const explicitEventId = mozPaymentWebhookText(records, ["event_id", "eventId", "webhook_id", "webhookId"]);
   const eventId = `mozpayment:${explicitEventId || `${local.internal_id}:${eventStatus}`}`;
