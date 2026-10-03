@@ -245,9 +245,9 @@ function orderRecord(txId: string, reference: string, phone: string, beneficiary
 async function insertPendingOperation(txId: string, operationId: string, reference: string) {
   await pool!.query(
     `INSERT INTO pagar_operations
-      (internal_id, pagar_operation_id, pagar_reference, type, amount_mzn, status,
+      (internal_id, provider, pagar_operation_id, pagar_reference, type, amount_mzn, status,
        idempotency_key, source_id, local_transaction_id, title, method, payer_phone)
-     VALUES ($1,$2,$3,'payment',20,'PENDING',$4,$5,$1,'Teste PAID','MPESA','841112223')`,
+     VALUES ($1,'vpay',$2,$3,'payment',20,'PENDING',$4,$5,$1,'Teste PAID','MPESA','841112223')`,
     [txId, operationId, reference, `delivery-test-${txId}`, `delivery-source-${txId}`],
   );
 }
@@ -557,6 +557,52 @@ test("reconciliation adopts the provider PAID status and keeps the local record 
     assert.ok(stored.rows[0]?.confirmed_at);
   } finally {
     globalThis.fetch = originalFetch;
+    await pool!.query("DELETE FROM pagar_operations WHERE internal_id = $1", [txId]);
+  }
+});
+
+test("Vpay operations keep reconciling through Vpay after the active provider changes", async () => {
+  const txId = `delivery-test-vpay-provider-${testId}`;
+  const operationId = `vpay-reconcile-${testId}`;
+  const reference = `net-${txId}`;
+  await insertPendingOperation(txId, operationId, reference);
+  const originalFetch = globalThis.fetch;
+  const previousProvider = process.env.PAYMENT_PROVIDER;
+  const previousClientId = process.env.VPAY_CLIENT_ID;
+  const previousClientSecret = process.env.VPAY_CLIENT_SECRET;
+  const paths: string[] = [];
+  try {
+    process.env.PAYMENT_PROVIDER = "mozpayment";
+    process.env.VPAY_CLIENT_ID = "test-vpay-client";
+    process.env.VPAY_CLIENT_SECRET = "test-vpay-secret";
+    globalThis.fetch = (async (input) => {
+      const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
+      paths.push(url.pathname);
+      if (url.pathname === "/v1/auth/token") {
+        return new Response(JSON.stringify({ access_token: "test-vpay-token", expires_in: 3600 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.pathname === `/v1/orders/${operationId}/status`) {
+        return new Response(JSON.stringify({
+          data: { order: { orderId: operationId, status: "PAID", amount: 2000 } },
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      throw new Error(`Unexpected provider path: ${url.pathname}`);
+    }) as typeof fetch;
+
+    const reconciled = await reconcilePagarPayment(txId);
+    assert.equal(reconciled.status, "PAID");
+    assert.deepEqual(paths, ["/v1/auth/token", `/v1/orders/${operationId}/status`]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (previousProvider === undefined) delete process.env.PAYMENT_PROVIDER;
+    else process.env.PAYMENT_PROVIDER = previousProvider;
+    if (previousClientId === undefined) delete process.env.VPAY_CLIENT_ID;
+    else process.env.VPAY_CLIENT_ID = previousClientId;
+    if (previousClientSecret === undefined) delete process.env.VPAY_CLIENT_SECRET;
+    else process.env.VPAY_CLIENT_SECRET = previousClientSecret;
     await pool!.query("DELETE FROM pagar_operations WHERE internal_id = $1", [txId]);
   }
 });

@@ -1409,7 +1409,7 @@ function schedulePagarReconciliation(tx, delayMs = 30_000) {
   pagarReconciliationTimers.set(tx.id, timer)
 }
 
-function restorePendingPagarReconciliations() {
+async function restorePendingPagarReconciliations() {
   for (const order of orders) {
     if (order.status !== 'pending' || order.pagarReconciliationStatus === 'manual_required' || !order.txId || !['mpesa','emola'].includes(order.method)) continue
     const tx = {
@@ -1441,7 +1441,7 @@ function restorePendingPagarReconciliations() {
     transactions.set(tx.id, tx)
     if (tx.pagarProvider === 'mozpayment') {
       const message = 'O MozPayment não disponibiliza consulta de estado; confirme esta cobrança manualmente antes de qualquer nova tentativa.'
-      void requireManualPagarReconciliation(tx, message)
+      await requireManualPagarReconciliation(tx, message)
       continue
     }
     schedulePagarReconciliation(tx, 1_000)
@@ -5056,7 +5056,7 @@ await loadRechargeCredits()
 await loadMaintenance()
 await recoverRechargeCredits()
 await loadGwKeys()
-restorePendingPagarReconciliations()
+await restorePendingPagarReconciliations()
 createServer((req, res) => {
   router(req, res).catch(err => {
     console.error('[Server]', err)
