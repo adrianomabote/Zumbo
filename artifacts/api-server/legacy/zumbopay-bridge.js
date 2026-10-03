@@ -263,14 +263,14 @@ const PUBLIC_INFO_PAGES = {
   },
   '/megas-baratos-vodacom': {
     title: 'Megas Baratos Vodacom a partir de 10 MT | Megabyte',
-    description: 'Procura megas baratos em Moçambique? Veja opções de internet Vodacom a partir de 10 MT com saldo de crédito. Recarregue a partir de 20 MT usando M-Pesa ou e-Mola.',
+    description: 'Procura megas baratos em Moçambique? Veja opções de internet Vodacom a partir de 10 MT. Pague com M-Pesa, e-Mola ou saldo Megabyte.',
     heading: 'Megas baratos Vodacom a partir de 10 MT',
-    intro: 'Compare as opções de megas Vodacom disponíveis na Megabyte. As ofertas abaixo de 20 MT são pagas somente com saldo de crédito.',
+    intro: 'Compare as opções de megas Vodacom disponíveis na Megabyte. Pode pagar os pacotes a partir de 10 MT com M-Pesa, e-Mola ou saldo de crédito.',
     sections: [
       {
         heading: 'Opções de internet a partir de 10 MT',
         paragraphs: [
-          'O catálogo da Megabyte inclui pacotes de internet Vodacom a partir de 10 MT. Para usar as ofertas abaixo de 20 MT, recarregue o saldo com M-Pesa ou e-Mola a partir de 20 MT.',
+          'O catálogo da Megabyte inclui pacotes de internet Vodacom a partir de 10 MT, com pagamento directo por M-Pesa ou e-Mola.',
           'Se pesquisou por “Vodacom megas”, “megas baratos” ou “internet móvel barata”, abra a loja para ver as ofertas actuais.',
         ],
       },
@@ -279,7 +279,7 @@ const PUBLIC_INFO_PAGES = {
         steps: [
           'Compare o preço, a quantidade de megas e o período de validade.',
           'Escolha o número Vodacom que deve receber o pacote.',
-          'Use saldo de crédito para ofertas abaixo de 20 MT; pacotes a partir de 20 MT também aceitam M-Pesa ou e-Mola.',
+          'Escolha o pacote e pague directamente por M-Pesa, e-Mola ou com o saldo da sua conta.',
         ],
       },
     ],
@@ -1069,19 +1069,19 @@ a{color:#0f766e}.wrap{width:min(1120px,calc(100% - 36px));margin:auto}.hero{back
     "reference": "pedido-123",
     "description": "Compra na minha loja",
     "callback_url": "https://seusite.com/api/gateway/callback"
-  }'</pre><p><code class="inline">phone</code> e <code class="inline">amount</code> são obrigatórios. <code class="inline">reference</code> tem no máximo 64 caracteres. <code class="inline">description</code> tem no máximo 120. O <code class="inline">callback_url</code> é opcional, mas deve ser HTTPS público.</p><h3>Resposta <span class="pill">202 Accepted</span></h3><pre>{
+  }'</pre><p><code class="inline">phone</code> e <code class="inline">amount</code> são obrigatórios.${isMozPayment ? ' O valor deve ser inteiro entre 10 e 40000 MT e é enviado sem arredondamento.' : ''} <code class="inline">reference</code> tem no máximo 64 caracteres. <code class="inline">description</code> tem no máximo 120. O <code class="inline">callback_url</code> é opcional, mas deve ser HTTPS público.</p><h3>Resposta <span class="pill">202 Accepted</span></h3><pre>{
   "ok": true,
   "txId": "a1b2c3d4e5f6",
   "status": "pending",
   "method": "mpesa",
   "megabytes": 4096,
 ${checkoutResponseField}  "statusUrl": "${baseUrl}/gateway/api/status/a1b2c3d4e5f6"
-}</pre></div></div><div class="callout"><strong>Conversão em megas:</strong> valores iguais aos pacotes normais usam a quantidade exacta do catálogo. Outros valores usam <code class="inline">amount × 40 MB</code>. Por exemplo: 25 MT = 1024 MB; 100 MT = 4096 MB.</div></section>
+}</pre></div></div><div class="callout"><strong>Conversão em megas:</strong> valores iguais aos pacotes normais usam a quantidade exacta do catálogo. Outros valores usam <code class="inline">amount × 40 MB</code>. O valor cobrado pela MozPayment é sempre exactamente o <code class="inline">amount</code> enviado. Por exemplo: 25 MT = 1024 MB; 100 MT = 4096 MB.</div></section>
     <section class="section" id="estado"><h2>Consultar o estado</h2><div class="endpoint"><div class="endpoint-head"><span class="method get">GET</span><code>/gateway/api/status/&lt;txId&gt;</code></div><div class="endpoint-body"><pre>curl ${baseUrl}/gateway/api/status/a1b2c3d4e5f6 \\
   -H "X-API-Key: gw_live_SUA_CHAVE"</pre><h3>Resposta</h3><pre>{
   "ok": true,
   "txId": "a1b2c3d4e5f6",
-  "status": "pending",
+  "status": "succeeded",
   "amount": 100,
   "megabytes": 4096,
   "phone": "84xxxxxxx",
@@ -3399,12 +3399,12 @@ ${allListHtml}
       <div class="auth-card-head">
         <div style="margin-bottom:12px;display:flex;justify-content:center"><img src="/static/coins.png" style="width:56px;height:56px" alt="saldo"></div>
         <div class="auth-card-title">Recarregar Saldo</div>
-         <div class="auth-card-sub">M-Pesa ou e-Mola, conforme o número da conta · mínimo 20 MT</div>
+         <div class="auth-card-sub">M-Pesa ou e-Mola, conforme o número da conta · mínimo 10 MT</div>
       </div>
       <div class="auth-body">
         <div class="rech-amount-wrap">
           <span class="rech-amount-prefix">MT</span>
-           <input class="auth-inp rech-inp" id="rech-amount" type="number" min="20" placeholder="Mínimo 20 MT" inputmode="numeric">
+           <input class="auth-inp rech-inp" id="rech-amount" type="number" min="10" max="40000" step="1" placeholder="Mínimo 10 MT" inputmode="numeric">
         </div>
         <div class="auth-err" id="rech-err"></div>
          <button class="auth-btn" id="rech-btn" onclick="submitRecharge()">Continuar</button>
@@ -3675,9 +3675,9 @@ function closeRechargeDialog() {
   setTimeout(()=>{document.getElementById('recharge-modal').style.display='none'},250)
 }
 async function submitRecharge() {
-  const amount=parseInt(document.getElementById('rech-amount').value)
+  const amount=Number(document.getElementById('rech-amount').value)
   const err=document.getElementById('rech-err'); err.style.display='none'
-  if(!amount||amount<20){err.textContent='O valor mínimo para recarregar é 20 MT.';err.style.display='block';return}
+  if(!Number.isInteger(amount)||amount<10||amount>40000){err.textContent='A recarga deve ser um número inteiro entre 10 e 40000 MT.';err.style.display='block';return}
   const btn=document.getElementById('rech-btn'); btn.disabled=true; btn.textContent='A processar…'
   try {
     const r=await fetch('/api/recharge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount})})
