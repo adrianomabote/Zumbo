@@ -504,6 +504,33 @@ async function request(
           ...mozPaymentC2BResponseLogFields(details.data),
         }, "MozPayment C2B provider response");
       };
+  if (configuration.provider === "mozpayment") {
+    const rawText = await response.text();
+    let data: unknown = {};
+    let jsonParsed = false;
+    if (rawText.trim()) {
+      try {
+        data = JSON.parse(rawText);
+        jsonParsed = true;
+      } catch {
+        data = { message: rawText.slice(0, 500) };
+      }
+    }
+    observeMozPaymentResponse?.({
+      httpStatus: response.status,
+      contentType: response.headers.get("content-type"),
+      jsonParsed,
+      data,
+    });
+    if (!response.ok && parseMozPaymentC2BResponse(data).status !== "FAILED") {
+      const error = new Error("MozPayment não confirmou o resultado da cobrança.");
+      Object.assign(error, { status: response.status, mozPaymentAmbiguous: true });
+      throw error;
+    }
+    return data && typeof data === "object" && !Array.isArray(data)
+      ? data as Record<string, unknown>
+      : {};
+  }
   return parseResponse(response, observeMozPaymentResponse);
 }
 
@@ -536,6 +563,7 @@ export type MozPaymentC2BStatus = "PAID" | "FAILED" | "RECONCILIATION_REQUIRED";
 export function parseMozPaymentC2BResponse(data: unknown): {
   status: MozPaymentC2BStatus;
   operationId?: string;
+  failureReason?: "EMOLA_PIN_INCORRECT";
 } {
   const records = mozPaymentResponseRecords(data);
   const response = records.find((record) => record.cod !== undefined) || records[0] || {};
@@ -554,8 +582,27 @@ export function parseMozPaymentC2BResponse(data: unknown): {
     ? normalizedOperationId.trim()
     : undefined;
 
-  if (response.cod === 409 || response.cod === 401) {
-    return { status: "FAILED", ...(operationId ? { operationId } : {}) };
+  const codes = records
+    .map((record) => record.cod)
+    .filter((code): code is number => typeof code === "number");
+  const hasSuccessResponse = records.some((record) =>
+    record.cod === 200 &&
+    typeof record.status === "string" &&
+    record.status.trim().toLowerCase() === "success"
+  );
+  const failureReason = mozPaymentExplicitFailureReason(records);
+  if ((codes.includes(409) || codes.includes(401) || failureReason) && !hasSuccessResponse) {
+    return {
+      status: "FAILED",
+      ...(operationId ? { operationId } : {}),
+      ...(failureReason === "EMOLA_PIN_INCORRECT" ? { failureReason } : {}),
+    };
+  }
+  if ((codes.includes(409) || codes.includes(401)) && hasSuccessResponse) {
+    return {
+      status: "RECONCILIATION_REQUIRED",
+      ...(operationId ? { operationId } : {}),
+    };
   }
   if (
     response.cod === 200 &&
