@@ -139,14 +139,14 @@ function pagarReferenceFor(tx) {
 }
 
 function pagarTitleFor(tx, customerName) {
-  if (tx.type === 'gateway') return `Recarga de ${Math.round(Number(tx.amount) || 0)} MT`
+  if (tx.type === 'gateway') return `Recarga ${Math.round(Number(tx.amount) || 0)} MT`
   return String(customerName || `Compra de ${tx.bundleLabel || 'megas'}`).slice(0, 120)
 }
 
 function pagarDescriptionFor(tx, customerName) {
   const mega = tx.megabytes || megaDetailsForAmount(tx.amount).megabytes
   if (tx.type === 'gateway') {
-    return `Recarga de ${Math.round(Number(tx.amount) || 0)} MT`
+    return `Recarga ${Math.round(Number(tx.amount) || 0)} MT`
   }
   return `Compra de ${mega} MB por ${tx.amount} MT`.slice(0, 240)
 }

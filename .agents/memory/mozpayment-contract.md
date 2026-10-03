@@ -27,6 +27,14 @@ As ofertas da loja começam em 10 MT, por isso a validação MozPayment tem de a
 
 **How to apply:** manter o mínimo C2B alinhado ao preço mais baixo publicado e preservar a mensagem PIN acordada.
 
+## Identificação da cobrança
+
+O nome/descrição visível no painel MozPayment deve ser exactamente `Recarga [valor] MT`, nunca `Cliente Megabyte`. O valor apresentado tem de ser o mesmo montante exacto cobrado pelo pacote ou recarga.
+
+**Why:** o utilizador pediu que cada cobrança seja identificável pelo montante realmente pago.
+
+**How to apply:** gerar o rótulo a partir do valor validado da cobrança em todos os fluxos MozPayment, incluindo compras do Gateway.
+
 ## Carteira C2B versus credencial B2C
 
 O utilizador esclareceu que o valor anteriormente configurado como `MOZPAYMENT_WALLET_ID` era uma secret key B2C, não o ID de carteira C2B. Não reutilizar credenciais B2C no campo `carteira` dos pedidos C2B. O ID C2B correcto deve ser substituído através do fluxo seguro de Secrets, em todos os ambientes usados.
