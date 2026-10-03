@@ -242,13 +242,18 @@ function orderRecord(txId: string, reference: string, phone: string, beneficiary
   };
 }
 
-async function insertPendingOperation(txId: string, operationId: string, reference: string) {
+async function insertPendingOperation(
+  txId: string,
+  operationId: string,
+  reference: string,
+  provider = "pagar",
+) {
   await pool!.query(
     `INSERT INTO pagar_operations
       (internal_id, provider, pagar_operation_id, pagar_reference, type, amount_mzn, status,
        idempotency_key, source_id, local_transaction_id, title, method, payer_phone)
-     VALUES ($1,'vpay',$2,$3,'payment',20,'PENDING',$4,$5,$1,'Teste PAID','MPESA','841112223')`,
-    [txId, operationId, reference, `delivery-test-${txId}`, `delivery-source-${txId}`],
+     VALUES ($1,$2,$3,$4,'payment',20,'PENDING',$5,$6,$1,'Teste PAID','MPESA','841112223')`,
+    [txId, provider, operationId, reference, `delivery-test-${txId}`, `delivery-source-${txId}`],
   );
 }
 
@@ -409,7 +414,7 @@ test("PAID Para Mim reaches the account number and repeated equivalent webhooks 
   const txId = `delivery-test-self-${testId}`;
   const operationId = `pagar-self-${testId}`;
   const reference = `net-${txId}`;
-  await insertPendingOperation(txId, operationId, reference);
+  await insertPendingOperation(txId, operationId, reference, "vpay");
 
   assert.equal((await webhookRequest(`delivery-test-self-event-${testId}`, operationId, reference)).status, 204);
   let deliveries = await listDeliveries();
