@@ -101,6 +101,7 @@ router.post(["/pagar/internal/payments/:localTransactionId/reconcile", "/debitop
       paymentId: payment.pagar_operation_id,
       status: payment.status,
       reference: payment.pagar_reference,
+      provider: payment.provider,
     });
   } catch (error) {
     const errorStatus = (error as { status?: unknown })?.status;

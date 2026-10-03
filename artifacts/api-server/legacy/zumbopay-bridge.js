@@ -1199,7 +1199,16 @@ async function initiateCharge(tx, customerName) {
     })
     const data = await resp.json().catch(()=>({}))
     console.log(`[${PAYMENT_API_ROUTE}] POST /payments → ${resp.status}`, JSON.stringify({ status:data.status, paymentId:data.paymentId, reference:data.reference }))
-    if (PAYMENT_PROVIDERS.has(data.provider)) tx.pagarProvider = data.provider
+    if (PAYMENT_PROVIDERS.has(data.provider)) {
+      tx.pagarProvider = data.provider
+    } else {
+      tx.pagarProvider = null
+      await requireManualPagarReconciliation(
+        tx,
+        'Não foi possível identificar com segurança o provedor desta cobrança. É necessária confirmação manual.',
+      )
+      return
+    }
     if (resp.status === 202) {
       tx.ref = data.reference || tx.ref || pagarReference
       if (PAYMENT_API_ROUTE === 'vpay' && typeof data.checkoutUrl === 'string') {
@@ -1274,7 +1283,7 @@ async function requireManualPagarReconciliation(tx, message) {
   tx.status = 'pending'
   tx.error = message
   await updateOrderStatus(tx.id, 'pending', {
-    pagarProvider: tx.pagarProvider || PAYMENT_API_ROUTE,
+    pagarProvider: tx.pagarProvider || null,
     pagarRef: tx.ref || tx.pagarRef || pagarReferenceFor(tx),
     pagarTitle: tx.pagarTitle,
     pagarDescription: tx.pagarDescription,
@@ -1349,6 +1358,13 @@ async function reconcilePagarTransaction(tx) {
     if (res.status === 404) return 'missing'
     if (!res.ok) throw new Error(data.error || `Reconciliação recusada: ${res.status}`)
     const providerStatus = String(data.status || '').toUpperCase()
+    if (PAYMENT_PROVIDERS.has(data.provider)) tx.pagarProvider = data.provider
+    else if (!['PAID','FAILED','CANCELLED','REFUNDED'].includes(providerStatus)) {
+      tx.pagarProvider = null
+      const message = 'Não foi possível identificar com segurança o provedor desta cobrança. É necessária confirmação manual.'
+      await requireManualPagarReconciliation(tx, message)
+      return 'manual_required'
+    }
     if (providerStatus === 'PAID' || ['FAILED','CANCELLED','REFUNDED'].includes(providerStatus)) {
       return applyPagarProviderStatus(tx, providerStatus, { reference: data.reference || tx.ref })
     }
@@ -1366,6 +1382,7 @@ async function reconcilePagarTransaction(tx) {
   } catch (error) {
     console.error('[Pagar] Falha na reconciliação:', error.message)
     if (Number(error.status) === 409) {
+      tx.pagarProvider = null
       await requireManualPagarReconciliation(
         tx,
         error.message || 'Não foi possível identificar com segurança o provedor desta cobrança. É necessária confirmação manual.',
@@ -1432,7 +1449,7 @@ async function restorePendingPagarReconciliations() {
       beneficiaryPhone: order.beneficiaryPhone,
       amount: order.amount,
       method: order.method,
-      pagarProvider: order.pagarProvider || 'vpay',
+      pagarProvider: order.pagarProvider || null,
       status: 'pending',
       ref: order.pagarRef || pagarReferenceFor(order),
       pagarRef: order.pagarRef || pagarReferenceFor(order),

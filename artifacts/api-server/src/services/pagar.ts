@@ -832,6 +832,7 @@ export async function reconcilePagarPayment(localTransactionId: string) {
     Object.assign(error, { status: 404 });
     throw error;
   }
+  if (terminalStates.has(normalizePaymentStatus(local.status) || "")) return local;
   const provider = local.provider as PaymentProvider;
   if (!["pagar", "debitopay", "paysuite", "vpay", "mozpayment"].includes(provider)) {
     const error = new Error("O provedor original desta operação não está identificado; é necessária confirmação manual.");
@@ -839,7 +840,6 @@ export async function reconcilePagarPayment(localTransactionId: string) {
     throw error;
   }
   if (provider === "mozpayment") {
-    if (terminalStates.has(normalizePaymentStatus(local.status) || "")) return local;
     const error = new Error(
       "O MozPayment não documenta consulta de estado; esta operação requer confirmação manual.",
     );

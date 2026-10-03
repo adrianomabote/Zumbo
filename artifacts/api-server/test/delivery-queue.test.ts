@@ -246,7 +246,7 @@ async function insertPendingOperation(
   txId: string,
   operationId: string,
   reference: string,
-  provider = "pagar",
+  provider: string | null = "pagar",
 ) {
   await pool!.query(
     `INSERT INTO pagar_operations
@@ -608,6 +608,34 @@ test("Vpay operations keep reconciling through Vpay after the active provider ch
     else process.env.VPAY_CLIENT_ID = previousClientId;
     if (previousClientSecret === undefined) delete process.env.VPAY_CLIENT_SECRET;
     else process.env.VPAY_CLIENT_SECRET = previousClientSecret;
+    await pool!.query("DELETE FROM pagar_operations WHERE internal_id = $1", [txId]);
+  }
+});
+
+test("an operation without a known provider is not sent to the currently selected provider", async () => {
+  const txId = `delivery-test-unknown-provider-${testId}`;
+  const operationId = `unknown-provider-${testId}`;
+  const reference = `net-${txId}`;
+  await insertPendingOperation(txId, operationId, reference, null);
+  const originalFetch = globalThis.fetch;
+  const previousProvider = process.env.PAYMENT_PROVIDER;
+  let providerRequestMade = false;
+  try {
+    process.env.PAYMENT_PROVIDER = "mozpayment";
+    globalThis.fetch = (async () => {
+      providerRequestMade = true;
+      throw new Error("An unknown operation must not reach any provider.");
+    }) as typeof fetch;
+
+    await assert.rejects(
+      () => reconcilePagarPayment(txId),
+      (error: unknown) => (error as { status?: number }).status === 409,
+    );
+    assert.equal(providerRequestMade, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (previousProvider === undefined) delete process.env.PAYMENT_PROVIDER;
+    else process.env.PAYMENT_PROVIDER = previousProvider;
     await pool!.query("DELETE FROM pagar_operations WHERE internal_id = $1", [txId]);
   }
 });
