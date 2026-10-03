@@ -1128,7 +1128,7 @@ function mozPaymentResponseRecords(payload: unknown) {
     const record = value as Record<string, unknown>;
     records.push(record);
     if (depth >= 3) continue;
-    for (const key of ["data", "payment", "transaction", "payload"]) {
+    for (const key of ["data", "payment", "transaction", "payload", "response"]) {
       if (record[key] && typeof record[key] === "object") {
         queue.push({ value: record[key], depth: depth + 1 });
       }

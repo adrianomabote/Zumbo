@@ -272,6 +272,14 @@ test("MozPayment C2B uses the documented endpoints and requires an explicit JSON
       transacao: 123456,
     }), { status: "PAID", operationId: "123456" });
     assert.deepEqual(parseMozPaymentC2BResponse({
+      status: "success",
+      response: {
+        cod: 200,
+        status: "success",
+        transacao: "moz-txn-nested-test",
+      },
+    }), { status: "PAID", operationId: "moz-txn-nested-test" });
+    assert.deepEqual(parseMozPaymentC2BResponse({
       cod: 409,
       status: "error",
       mensagem: "Saldo insuficiente.",
@@ -313,4 +321,16 @@ test("MozPayment response diagnostics retain status fields without logging payme
   assert.equal(loggedFields.includes("moz-txn-sensitive-value"), false);
   assert.equal(loggedFields.includes("841234567"), false);
   assert.equal(loggedFields.includes("informação privada"), false);
+
+  assert.deepEqual(mozPaymentC2BResponseLogFields({
+    status: "success",
+    response: { cod: 200, status: "success", transacao: "moz-txn-nested-value" },
+  }), {
+    responseCode: 200,
+    responseStatus: "success",
+    responseKeys: ["cod", "response", "status", "transacao"],
+    transacaoFieldPresent: true,
+    transacaoValueType: "string",
+    transacaoRecognized: true,
+  });
 });
