@@ -591,17 +591,17 @@ export function parseMozPaymentC2BResponse(data: unknown): {
     record.status.trim().toLowerCase() === "success"
   );
   const failureReason = mozPaymentExplicitFailureReason(records);
-  if ((codes.includes(409) || codes.includes(401) || failureReason) && !hasSuccessResponse) {
+  if ((codes.includes(409) || codes.includes(401) || failureReason) && hasSuccessResponse) {
+    return {
+      status: "RECONCILIATION_REQUIRED",
+      ...(operationId ? { operationId } : {}),
+    };
+  }
+  if (codes.includes(409) || codes.includes(401) || failureReason) {
     return {
       status: "FAILED",
       ...(operationId ? { operationId } : {}),
       ...(failureReason === "EMOLA_PIN_INCORRECT" ? { failureReason } : {}),
-    };
-  }
-  if ((codes.includes(409) || codes.includes(401)) && hasSuccessResponse) {
-    return {
-      status: "RECONCILIATION_REQUIRED",
-      ...(operationId ? { operationId } : {}),
     };
   }
   if (
@@ -631,12 +631,18 @@ export async function createMozPaymentC2B(input: Pick<
   const endpoint = input.method === "MPESA"
     ? "/pagamentorotativompesa"
     : "/pagamentorotativoemola";
-  const data = await request("POST", endpoint, {
-    carteira: configuration.walletId,
-    numero: localPhone,
-    cliente: `Recarga ${input.amountMzn} MT`,
-    valor: String(input.amountMzn),
-  });
+  let data: Record<string, unknown>;
+  try {
+    data = await request("POST", endpoint, {
+      carteira: configuration.walletId,
+      numero: localPhone,
+      cliente: `Recarga ${input.amountMzn} MT`,
+      valor: String(input.amountMzn),
+    }, undefined, "mozpayment");
+  } catch (error) {
+    if (isConfigurationError(error)) throw error;
+    return { status: "RECONCILIATION_REQUIRED" };
+  }
   return parseMozPaymentC2BResponse(data);
 }
 
@@ -1175,13 +1181,76 @@ function mozPaymentResponseRecords(payload: unknown) {
     const record = value as Record<string, unknown>;
     records.push(record);
     if (depth >= 3) continue;
-    for (const key of ["data", "payment", "transaction", "payload", "response"]) {
-      if (record[key] && typeof record[key] === "object") {
-        queue.push({ value: record[key], depth: depth + 1 });
+    for (const key of [
+      "data",
+      "payment",
+      "transaction",
+      "payload",
+      "response",
+      "mpesa_response",
+      "emola_response",
+      "mpesaResponse",
+      "emolaResponse",
+      "provider_response",
+      "providerResponse",
+      "details",
+    ]) {
+      const child = record[key];
+      if (child && typeof child === "object") {
+        queue.push({ value: child, depth: depth + 1 });
+      } else if (typeof child === "string" && child.trim().startsWith("{")) {
+        try {
+          queue.push({ value: JSON.parse(child), depth: depth + 1 });
+        } catch {
+          // Preserve non-JSON provider text as opaque data.
+        }
       }
     }
   }
   return records;
+}
+
+function mozPaymentExplicitFailureReason(
+  records: Record<string, unknown>[],
+): "EMOLA_PIN_INCORRECT" | "PROVIDER_DECLINED" | undefined {
+  const messageKeys = [
+    "message",
+    "mensagem",
+    "error",
+    "description",
+    "descricao",
+    "detail",
+    "details",
+    "error_description",
+    "error_message",
+    "status_description",
+    "mpesa_response",
+    "emola_response",
+    "mpesaResponse",
+    "emolaResponse",
+    "provider_response",
+    "providerResponse",
+  ];
+  const messages = records.flatMap((record) =>
+    messageKeys
+      .map((key) => record[key])
+      .filter((value): value is string => typeof value === "string")
+      .map((value) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase())
+  );
+  if (messages.some((message) =>
+    /\b(?:pin.{0,40}(?:incorrect|wrong|invalid|errado|errada|incorreto|incorreta)|(?:incorrect|wrong|invalid|errado|errada|incorreto|incorreta).{0,40}pin)\b/.test(message)
+  )) {
+    return "EMOLA_PIN_INCORRECT";
+  }
+
+  const hasMpesaFailureCode = records.some((record) =>
+    ["code", "error_code", "errorCode", "codigo", "response_code", "responseCode"]
+      .some((key) => typeof record[key] === "string" && (record[key] as string).trim().toUpperCase() === "INS-6")
+  );
+  if (hasMpesaFailureCode && messages.some((message) => /transaction failed/.test(message))) {
+    return "PROVIDER_DECLINED";
+  }
+  return undefined;
 }
 
 export function mozPaymentC2BResponseLogFields(payload: unknown) {
