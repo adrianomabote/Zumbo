@@ -143,7 +143,7 @@ test("MozPayment Gateway cobra exactamente 10 MT e inicia a entrega USSD", async
   assert.match(docs, /MozPayment C2B/);
   assert.match(docs, /Recarga \[valor\] MT/);
   assert.match(docs, /entre 10 e 40000 MT/);
-  assert.match(docs, /entrega USSD em fila automaticamente/i);
+  assert.match(docs, /após confirmação, a Megabyte coloca a entrega USSD em fila/i);
   assert.match(docs, /cod: 200.*status: "success".*transacao/);
   assert.match(docs, /não enviam callback\/webhook neste fluxo/i);
   assert.match(docs, /callback_url.*notificação do Gateway Megabyte/i);

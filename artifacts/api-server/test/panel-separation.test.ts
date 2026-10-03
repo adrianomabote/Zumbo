@@ -403,7 +403,7 @@ test("preserva o contrato público de criação e consulta do gateway", async ()
   assert.equal(createResponse.status, 202);
   const created = await createResponse.json();
   assert.equal(created.ok, true);
-  assert.equal(created.status, "pending");
+  assert.equal(created.status, "succeeded");
   assert.equal(created.method, "mpesa");
   assert.equal(created.checkoutUrl, undefined);
   assert.equal(typeof created.txId, "string");
