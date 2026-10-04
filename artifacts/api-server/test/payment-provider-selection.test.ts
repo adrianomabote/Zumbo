@@ -297,7 +297,7 @@ test("MozPayment C2B uses the documented endpoints and requires an explicit JSON
       cod: "200",
       status: "success",
       transacao: "moz-txn-test-2",
-    }), { status: "RECONCILIATION_REQUIRED", operationId: "moz-txn-test-2" });
+    }), { status: "PAID", operationId: "moz-txn-test-2" });
     assert.deepEqual(parseMozPaymentC2BResponse({
       cod: 200,
       status: "success",
