@@ -322,6 +322,7 @@ test("MozPayment C2B uses the documented endpoints and requires an explicit JSON
       mensagem: "Saldo insuficiente.",
     }), { status: "FAILED" });
     assert.deepEqual(parseMozPaymentC2BResponse({
+      cod: 200,
       status: "success",
       response: { cod: 409, status: "failed" },
       transacao: "moz-txn-contradictory",
