@@ -2936,6 +2936,8 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 #recharge-modal .auth-card{width:100%;max-width:none;background:#fff;border:1px solid #e5e5ea;color:#1c1c1e;}
 #recharge-modal .auth-card-title{color:#1c1c1e;}
 #recharge-modal .auth-close{color:#636366;}
+ #recharge-modal .recharge-checkout-head{padding:24px 56px 16px 24px;text-align:left;}
+ #recharge-modal .recharge-checkout-frame{display:block;width:100%;height:min(68dvh,620px);min-height:360px;border:0;background:#fff;}
 .rech-quick-title{font-size:12px;font-weight:800;color:#636366;letter-spacing:.07em;margin:2px 0 10px;}
 .rech-quick-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;}
 .rech-quick-option{min-height:52px;padding:6px 8px;border:1.5px solid #e5e5ea;border-radius:9px;background:#f9f9fb;color:#1c1c1e;font-family:inherit;font-size:17px;font-weight:700;cursor:pointer;transition:background .15s,border-color .15s,color .15s;}
@@ -3412,7 +3414,7 @@ ${allListHtml}
         <div style="margin-bottom:12px;display:flex;justify-content:center"><img src="/static/coins.png" style="width:56px;height:56px" alt="saldo"></div>
         <div class="auth-card-title">Recarregar Saldo</div>
       </div>
-      <div class="auth-body">
+      <div class="auth-body" id="recharge-selection">
         <div class="rech-quick-title">VALOR RÁPIDO</div>
         <div class="rech-quick-grid" role="group" aria-label="Escolha o valor da recarga">
           <button type="button" class="rech-quick-option" data-amount="20" aria-pressed="false" onclick="selectRechargeAmount(20)">20 MT</button>
@@ -3426,6 +3428,19 @@ ${allListHtml}
         </div>
         <div class="auth-err" id="rech-err"></div>
         <button class="auth-btn rech-deposit-btn" id="rech-btn" onclick="submitRecharge()" disabled>Depositar</button>
+      </div>
+      <div id="recharge-checkout" style="display:none">
+        <div class="auth-card-head recharge-checkout-head">
+          <div class="auth-card-title" id="recharge-checkout-title">Checkout de recarga</div>
+        </div>
+        <iframe
+          id="recharge-checkout-frame"
+          class="recharge-checkout-frame"
+          title="Checkout de recarga"
+          src="about:blank"
+          referrerpolicy="strict-origin-when-cross-origin"
+          allow="payment; clipboard-write"
+        ></iframe>
       </div>
     </div>
   </div>
@@ -3681,6 +3696,13 @@ async function changePassword() {
 
 // ── Recarga ──────────────────────────────────────────────────────────────────
 const QUICK_RECHARGE_AMOUNTS = [20,50,100,250,500,1000,2000,5000]
+const RECHARGE_CHECKOUT_URLS = {
+  250: 'https://paynice.online/c/recarga-de-250-yrcne',
+  500: 'https://paynice.online/c/recarga-de-500-9b82p',
+  1000: 'https://paynice.online/c/recarga-de-1000-5ip1g',
+  2000: 'https://paynice.online/c/recarga-de-2000-yxn65',
+  5000: 'https://paynice.online/c/recarga-de-5000-muzo1',
+}
 let selectedRechargeAmount = null
 function selectRechargeAmount(amount) {
   if (!QUICK_RECHARGE_AMOUNTS.includes(amount)) return
@@ -3695,6 +3717,9 @@ function selectRechargeAmount(amount) {
 }
 function openRechargeDialog() {
   selectedRechargeAmount = null
+  document.getElementById('recharge-selection').style.display=''
+  document.getElementById('recharge-checkout').style.display='none'
+  document.getElementById('recharge-checkout-frame').src='about:blank'
   document.querySelectorAll('.rech-quick-option').forEach(option => {
     option.classList.remove('is-selected')
     option.setAttribute('aria-pressed','false')
@@ -3706,12 +3731,21 @@ function openRechargeDialog() {
 }
 function closeRechargeDialog() {
   document.getElementById('recharge-card').classList.remove('open')
+  document.getElementById('recharge-checkout-frame').src='about:blank'
   setTimeout(()=>{document.getElementById('recharge-modal').style.display='none'},250)
 }
 async function submitRecharge() {
   const amount=selectedRechargeAmount
   const err=document.getElementById('rech-err'); err.style.display='none'
   if(!QUICK_RECHARGE_AMOUNTS.includes(amount)){err.textContent='Escolha um valor para a recarga.';err.style.display='block';return}
+  const checkoutUrl=RECHARGE_CHECKOUT_URLS[amount]
+  if(checkoutUrl){
+    document.getElementById('recharge-checkout-title').textContent='Depositar '+amount.toLocaleString('pt-MZ')+' MT'
+    document.getElementById('recharge-checkout-frame').src=checkoutUrl
+    document.getElementById('recharge-selection').style.display='none'
+    document.getElementById('recharge-checkout').style.display='block'
+    return
+  }
   const btn=document.getElementById('rech-btn'); btn.disabled=true; btn.textContent='A processar…'
   try {
     const r=await fetch('/api/recharge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount})})
