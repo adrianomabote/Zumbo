@@ -2937,7 +2937,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 #recharge-modal .auth-card-title{color:#1c1c1e;}
 #recharge-modal .auth-close{color:#636366;}
  #recharge-modal .recharge-checkout-head{padding:24px 56px 16px 24px;text-align:left;}
- #recharge-modal .recharge-checkout-frame{display:block;width:100%;height:min(68dvh,620px);min-height:360px;border:0;background:#fff;}
+ #recharge-modal .recharge-checkout-frame{display:block;width:calc(100% - 24px);height:min(68dvh,620px);min-height:360px;margin:0 12px 12px;border:0;border-radius:12px;background:#fff;overflow:hidden;}
 .rech-quick-title{font-size:12px;font-weight:800;color:#636366;letter-spacing:.07em;margin:2px 0 10px;}
 .rech-quick-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;}
 .rech-quick-option{min-height:52px;padding:6px 8px;border:1.5px solid #e5e5ea;border-radius:9px;background:#f9f9fb;color:#1c1c1e;font-family:inherit;font-size:17px;font-weight:700;cursor:pointer;transition:background .15s,border-color .15s,color .15s;}
@@ -3427,7 +3427,7 @@ ${allListHtml}
           <button type="button" class="rech-quick-option" data-amount="5000" aria-pressed="false" onclick="selectRechargeAmount(5000)">5,000 MT</button>
         </div>
         <div class="auth-err" id="rech-err"></div>
-        <button class="auth-btn rech-deposit-btn" id="rech-btn" onclick="submitRecharge()" disabled>Depositar</button>
+        <button class="auth-btn rech-deposit-btn" id="rech-btn" onclick="submitRecharge()" disabled>Recarregar</button>
       </div>
       <div id="recharge-checkout" style="display:none">
         <div class="auth-card-head recharge-checkout-head">
@@ -3725,7 +3725,7 @@ function openRechargeDialog() {
     option.setAttribute('aria-pressed','false')
   })
   document.getElementById('rech-err').style.display='none'
-  const btn=document.getElementById('rech-btn'); btn.disabled=true; btn.textContent='Depositar'
+  const btn=document.getElementById('rech-btn'); btn.disabled=true; btn.textContent='Recarregar'
   document.getElementById('recharge-modal').style.display='flex'
   setTimeout(()=>document.getElementById('recharge-card').classList.add('open'),10)
 }
@@ -3740,7 +3740,7 @@ async function submitRecharge() {
   if(!QUICK_RECHARGE_AMOUNTS.includes(amount)){err.textContent='Escolha um valor para a recarga.';err.style.display='block';return}
   const checkoutUrl=RECHARGE_CHECKOUT_URLS[amount]
   if(checkoutUrl){
-    document.getElementById('recharge-checkout-title').textContent='Depositar '+amount.toLocaleString('pt-MZ')+' MT'
+    document.getElementById('recharge-checkout-title').textContent='Recarga de '+amount.toLocaleString('pt-MZ')+' MT'
     document.getElementById('recharge-checkout-frame').src=checkoutUrl
     document.getElementById('recharge-selection').style.display='none'
     document.getElementById('recharge-checkout').style.display='block'
@@ -3750,7 +3750,7 @@ async function submitRecharge() {
   try {
     const r=await fetch('/api/recharge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount})})
     const d=await r.json()
-    if(!r.ok){err.textContent=d.error||'Erro ao processar.';err.style.display='block';btn.disabled=false;btn.textContent='Depositar';return}
+    if(!r.ok){err.textContent=d.error||'Erro ao processar.';err.style.display='block';btn.disabled=false;btn.textContent='Recarregar';return}
     closeRechargeDialog()
      const rechargeMethodLabel = document.getElementById('rech-method-lbl')
      if (rechargeMethodLabel) rechargeMethodLabel.textContent=paymentMethodLabel(d.method)
@@ -3764,7 +3764,7 @@ async function submitRecharge() {
      } else {
        listenRecharge(d.txId, amount)
      }
-  } catch{err.textContent='Erro de ligação.';err.style.display='block';btn.disabled=false;btn.textContent='Depositar'}
+  } catch{err.textContent='Erro de ligação.';err.style.display='block';btn.disabled=false;btn.textContent='Recarregar'}
 }
  function completeFreeRecharge(amount, attempt) {
    fetch('/api/auth/me')
