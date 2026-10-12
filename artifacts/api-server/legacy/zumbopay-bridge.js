@@ -2937,7 +2937,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 #recharge-modal .auth-card-title{color:#1c1c1e;}
 #recharge-modal .auth-close{color:#636366;}
  #recharge-modal .recharge-checkout-head{padding:24px 56px 16px 24px;text-align:left;}
- #recharge-modal .recharge-checkout-frame{display:block;width:calc(100% - 24px);height:min(68dvh,620px);min-height:360px;margin:0 12px 12px;border:0;border-radius:12px;background:#fff;overflow:hidden;}
+ #recharge-modal .recharge-checkout-frame{display:block;width:calc(100% - 32px);height:min(68dvh,620px);min-height:360px;margin:0 16px 16px;border:0;border-radius:12px;background:#fff;overflow:hidden;}
 .rech-quick-title{font-size:12px;font-weight:800;color:#636366;letter-spacing:.07em;margin:2px 0 10px;}
 .rech-quick-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;}
 .rech-quick-option{min-height:52px;padding:6px 8px;border:1.5px solid #e5e5ea;border-radius:9px;background:#f9f9fb;color:#1c1c1e;font-family:inherit;font-size:17px;font-weight:700;cursor:pointer;transition:background .15s,border-color .15s,color .15s;}
@@ -3740,7 +3740,7 @@ async function submitRecharge() {
   if(!QUICK_RECHARGE_AMOUNTS.includes(amount)){err.textContent='Escolha um valor para a recarga.';err.style.display='block';return}
   const checkoutUrl=RECHARGE_CHECKOUT_URLS[amount]
   if(checkoutUrl){
-    document.getElementById('recharge-checkout-title').textContent='Recarga de '+amount.toLocaleString('pt-MZ')+' MT'
+    document.getElementById('recharge-checkout-title').textContent=amount.toLocaleString('pt-MZ')+' MT'
     document.getElementById('recharge-checkout-frame').src=checkoutUrl
     document.getElementById('recharge-selection').style.display='none'
     document.getElementById('recharge-checkout').style.display='block'
