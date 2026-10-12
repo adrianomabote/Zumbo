@@ -218,42 +218,6 @@ O site fica acessível em: `http://IP_DA_VPS:3003`
 
 ---
 
-## Passo 7 — Configurar o telefone Android (agente USSD)
-
-### 6.1 — Definir o endereço do servidor na app
-
-No Replit, edite `artifacts/net-servicos-ussd-agent/.env`:
-```env
-EXPO_PUBLIC_DOMAIN=IP_DA_VPS:7000
-```
-Exemplo: `EXPO_PUBLIC_DOMAIN=196.28.1.100:7000`
-
-### 6.2 — Gerar o APK
-
-No terminal do Replit:
-```bash
-cd artifacts/net-servicos-ussd-agent
-
-# Instalar EAS CLI (uma vez)
-npm install -g eas-cli
-
-# Login na conta Expo (gratuita em https://expo.dev)
-eas login
-
-# Gerar APK
-eas build --platform android --profile preview --non-interactive
-```
-
-### 6.3 — Instalar no telefone
-
-1. Descarregar o APK para o telefone
-2. No Android: **Definições → Segurança → Instalar apps desconhecidas** → activar
-3. Instalar o APK
-4. Na app: nome do dispositivo (ex: "Vodacom USSD") + código **`00220022a1`**
-5. Carregar **Emparelhar**
-
----
-
 ## Comandos do dia-a-dia
 
 ```bash

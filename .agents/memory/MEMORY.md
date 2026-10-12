@@ -23,3 +23,4 @@
 - [Contrato MozPayment C2B](mozpayment-contract.md) — M-Pesa/e-Mola confirmam pela resposta C2B; não oferecem webhook nem consulta de estado
 - [Escopo das alterações](change-scope.md) — fazer apenas o que o utilizador pedir, sem ampliar o trabalho
 - [Janela de autenticação](auth-dialog-ui.md) — manter os diálogos de criar conta e entrar compactos em vez de ocupar quase toda a largura
+- [Agente externo de encomendas](external-order-agent.md) — a entrega passa pelo sistema externo do utilizador; manter as APIs e não reintroduzir o APK interno
