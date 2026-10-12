@@ -20,3 +20,4 @@
 - [Contrato Pay.co.mz](payco-contract.md) — API pública é live-only; cobranças exigem headers de conta e e-Mola não está activo
 - [Checkout hospedado Vpay](vpay-contract.md) — criar encomendas pela API, abrir o checkout oficial e só entregar após validar estado e valor
 - [Contrato MozPayment C2B](mozpayment-contract.md) — M-Pesa/e-Mola confirmam pela resposta C2B; não oferecem webhook nem consulta de estado
+- [Escopo das alterações](change-scope.md) — fazer apenas o que o utilizador pedir, sem ampliar o trabalho

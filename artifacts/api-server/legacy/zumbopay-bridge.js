@@ -2931,19 +2931,18 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
  .profile-modal .auth-card-head>div:first-child{justify-content:flex-start!important;}
 
 /* ── Recharge modal (reutiliza .auth-modal + .auth-card) ── */
-#recharge-modal .auth-card{background:#171c22;border:1px solid #303740;color:#f3f5f7;}
-#recharge-modal .auth-card-title{color:#f3f5f7;}
-#recharge-modal .auth-card-sub{color:#aeb6c0;}
-#recharge-modal .auth-close{color:#f3f5f7;}
-.rech-quick-title{font-size:12px;font-weight:800;color:#d5dbe2;letter-spacing:.07em;margin:2px 0 10px;}
+#recharge-modal .auth-card{background:#fff;border:1px solid #e5e5ea;color:#1c1c1e;}
+#recharge-modal .auth-card-title{color:#1c1c1e;}
+#recharge-modal .auth-close{color:#636366;}
+.rech-quick-title{font-size:12px;font-weight:800;color:#636366;letter-spacing:.07em;margin:2px 0 10px;}
 .rech-quick-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;}
-.rech-quick-option{min-height:62px;padding:10px 8px;border:1.5px solid #343b44;border-radius:9px;background:#22272e;color:#f3f5f7;font-family:inherit;font-size:17px;font-weight:700;cursor:pointer;transition:background .15s,border-color .15s,color .15s;}
-.rech-quick-option:hover,.rech-quick-option.is-selected{background:#29333c;border-color:#00c853;color:#00c853;}
-.rech-quick-option:focus-visible{outline:3px solid #00c853;outline-offset:2px;}
-.rech-deposit-btn{margin-top:18px!important;background:#00c853!important;color:#071b10!important;box-shadow:none!important;}
+.rech-quick-option{min-height:62px;padding:10px 8px;border:1.5px solid #e5e5ea;border-radius:9px;background:#f9f9fb;color:#1c1c1e;font-family:inherit;font-size:17px;font-weight:700;cursor:pointer;transition:background .15s,border-color .15s,color .15s;}
+.rech-quick-option:hover,.rech-quick-option.is-selected{background:#fff0f0;border-color:#cc0000;color:#cc0000;}
+.rech-quick-option:focus-visible{outline:3px solid #cc0000;outline-offset:2px;}
+.rech-deposit-btn{margin-top:18px!important;background:#cc0000!important;color:#fff!important;box-shadow:none!important;}
 .rech-deposit-btn:hover{filter:brightness(1.06);}
-.rech-deposit-btn:disabled{background:#178348!important;color:#d5e7dc!important;cursor:not-allowed;opacity:.72;}
-#recharge-modal .auth-err{color:#ffc4c4;background:#3a2024;border-color:#71343c;}
+.rech-deposit-btn:disabled{background:#cc0000!important;color:#fff!important;cursor:not-allowed;opacity:.5;}
+#recharge-modal .auth-err{color:#cc0000;background:#fff0f0;border-color:#ffcdd2;}
 
 /* ── Success credit ── */
 .credit-badge{display:inline-flex;align-items:center;gap:5px;background:#fff0f0;border:1px solid #ffcdd2;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:700;color:#cc0000;margin-bottom:14px;}
@@ -3410,7 +3409,6 @@ ${allListHtml}
       <div class="auth-card-head">
         <div style="margin-bottom:12px;display:flex;justify-content:center"><img src="/static/coins.png" style="width:56px;height:56px" alt="saldo"></div>
         <div class="auth-card-title">Recarregar Saldo</div>
-        <div class="auth-card-sub">M-Pesa ou e-Mola, conforme o número da conta.</div>
       </div>
       <div class="auth-body">
         <div class="rech-quick-title">VALOR RÁPIDO</div>
