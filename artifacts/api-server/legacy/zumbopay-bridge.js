@@ -2931,7 +2931,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
  .profile-modal .auth-card-head>div:first-child{justify-content:flex-start!important;}
 
 /* ── Recharge modal (reutiliza .auth-modal + .auth-card) ── */
-#recharge-modal .auth-card{background:#fff;border:1px solid #e5e5ea;color:#1c1c1e;}
+#recharge-modal .auth-card{max-width:340px;background:#fff;border:1px solid #e5e5ea;color:#1c1c1e;}
 #recharge-modal .auth-card-title{color:#1c1c1e;}
 #recharge-modal .auth-close{color:#636366;}
 .rech-quick-title{font-size:12px;font-weight:800;color:#636366;letter-spacing:.07em;margin:2px 0 10px;}
