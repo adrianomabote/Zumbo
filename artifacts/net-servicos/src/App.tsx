@@ -10,22 +10,22 @@ const PUBLIC_SEO_PAGES: Record<string, { title: string; description: string }> =
   "/pacotes-diarios": {
     title: "Pacotes Diários Vodacom em Moçambique | Megabyte",
     description:
-      "Compre pacotes diários de internet Vodacom em Moçambique. Escolha os megas disponíveis, pague com M-Pesa ou e-Mola e receba a activação no número indicado.",
+      "Compre pacotes diários de internet Vodacom em Moçambique usando o saldo da sua conta Megabyte.",
   },
   "/pacotes-semanais": {
     title: "Pacotes Semanais Vodacom em Moçambique | Megabyte",
     description:
-      "Encontre pacotes semanais de internet Vodacom em Moçambique. Consulte os megas e valores disponíveis e compre com M-Pesa ou e-Mola.",
+      "Encontre pacotes semanais de internet Vodacom em Moçambique e compre-os com o saldo da sua conta Megabyte.",
   },
   "/pacotes-mensais": {
     title: "Pacotes Mensais Vodacom em Moçambique | Megabyte",
     description:
-      "Compre pacotes mensais de internet Vodacom em Moçambique. Compare os megas e valores do catálogo e pague de forma simples com M-Pesa ou e-Mola.",
+      "Compre pacotes mensais de internet Vodacom em Moçambique usando o saldo disponível na sua conta Megabyte.",
   },
   "/pacotes-diamante": {
     title: "Pacotes Diamante Vodacom em Moçambique | Megabyte",
     description:
-      "Conheça os pacotes Diamante Vodacom em Moçambique, com dados e chamadas mais completas. Compre com M-Pesa ou e-Mola na Megabyte.",
+      "Conheça os pacotes Diamante Vodacom em Moçambique, com dados e chamadas mais completas. Compre com o saldo Megabyte.",
   },
   "/pacotes-internet-vodacom": {
     title: "Pacotes de Internet Vodacom em Moçambique | Megabyte",
@@ -51,7 +51,7 @@ const SEO_PAGES: Record<string, SeoPage> = {
   "/comprar-megas": {
     title: "Comprar Megas Vodacom em Moçambique | Megabyte",
     description:
-      "Compre megas e pacotes de internet Vodacom em Moçambique na Megabyte. Escolha o pacote, indique o número e pague com M-Pesa ou e-Mola.",
+      "Compre megas e pacotes de internet Vodacom em Moçambique na Megabyte usando o saldo da sua conta.",
     canonical: "https://megabyte.live/comprar-megas/",
     eyebrow: "Internet Vodacom",
     heading: "Comprar megas Vodacom em Moçambique",
@@ -61,14 +61,14 @@ const SEO_PAGES: Record<string, SeoPage> = {
     steps: [
       "Abra a loja e escolha o pacote de internet disponível.",
       "Indique o número Vodacom que deve receber os megas.",
-      "Pague com M-Pesa ou e-Mola e aguarde a activação do pacote.",
+      "Confirme a compra para descontar o valor do seu saldo Megabyte.",
     ],
     cta: "Comprar agora",
   },
   "/pacotes-diarios": {
     title: "Pacotes Diários Vodacom a partir de 10 MT | Megabyte",
     description:
-      "Veja os pacotes diários de internet Vodacom da Megabyte, a partir de 10 MT. Pague com M-Pesa, e-Mola ou saldo Megabyte.",
+      "Veja os pacotes diários de internet Vodacom da Megabyte, a partir de 10 MT. Compre-os com o saldo da sua conta.",
     canonical: "https://megabyte.live/pacotes-diarios/",
     eyebrow: "Pacotes Vodacom",
     heading: "Pacotes diários de internet Vodacom",
@@ -76,22 +76,22 @@ const SEO_PAGES: Record<string, SeoPage> = {
       "Precisa de megas para hoje? Encontre na Megabyte pacotes diários a partir de 10 MT para o seu número ou para outro número Vodacom.",
     sectionHeading: "Compra rápida e simples",
     paragraphs: [
-      "Abra a loja, escolha o pacote diário e informe o número beneficiário. Pode pagar directamente por M-Pesa ou e-Mola, ou usar o seu saldo.",
+      "Abra a loja, escolha o pacote diário e informe o número beneficiário. O valor é descontado do saldo da sua conta.",
     ],
     cta: "Ver pacotes diários",
   },
   "/pacotes-semanais": {
     title: "Pacotes Semanais Vodacom | Megabyte",
     description:
-      "Compre pacotes semanais de internet Vodacom na Megabyte. Escolha os megas para a semana e pague com M-Pesa ou e-Mola.",
+      "Compre pacotes semanais de internet Vodacom na Megabyte usando o saldo da sua conta.",
     canonical: "https://megabyte.live/pacotes-semanais/",
     eyebrow: "Pacotes Vodacom",
     heading: "Pacotes semanais de internet Vodacom",
     lead:
       "Compre megas para a semana na Megabyte e escolha se o pacote deve ser activado no seu número ou enviado para outra pessoa.",
-    sectionHeading: "Pagamento por M-Pesa ou e-Mola",
+    sectionHeading: "Pagamento com saldo Megabyte",
     paragraphs: [
-      "O preço e os megas aparecem na loja antes da compra. Depois do pagamento, o pacote é encaminhado para o número Vodacom indicado.",
+      "O preço e os megas aparecem na loja antes da compra. O valor é descontado do saldo e o pacote é encaminhado para o número Vodacom indicado.",
     ],
     cta: "Ver pacotes semanais",
   },
@@ -106,7 +106,7 @@ const SEO_PAGES: Record<string, SeoPage> = {
       "Escolha um pacote mensal de megas para manter o seu número Vodacom ligado durante mais tempo.",
     sectionHeading: "Para o seu número ou para outro",
     paragraphs: [
-      "A Megabyte permite seleccionar o destinatário antes de pagar. Use M-Pesa ou e-Mola e confirme os megas e o número na loja.",
+      "A Megabyte permite seleccionar o destinatário antes de pagar com o saldo da sua conta. Confirme os megas e o número na loja.",
     ],
     cta: "Ver pacotes mensais",
   },
@@ -133,7 +133,7 @@ const SEO_PAGES: Record<string, SeoPage> = {
   "/comprar-megas-online": {
     title: "Comprar Megas Online em Moçambique | Megabyte",
     description:
-      "Compre megas online em Moçambique na Megabyte. Escolha um pacote de internet Vodacom, indique o número e pague com M-Pesa ou e-Mola.",
+      "Compre megas online em Moçambique na Megabyte. Escolha um pacote de internet Vodacom, indique o número e pague com o seu saldo.",
     canonical: "https://megabyte.live/comprar-megas-online/",
     eyebrow: "Megabyte Moçambique",
     heading: "Comprar megas online em Moçambique",
@@ -143,7 +143,7 @@ const SEO_PAGES: Record<string, SeoPage> = {
     steps: [
       "Abra a loja Megabyte e veja os pacotes de internet disponíveis.",
       "Escolha a quantidade de megas e indique o número Vodacom beneficiário.",
-      "Confirme os dados e pague com M-Pesa ou e-Mola.",
+      "Confirme os dados e pague com o saldo da sua conta Megabyte.",
     ],
     paragraphs: [
       "Pode escolher entre pacotes diários, semanais, mensais e Diamante conforme a oferta disponível no catálogo.",
@@ -154,7 +154,7 @@ const SEO_PAGES: Record<string, SeoPage> = {
   "/comprar-megas-para-outra-pessoa": {
     title: "Comprar Megas para Outra Pessoa | Megabyte",
     description:
-      "Quer oferecer megas? Compre um pacote de internet Vodacom para outra pessoa na Megabyte e pague com M-Pesa ou e-Mola.",
+      "Quer oferecer megas? Compre um pacote de internet Vodacom para outra pessoa na Megabyte usando o saldo da sua conta.",
     canonical: "https://megabyte.live/comprar-megas-para-outra-pessoa/",
     eyebrow: "Megabyte Moçambique",
     heading: "Comprar megas para outra pessoa",
@@ -164,7 +164,7 @@ const SEO_PAGES: Record<string, SeoPage> = {
     steps: [
       "Escolha o pacote de internet que pretende oferecer.",
       "Seleccione a opção para outro destinatário e escreva o número Vodacom.",
-      "Pague com M-Pesa ou e-Mola e confirme o número antes de concluir.",
+      "Confirme o número e conclua a compra com o saldo da sua conta.",
     ],
     paragraphs: [
       "A Megabyte permite comprar megas para outro número sem confundir o pagador com o beneficiário.",
@@ -173,44 +173,44 @@ const SEO_PAGES: Record<string, SeoPage> = {
     cta: "Começar uma compra",
   },
   "/pagar-megas-mpesa-emola": {
-    title: "Pagar Megas com M-Pesa ou e-Mola | Megabyte",
+    title: "Recarregar Saldo com M-Pesa ou e-Mola | Megabyte",
     description:
-      "Compre pacotes de megas Vodacom em Moçambique e pague com M-Pesa ou e-Mola através da loja Megabyte.",
+      "Recarregue o saldo da sua conta Megabyte com M-Pesa ou e-Mola e use-o para activar pacotes de megas.",
     canonical: "https://megabyte.live/pagar-megas-mpesa-emola/",
-    eyebrow: "Pagamentos móveis",
-    heading: "Pagar megas com M-Pesa ou e-Mola",
+    eyebrow: "Recargas de saldo",
+    heading: "Recarregar saldo com M-Pesa ou e-Mola",
     lead:
-      "Escolha um pacote de internet Vodacom e utilize o método de pagamento disponível para concluir a compra.",
-    sectionHeading: "Pagamento de pacotes de internet",
+      "Adicione saldo à sua conta Megabyte por M-Pesa ou e-Mola. Depois, use o saldo para comprar pacotes de internet Vodacom.",
+    sectionHeading: "Como recarregar e comprar pacotes",
     steps: [
-      "Escolha um pacote diário, semanal, mensal ou Diamante.",
-      "Informe o número Vodacom que deve receber os megas.",
-      "Seleccione M-Pesa ou e-Mola e siga as instruções de pagamento.",
+      "Entre na sua conta Megabyte e escolha a opção para recarregar saldo.",
+      "Confirme a recarga com M-Pesa ou e-Mola no telemóvel associado à conta.",
+      "Escolha um pacote e pague com o saldo disponível na sua conta.",
     ],
     paragraphs: [
-      "Verifique sempre o pacote, o valor e o número beneficiário antes de confirmar o pagamento.",
-      "A activação é encaminhada depois da confirmação do pagamento.",
+      "M-Pesa e e-Mola servem para adicionar saldo à conta; não são métodos de pagamento directo de pacotes.",
+      "Ao comprar um pacote, o valor é descontado do saldo da conta Megabyte.",
     ],
     cta: "Comprar agora",
   },
   "/megas-baratos-vodacom": {
     title: "Megas Baratos Vodacom a partir de 10 MT | Megabyte",
     description:
-      "Procura megas baratos em Moçambique? Veja opções de internet Vodacom a partir de 10 MT. Pague com M-Pesa, e-Mola ou saldo Megabyte.",
+      "Procura megas baratos em Moçambique? Veja opções de internet Vodacom a partir de 10 MT e pague com saldo Megabyte.",
     canonical: "https://megabyte.live/megas-baratos-vodacom/",
     eyebrow: "Pacotes acessíveis",
     heading: "Megas baratos Vodacom a partir de 10 MT",
     lead:
-      "Compare as opções de megas Vodacom disponíveis na Megabyte. Pode pagar os pacotes a partir de 10 MT com M-Pesa, e-Mola ou saldo de crédito.",
+      "Compare as opções de megas Vodacom disponíveis na Megabyte. Os pacotes a partir de 10 MT são pagos com saldo de crédito.",
     sectionHeading: "Opções de internet a partir de 10 MT",
     paragraphs: [
-      "O catálogo da Megabyte inclui pacotes de internet Vodacom a partir de 10 MT, com pagamento directo por M-Pesa ou e-Mola.",
+      "O catálogo da Megabyte inclui pacotes de internet Vodacom a partir de 10 MT, pagos com o saldo da sua conta.",
       "Se pesquisou por “Vodacom megas”, “megas baratos” ou “internet móvel barata”, abra a loja para ver as ofertas actuais.",
     ],
     steps: [
       "Compare o preço, a quantidade de megas e o período de validade.",
       "Escolha o número Vodacom que deve receber o pacote.",
-      "Escolha o pacote e pague directamente por M-Pesa, e-Mola ou com o saldo da sua conta.",
+      "Escolha o pacote e pague com o saldo da sua conta. Se precisar, recarregue o saldo com M-Pesa ou e-Mola.",
     ],
     cta: "Ver megas disponíveis",
   },

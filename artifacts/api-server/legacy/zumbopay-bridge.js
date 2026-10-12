@@ -157,28 +157,28 @@ const PUBLIC_CATEGORY_PAGES = {
   '/pacotes-diarios': {
     categoryId: 'diarias',
     title: 'Pacotes Diários Vodacom em Moçambique | Megabyte',
-    description: 'Compre pacotes diários de internet Vodacom em Moçambique. Escolha os megas disponíveis, pague com M-Pesa ou e-Mola e receba a activação no número indicado.',
+    description: 'Compre pacotes diários de internet Vodacom em Moçambique usando o saldo da sua conta Megabyte.',
     heading: 'Pacotes diários Vodacom',
     intro: 'Escolha um pacote de internet Vodacom com validade de 1 dia. Os pacotes e valores apresentados abaixo correspondem ao catálogo disponível na Megabyte.',
   },
   '/pacotes-semanais': {
     categoryId: 'semanais',
     title: 'Pacotes Semanais Vodacom em Moçambique | Megabyte',
-    description: 'Encontre pacotes semanais de internet Vodacom em Moçambique. Consulte os megas e valores disponíveis e compre com M-Pesa ou e-Mola.',
+    description: 'Encontre pacotes semanais de internet Vodacom em Moçambique e compre-os com o saldo da sua conta Megabyte.',
     heading: 'Pacotes semanais Vodacom',
     intro: 'Veja os pacotes de internet Vodacom com validade semanal actualmente disponíveis na Megabyte e escolha a opção certa para navegar.',
   },
   '/pacotes-mensais': {
     categoryId: 'mensais',
     title: 'Pacotes Mensais Vodacom em Moçambique | Megabyte',
-    description: 'Compre pacotes mensais de internet Vodacom em Moçambique. Compare os megas e valores do catálogo e pague de forma simples com M-Pesa ou e-Mola.',
+    description: 'Compre pacotes mensais de internet Vodacom em Moçambique usando o saldo disponível na sua conta Megabyte.',
     heading: 'Pacotes mensais Vodacom',
     intro: 'Consulte os pacotes de internet Vodacom com validade de 30 dias disponíveis na Megabyte. Seleccione uma oferta para iniciar a compra.',
   },
   '/pacotes-diamante': {
     categoryId: 'infinitas',
     title: 'Pacotes Diamante Vodacom em Moçambique | Megabyte',
-    description: 'Conheça os pacotes Diamante Vodacom em Moçambique, com dados e chamadas mais completas. Compre com M-Pesa ou e-Mola na Megabyte.',
+    description: 'Conheça os pacotes Diamante Vodacom em Moçambique, com dados e chamadas mais completas. Compre com o saldo Megabyte.',
     heading: 'Pacotes Diamante Vodacom',
     intro: 'Os pacotes Diamante combinam dados com chamadas e SMS ilimitadas durante 30 dias, conforme as ofertas actualmente disponíveis no catálogo.',
   },
@@ -187,14 +187,14 @@ const PUBLIC_CATEGORY_PAGES = {
     title: 'Pacotes de Internet Vodacom em Moçambique | Megabyte',
     description: 'Compre pacotes de internet Vodacom em Moçambique para o seu número ou para outra pessoa. Veja as ofertas diárias, semanais, mensais e Diamante disponíveis.',
     heading: 'Pacotes de internet Vodacom em Moçambique',
-    intro: 'Na Megabyte encontra pacotes de internet Vodacom diários, semanais, mensais e Diamante. Escolha uma oferta do catálogo e pague com M-Pesa ou e-Mola.',
+    intro: 'Na Megabyte encontra pacotes de internet Vodacom diários, semanais, mensais e Diamante. Escolha uma oferta do catálogo e pague com o saldo da sua conta.',
   },
 }
 const PUBLIC_CATEGORY_PATHS = Object.keys(PUBLIC_CATEGORY_PAGES)
 const PUBLIC_INFO_PAGES = {
   '/comprar-megas-online': {
     title: 'Comprar Megas Online em Moçambique | Megabyte',
-    description: 'Compre megas online em Moçambique na Megabyte. Escolha um pacote de internet Vodacom, indique o número e pague com M-Pesa ou e-Mola.',
+    description: 'Compre megas online em Moçambique na Megabyte. Escolha um pacote de internet Vodacom, indique o número e pague com o seu saldo.',
     heading: 'Comprar megas online em Moçambique',
     intro: 'Encontre uma forma simples de comprar pacotes de internet Vodacom online para o seu número ou para outra pessoa.',
     sections: [
@@ -203,7 +203,7 @@ const PUBLIC_INFO_PAGES = {
         steps: [
           'Abra a loja Megabyte e veja os pacotes de internet disponíveis.',
           'Escolha a quantidade de megas e indique o número Vodacom beneficiário.',
-          'Confirme os dados e pague com M-Pesa ou e-Mola.',
+          'Confirme os dados e pague com o saldo da sua conta Megabyte.',
         ],
       },
       {
@@ -217,7 +217,7 @@ const PUBLIC_INFO_PAGES = {
   },
   '/comprar-megas-para-outra-pessoa': {
     title: 'Comprar Megas para Outra Pessoa | Megabyte',
-    description: 'Quer oferecer megas? Compre um pacote de internet Vodacom para outra pessoa na Megabyte e pague com M-Pesa ou e-Mola.',
+    description: 'Quer oferecer megas? Compre um pacote de internet Vodacom para outra pessoa na Megabyte usando o saldo da sua conta.',
     heading: 'Comprar megas para outra pessoa',
     intro: 'Envie um pacote de internet Vodacom para um familiar, amigo ou colega indicando o número que deve receber os megas.',
     sections: [
@@ -226,7 +226,7 @@ const PUBLIC_INFO_PAGES = {
         steps: [
           'Escolha o pacote de internet que pretende oferecer.',
           'Seleccione a opção para outro destinatário e escreva o número Vodacom.',
-          'Pague com M-Pesa ou e-Mola e confirme o número antes de concluir.',
+          'Confirme o número e conclua a compra com o saldo da sua conta.',
         ],
       },
       {
@@ -239,38 +239,38 @@ const PUBLIC_INFO_PAGES = {
     ],
   },
   '/pagar-megas-mpesa-emola': {
-    title: 'Pagar Megas com M-Pesa ou e-Mola | Megabyte',
-    description: 'Compre pacotes de megas Vodacom em Moçambique e pague com M-Pesa ou e-Mola através da loja Megabyte.',
-    heading: 'Pagar megas com M-Pesa ou e-Mola',
-    intro: 'Escolha um pacote de internet Vodacom e utilize o método de pagamento disponível para concluir a compra.',
+    title: 'Recarregar Saldo com M-Pesa ou e-Mola | Megabyte',
+    description: 'Recarregue o saldo da sua conta Megabyte com M-Pesa ou e-Mola e use-o para activar pacotes de megas.',
+    heading: 'Recarregar saldo com M-Pesa ou e-Mola',
+    intro: 'Adicione saldo à sua conta Megabyte por M-Pesa ou e-Mola. Depois, use o saldo para comprar pacotes de internet Vodacom.',
     sections: [
       {
-        heading: 'Pagamento de pacotes de internet',
+        heading: 'Como recarregar e comprar pacotes',
         steps: [
-          'Escolha um pacote diário, semanal, mensal ou Diamante.',
-          'Informe o número Vodacom que deve receber os megas.',
-          'Seleccione M-Pesa ou e-Mola e siga as instruções de pagamento.',
+          'Entre na sua conta Megabyte e escolha a opção para recarregar saldo.',
+          'Confirme a recarga com M-Pesa ou e-Mola no telemóvel associado à conta.',
+          'Escolha um pacote e pague com o saldo disponível na sua conta.',
         ],
       },
       {
-        heading: 'Confirme antes de pagar',
+        heading: 'Pagamento de pacotes',
         paragraphs: [
-          'Verifique sempre o pacote, o valor e o número beneficiário antes de confirmar o pagamento.',
-          'A activação é encaminhada depois da confirmação do pagamento.',
+          'M-Pesa e e-Mola servem para adicionar saldo à conta; não são métodos de pagamento directo de pacotes.',
+          'Ao comprar um pacote, o valor é descontado do saldo da conta Megabyte.',
         ],
       },
     ],
   },
   '/megas-baratos-vodacom': {
     title: 'Megas Baratos Vodacom a partir de 10 MT | Megabyte',
-    description: 'Procura megas baratos em Moçambique? Veja opções de internet Vodacom a partir de 10 MT. Pague com M-Pesa, e-Mola ou saldo Megabyte.',
+    description: 'Procura megas baratos em Moçambique? Veja opções de internet Vodacom a partir de 10 MT e pague com saldo Megabyte.',
     heading: 'Megas baratos Vodacom a partir de 10 MT',
-    intro: 'Compare as opções de megas Vodacom disponíveis na Megabyte. Pode pagar os pacotes a partir de 10 MT com M-Pesa, e-Mola ou saldo de crédito.',
+    intro: 'Compare as opções de megas Vodacom disponíveis na Megabyte. Os pacotes a partir de 10 MT são pagos com saldo de crédito.',
     sections: [
       {
         heading: 'Opções de internet a partir de 10 MT',
         paragraphs: [
-          'O catálogo da Megabyte inclui pacotes de internet Vodacom a partir de 10 MT, com pagamento directo por M-Pesa ou e-Mola.',
+          'O catálogo da Megabyte inclui pacotes de internet Vodacom a partir de 10 MT, pagos com o saldo da sua conta.',
           'Se pesquisou por “Vodacom megas”, “megas baratos” ou “internet móvel barata”, abra a loja para ver as ofertas actuais.',
         ],
       },
@@ -279,7 +279,7 @@ const PUBLIC_INFO_PAGES = {
         steps: [
           'Compare o preço, a quantidade de megas e o período de validade.',
           'Escolha o número Vodacom que deve receber o pacote.',
-          'Escolha o pacote e pague directamente por M-Pesa, e-Mola ou com o saldo da sua conta.',
+          'Escolha o pacote e pague com o saldo da sua conta. Se precisar, recarregue o saldo com M-Pesa ou e-Mola.',
         ],
       },
     ],
@@ -1671,47 +1671,9 @@ self.addEventListener('fetch',e=>{
 
   // ── API encomenda de megas ────────────────────────────────────────────────
   if (method === 'POST' && path === '/api/order') {
-    let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
-    const user = checkUserCookie(req)
-    if (!user) return json(res, { error:'Faça login para comprar um pacote.' }, 401)
-    const { phone, beneficiaryPhone, bundleId } = body
-    const bundle = BUNDLES.get(bundleId)
-    if (!bundle) return json(res, { error:'Pacote inválido.' }, 400)
-    const idempotencyKey = String(body.idempotencyKey || '').trim().slice(0, 120)
-    if (isFreeMode && idempotencyKey) {
-      const existing = [...transactions.values()].find(tx =>
-        tx.type === 'bundle' && tx.userId === user.id && tx.idempotencyKey === idempotencyKey
-      ) || orders.find(order =>
-        order.type === 'bundle' && order.userId === user.id && order.idempotencyKey === idempotencyKey
-      )
-      if (existing) {
-        return json(res, {
-          txId: existing.id || existing.txId,
-          status: existing.status || 'pending',
-          method: existing.method,
-        })
-      }
-    }
-    const purchaseFor = String(body.purchaseFor || '').toLowerCase()
-    const isSelfPurchase = purchaseFor === 'self' || (!purchaseFor && !beneficiaryPhone)
-    const payerPhone = normalizeLocalPhone(phone)
-    const selectedMethod = String(body.paymentMethod || body.method || '').toLowerCase()
-    if (!isSupportedLocalPhone(payerPhone)) return json(res, { error:'Número de pagamento inválido. Use M-Pesa 84/85 ou e-Mola 86/87.' }, 400)
-    if (!isSelfPurchase && !beneficiaryPhone) return json(res, { error:'Introduza o número do beneficiário.' }, 400)
-    const beneficiary = isSelfPurchase ? normalizeLocalPhone(user.phone) : normalizeLocalPhone(beneficiaryPhone)
-    if (!isSelfPurchase && beneficiary && detectMethod(normalizeMsisdn(beneficiary)) !== 'mpesa')
-      return json(res, { error:'Número do beneficiário inválido. Use apenas uma faixa 84 ou 85.' }, 400)
-    const msisdn = normalizeMsisdn(payerPhone), detectedMethod = detectMethod(msisdn)
-    const meth = selectedMethod || detectedMethod
-    if (!['mpesa','emola'].includes(meth) || meth !== detectedMethod)
-      return json(res, { error:'O método escolhido não corresponde ao número de pagamento.' }, 400)
-    const txId = randomBytes(6).toString('hex')
-    const tx = { id:txId, type:'bundle', bundleId, bundleLabel:bundle.label, phone:payerPhone, beneficiaryPhone:beneficiary, msisdn, amount:bundle.price, method:meth, status:'pending', ref:null, error:null, sourceId:randomUUID(), idempotencyKey, ts:new Date().toISOString(), userId:user.id }
-    transactions.set(txId, tx)
-    trackOrder(tx)
-    json(res, { txId, status:'pending', method:meth })
-    initiateCharge(tx, `Mega ${bundle.label}`)
-    return
+    return json(res, {
+      error:'A activação de pacotes está disponível apenas com saldo. Recarregue a sua conta para continuar.',
+    }, 410)
   }
 
   if (method === 'POST' && path === '/internal/pagar-event') {
@@ -3258,11 +3220,6 @@ ${allListHtml}
 
     <!-- Tab: Para Mim -->
     <div class="sh-panel" id="sh-tab-mim">
-      <div class="sh-payer-field">
-       <label class="sh-lbl">O seu número de pagamento</label>
-       <input class="sh-inp" id="sh-phone" type="tel" placeholder="Número que vai pagar" maxlength="9" inputmode="numeric" autocomplete="off">
-       <span class="sh-hint">M-Pesa: 84/85 · e-Mola: 86/87</span>
-      </div>
       <div class="sh-recipient">
         <span class="sh-recipient-label">Os megas serão enviados para</span>
         <strong class="sh-recipient-phone" id="sh-recipient-phone">—</strong>
@@ -3271,10 +3228,6 @@ ${allListHtml}
 
     <!-- Tab: Para Outro -->
     <div class="sh-panel" id="sh-tab-outro" style="display:none">
-      <div class="sh-payer-field">
-       <label class="sh-lbl">Número de pagamento</label>
-      <input class="sh-inp" id="sh-phone-payer" type="tel" placeholder="Número de telemóvel" maxlength="9" inputmode="numeric" autocomplete="off">
-      </div>
       <label class="sh-lbl">Introduza o número do beneficiário</label>
       <input class="sh-inp" id="sh-phone-bene" type="tel" placeholder="Número de telemóvel" maxlength="9" inputmode="numeric" autocomplete="off">
     </div>
@@ -3287,39 +3240,23 @@ ${allListHtml}
       </div>
     </div>
 
-    <!-- Método de pagamento -->
+    <!-- Pagamento exclusivamente com saldo -->
     <div class="via-section" id="via-section">
-      <div class="via-section-lbl">Método de pagamento</div>
-      <div class="via-btns">
-        <button class="via-btn mobile-money active" data-via="mobile-money" onclick="selectPayVia('mobile-money')">
-          <span class="via-btn-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
-          </span>
-          <div>
-             <div class="via-btn-label">M-Pesa / e-Mola</div>
-          </div>
-        </button>
-        <button class="via-btn" id="via-credit" data-via="credit" onclick="selectPayVia('credit')">
-          <span class="via-btn-icon">
-            <img src="/static/coins.png" style="width:18px;height:18px" alt="crédito">
-          </span>
-          <div>
-            <div class="via-btn-label">Crédito</div>
-          </div>
-        </button>
-      </div>
+      <div class="via-section-lbl">Pagamento com saldo</div>
+      <div class="via-credit-bal" id="sh-balance-available">Saldo disponível: 0 MT</div>
+      <div class="via-btn-sub">O valor do pacote será descontado do saldo da sua conta.</div>
     </div>
 
     <div class="sh-err" id="sh-err"></div>
     <button class="sh-next" id="sh-btn" onclick="pay()">Próximo</button>
   </div>
 
-  <!-- ── A aguardar PIN ── -->
+  <!-- ── A processar ── -->
   <div id="s-pending" style="display:none">
     <div class="sh-top"><button class="sh-close" onclick="closeSheet()">✕</button></div>
     <div class="sh-state">
       <img src="/static/voda-anim.gif" class="voda-gif" alt="Aguardando">
-       <p class="voda-pin-msg">${isFreeMode ? 'A concluir a sua encomenda. Aguarde um momento…' : 'Confirme a ativação da oferta introduzindo o PIN <span id="sh-method-lbl">M-Pesa</span> no seu telemóvel'}</p>
+       <p class="voda-pin-msg">A processar a sua encomenda. Aguarde um momento…</p>
     </div>
   </div>
 
@@ -3329,7 +3266,7 @@ ${allListHtml}
     <div class="sh-state">
       <div class="res-icon ok">✓</div>
       <div class="res-t">Pedido recebido!</div>
-       <p class="res-s">${isFreeMode ? 'Pedido concluído. O seu pacote será activado em' : 'Pagamento confirmado. O seu pacote será activado em'} <strong style="color:#cc0000">1–5 minutos</strong>.</p>
+       <p class="res-s">Compra concluída. O seu pacote será activado em <strong style="color:#cc0000">1–5 minutos</strong>.</p>
       <div class="res-box res-package-box">
         <div class="res-box-l">Detalhes do pacote</div>
         <div class="res-package-grid">
@@ -3554,7 +3491,6 @@ CATS_JS.forEach(cat => {
 
 // ── Auth state ──────────────────────────────────────────────────────────────
 const authState = { user: null, pendingPkg: null }
-let activeOrderRequestKey = null
 
 async function checkAuth() {
   try {
@@ -3806,7 +3742,6 @@ function listenRecharge(txId, amount) {
 
 // ── Sheet ──────────────────────────────────────────────────────────────────
 let shCurTab = 'mim'
-let payVia = 'mobile-money'
 
 function shSetTab(t) {
   shCurTab = t
@@ -3815,53 +3750,27 @@ function shSetTab(t) {
     document.querySelectorAll('.sh-tab')[i].classList.toggle('active', x===t)
   })
   const showBtn = t !== 'req'
-  const creditInsufficient = payVia === 'credit' && (authState.user?.balance || 0) < (curPkg?.price || 0)
-  document.getElementById('sh-btn').style.display = showBtn && !creditInsufficient ? 'block' : 'none'
+  const balance = authState.user?.balance || 0
+  const price = curPkg?.price || 0
+  const creditInsufficient = balance < price
+  const btn = document.getElementById('sh-btn')
+  const balanceLabel = document.getElementById('sh-balance-available')
+  if (balanceLabel) balanceLabel.textContent = 'Saldo disponível: ' + balance.toLocaleString('pt-MZ') + ' MT'
+  btn.style.display = showBtn && !creditInsufficient ? 'block' : 'none'
+  btn.disabled = false
+  btn.textContent = 'Pagar ' + price + ' MT com saldo'
   document.getElementById('via-section').style.display = showBtn ? 'block' : 'none'
-}
-
-function syncPayerFields() {
-  const hidden = payVia === 'credit'
-  document.querySelectorAll('.sh-payer-field').forEach(field => {
-    field.style.display = hidden ? 'none' : 'block'
-  })
+  if (showBtn && creditInsufficient) {
+    showSheetError('Saldo insuficiente. Tens ' + balance.toLocaleString('pt-MZ') + ' MT, precisas de ' + price + ' MT.', true)
+  } else {
+    clearSheetError()
+  }
 }
 
 function clearSheetError() {
   const ee=document.getElementById('sh-err')
   ee.textContent=''
   ee.style.display='none'
-}
-function selectPayVia(v, preserveError=false) {
-  payVia = v
-  document.querySelectorAll('.via-btn').forEach(b => b.classList.toggle('active', b.dataset.via===v))
-  const mobileBtn = document.querySelector('.via-btn[data-via="mobile-money"]')
-  if (mobileBtn) mobileBtn.disabled = false
-  syncPayerFields()
-  const btn = document.getElementById('sh-btn')
-  if (v === 'credit') {
-    const bal = authState.user?.balance || 0
-    const price = curPkg?.price || 0
-    if (bal < price) {
-      btn.style.display = 'none'
-      showSheetError('Saldo insuficiente. Tens ' + bal.toLocaleString('pt-MZ') + ' MT, precisas de ' + price + ' MT.', true)
-    } else {
-      btn.style.display = 'block'
-      btn.textContent = 'Pagar ' + price + ' MT com Crédito'
-      btn.disabled = false
-      if (!preserveError) clearSheetError()
-    }
-  } else {
-    btn.style.display = 'block'
-    btn.textContent = 'Próximo'
-    btn.disabled = false
-    clearSheetError()
-  }
-}
-function updateCreditBtn() {
-  const btn = document.getElementById('via-credit')
-  if (!btn) return
-  btn.disabled = false
 }
 
 function openBuy(id) {
@@ -3882,32 +3791,17 @@ function openBuyDirect(id) {
   document.getElementById('ico-dur').textContent  = p.dur
   document.getElementById('ico-calls').textContent = p.calls ? 'Ilim.' : '0 MT'
   document.getElementById('ico-sms').textContent   = p.calls ? '+ SMS' : '0 SMS'
-  const selfInput = document.getElementById('sh-phone')
-  selfInput.value = ''
-  selfInput.readOnly = false
-  selfInput.title = ''
-  selfInput.placeholder = 'Número que vai pagar'
   syncSelfPurchaseRecipient()
   document.getElementById('sh-err').style.display = 'none'
-  const btn = document.getElementById('sh-btn'); btn.disabled=false; btn.textContent='Próximo'; btn.style.display='block'
-  activeOrderRequestKey = newOrderRequestKey()
-  payVia = 'mobile-money'
-  selectPayVia(payVia)
-  updateCreditBtn()
+  const btn = document.getElementById('sh-btn'); btn.disabled=false; btn.style.display='block'
   shSetTab('mim')
   shShow('buy')
   document.getElementById('overlay').classList.add('open')
   setTimeout(()=>document.getElementById('sheet').classList.add('open'),10)
 }
-function newOrderRequestKey() {
-  return (window.crypto && typeof window.crypto.randomUUID === 'function')
-    ? window.crypto.randomUUID()
-    : 'order-' + Date.now() + '-' + Math.random().toString(16).slice(2)
-}
 function retryFailedPayment() {
-  activeOrderRequestKey = newOrderRequestKey()
   const btn = document.getElementById('sh-btn')
-  if (btn) { btn.disabled=false; btn.textContent='Próximo'; btn.style.display='block' }
+  if (btn) { btn.disabled=false; btn.textContent='Pagar ' + (curPkg?.price || 0) + ' MT com saldo'; btn.style.display='block' }
   const error = document.getElementById('sh-err')
   if (error) error.style.display='none'
   shShow('buy')
@@ -3954,73 +3848,8 @@ function showSheetError(message, showRecharge=false) {
   ee.style.display='block'
 }
 
-function getPhoneFromSheet() {
-  if (shCurTab==='outro') {
-    const phone=document.getElementById('sh-phone-payer').value.trim().replace(/\\D/g,'')
-    const bene=document.getElementById('sh-phone-bene').value.trim().replace(/\\D/g,'')
-    return { phone, beneficiaryPhone:bene, purchaseFor:'other', error: !phone?'Introduza o seu número de pagamento.':!phoneMethod(phone)?'Número de pagamento incompatível. M-Pesa: 84/85 · e-Mola: 86/87.':!bene?'Introduza o número do beneficiário.':phoneMethod(bene)!=='mpesa'?'Número do beneficiário inválido. Use apenas 84 ou 85.':null }
-  }
-  const phone=document.getElementById('sh-phone').value.trim().replace(/\\D/g,'')
-  return { phone, beneficiaryPhone:null, purchaseFor:'self', error: !authState.user?'Faça login para comprar para si.':!phoneMethod(phone)?'Número de pagamento incompatível. M-Pesa: 84/85 · e-Mola: 86/87.':null }
-}
-
 async function pay() {
-  if (payVia === 'credit') { await payWithCredit(); return }
-  const ee = document.getElementById('sh-err'); ee.style.display='none'
-  const {phone, beneficiaryPhone, purchaseFor, error} = getPhoneFromSheet()
-  if (error) { ee.textContent=error; ee.style.display='block'; return }
-  const btn = document.getElementById('sh-btn'); btn.disabled=true; btn.textContent='A processar…'
-  try {
-    const payload={phone,bundleId:curPkg.id,paymentMethod:phoneMethod(phone),purchaseFor,idempotencyKey:activeOrderRequestKey}; if(beneficiaryPhone) payload.beneficiaryPhone=beneficiaryPhone
-    let r
-    let d
-    for (let attempt = 0; attempt < (isFreeMode ? 4 : 1); attempt++) {
-      try {
-        r = await fetch('/api/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
-        d = await r.json().catch(()=>({}))
-        if (r.ok || !isFreeMode || r.status < 500) break
-      } catch (error) {
-        if (!isFreeMode || attempt === 3) throw error
-      }
-      await new Promise(resolve => setTimeout(resolve, 700))
-    }
-    if (!r?.ok) {
-      if (isFreeMode && (!r || r.status >= 500)) {
-        shShow('pending')
-        document.querySelector('#s-pending .voda-pin-msg').textContent='A confirmar a sua encomenda. Aguarde um momento…'
-        setTimeout(()=>pay(), 1200)
-        return
-      }
-      ee.textContent=d?.error||'Verifique os dados introduzidos.'
-      ee.style.display='block'
-      btn.disabled=false
-      btn.textContent='Próximo'
-      return
-    }
-    const orderMethodLabel = document.getElementById('sh-method-lbl')
-    if (orderMethodLabel) orderMethodLabel.textContent = paymentMethodLabel(d.method || phoneMethod(phone))
-    renderResultPackage('sh-ok')
-    shShow('pending')
-    if (isFreeMode) {
-      // Free mode has already been accepted server-side. Keep the same
-      // processing screen, then complete the normal flow without waiting for
-      // an SSE connection that may not be available through the proxy.
-       setTimeout(()=>shShow('success'), 1000)
-    } else {
-      listenOrder(d.txId)
-    }
-  } catch {
-    if (isFreeMode) {
-      shShow('pending')
-      document.querySelector('#s-pending .voda-pin-msg').textContent='A confirmar a sua encomenda. Aguarde um momento…'
-      setTimeout(()=>pay(), 1200)
-      return
-    }
-    ee.textContent='Não foi possível concluir a encomenda. Tente novamente.'
-    ee.style.display='block'
-    btn.disabled=false
-    btn.textContent='Próximo'
-  }
+  await payWithCredit()
 }
 
 function getCreditPurchaseFromSheet() {
@@ -4044,14 +3873,20 @@ function getCreditPurchaseFromSheet() {
 async function payWithCredit() {
   const ee = document.getElementById('sh-err'); ee.style.display='none'
   const {beneficiaryPhone, purchaseFor, error} = getCreditPurchaseFromSheet()
-  if (shCurTab !== 'req' && error) { ee.textContent=error; ee.style.display='block'; return }
-  const btn=document.getElementById('sh-btn'); btn.disabled=true; btn.textContent='A debitar crédito…'
+  if (error) { ee.textContent=error; ee.style.display='block'; return }
+  const btn=document.getElementById('sh-btn'); btn.disabled=true; btn.textContent='A debitar saldo…'
   try {
     const payload={bundleId:curPkg.id,purchaseFor}
     if(beneficiaryPhone) payload.beneficiaryPhone=beneficiaryPhone
     const r=await fetch('/api/buy-credit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
     const d=await r.json()
-    if(!r.ok){showSheetError(d.error||'Erro.', /saldo insuficiente/i.test(d.error||''));selectPayVia('credit', true);return}
+    if(!r.ok){
+      btn.disabled=false
+      btn.textContent='Pagar ' + (curPkg?.price || 0) + ' MT com saldo'
+      btn.style.display=/saldo insuficiente/i.test(d.error||'')?'none':'block'
+      showSheetError(d.error||'Erro.', /saldo insuficiente/i.test(d.error||''))
+      return
+    }
     authState.user.balance=d.newBalance; updateNavAuth()
     renderResultPackage('sh-ok-credit')
     document.getElementById('sh-credit-bal').textContent=(d.newBalance||0)+' MT'
@@ -4059,7 +3894,8 @@ async function payWithCredit() {
   } catch{
     ee.textContent='Não foi possível concluir a encomenda. Tente novamente.'
     ee.style.display='block'
-    selectPayVia('credit')
+    btn.disabled=false
+    btn.textContent='Pagar ' + (curPkg?.price || 0) + ' MT com saldo'
   }
 }
 function listenOrder(txId) {

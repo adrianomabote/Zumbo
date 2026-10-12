@@ -3,8 +3,8 @@ name: Métodos no checkout
 description: Preferência confirmada para a apresentação dos meios de pagamento
 ---
 
-No checkout, M-Pesa e e-Mola são uma única opção visual, apresentada como “M-Pesa / e-Mola”, sem mostrar prefixos. O método específico deve ser inferido pelo prefixo do número, sem obrigar o utilizador a escolher entre dois cartões. O número de pagamento aceita 84/85/86/87; o beneficiário aceita apenas 84/85.
+Na compra de pacotes, o saldo da conta é o único método de pagamento; M-Pesa e e-Mola ficam disponíveis apenas para recarregar esse saldo. Ao comprar para outra pessoa, pedir apenas o número do beneficiário, que aceita as faixas 84/85.
 
-**Why:** A separação em duas casas confundia a escolha; o próprio número já determina o operador de pagamento.
+**Why:** A activação directa por M-Pesa/e-Mola foi removida a pedido do utilizador; as carteiras móveis continuam a financiar o saldo.
 
-**How to apply:** Manter os dois nomes no mesmo cartão, indicar M-Pesa/e-Mola apenas no campo do número de pagamento e preservar no servidor a validação 84/85 para M-Pesa, 86/87 para e-Mola e somente 84/85 para beneficiários. Crédito pode continuar como opção separada; ao escolhê-lo, ocultar o número pagador e exigir apenas o beneficiário quando a compra for para outra pessoa. Ofertas abaixo de 20 MT são exclusivas de crédito; recargas aceitam M-Pesa/e-Mola e começam em 20 MT.
+**How to apply:** Manter as recargas M-Pesa/e-Mola no fluxo de adicionar saldo; nunca oferecer esses operadores no checkout de pacotes nem aceitar a rota antiga de cobrança directa. A compra de pacotes deve usar o endpoint de débito de saldo e exigir apenas o beneficiário quando for para outra pessoa.
