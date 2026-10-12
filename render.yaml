@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: starter
     buildCommand: pnpm install --frozen-lockfile && pnpm --filter @workspace/net-servicos run build && pnpm --filter @workspace/api-server run build
-    startCommand: node --enable-source-maps artifacts/api-server/dist/index.mjs
+    startCommand: npm run start
     healthCheckPath: /api/healthz
     disk:
       name: net-servicos-data
