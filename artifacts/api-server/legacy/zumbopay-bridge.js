@@ -2931,13 +2931,14 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
  .profile-modal .auth-card-head>div:first-child{justify-content:flex-start!important;}
 
 /* ── Recharge modal (reutiliza .auth-modal + .auth-card) ── */
-#recharge-modal.auth-modal{padding:8px;}
-#recharge-modal .auth-card-wrap{width:min(520px,calc(100vw - 16px));}
-#recharge-modal .auth-card{width:100%;max-width:none;background:#fff;border:1px solid #e5e5ea;color:#1c1c1e;}
+#recharge-modal.auth-modal{padding:24px 16px;align-items:center;justify-content:center;}
+#recharge-modal .auth-card-wrap{width:min(520px,calc(100vw - 32px));}
+#recharge-modal .auth-card{width:100%;max-width:none;max-height:calc(100dvh - 80px);background:#fff;border:1px solid #e5e5ea;color:#1c1c1e;}
 #recharge-modal .auth-card-title{color:#1c1c1e;}
 #recharge-modal .auth-close{color:#636366;}
- #recharge-modal .recharge-checkout-head{padding:24px 56px 16px 24px;text-align:left;}
- #recharge-modal .recharge-checkout-frame{display:block;width:calc(100% - 32px);height:min(68dvh,620px);min-height:360px;margin:0 16px 16px;border:0;border-radius:12px;background:#fff;overflow:hidden;}
+#recharge-modal .recharge-checkout-head{padding:12px 56px 12px 16px;text-align:left;}
+#recharge-modal .recharge-checkout-head .auth-card-title{font-size:16px;font-weight:600;line-height:1.35;margin:0;}
+#recharge-modal .recharge-checkout-frame{display:block;width:calc(100% - 32px);height:min(60dvh,560px);min-height:180px;margin:0 16px 16px;border:0;border-radius:12px;background:#fff;overflow:hidden;}
 .rech-quick-title{font-size:12px;font-weight:800;color:#636366;letter-spacing:.07em;margin:2px 0 10px;}
 .rech-quick-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;}
 .rech-quick-option{min-height:52px;padding:6px 8px;border:1.5px solid #e5e5ea;border-radius:9px;background:#f9f9fb;color:#1c1c1e;font-family:inherit;font-size:17px;font-weight:700;cursor:pointer;transition:background .15s,border-color .15s,color .15s;}
@@ -3431,7 +3432,7 @@ ${allListHtml}
       </div>
       <div id="recharge-checkout" style="display:none">
         <div class="auth-card-head recharge-checkout-head">
-          <div class="auth-card-title" id="recharge-checkout-title">Checkout de recarga</div>
+          <div class="auth-card-title" id="recharge-checkout-title">Recarga de saldo</div>
         </div>
         <iframe
           id="recharge-checkout-frame"
@@ -3740,7 +3741,7 @@ async function submitRecharge() {
   if(!QUICK_RECHARGE_AMOUNTS.includes(amount)){err.textContent='Escolha um valor para a recarga.';err.style.display='block';return}
   const checkoutUrl=RECHARGE_CHECKOUT_URLS[amount]
   if(checkoutUrl){
-    document.getElementById('recharge-checkout-title').textContent=amount.toLocaleString('pt-MZ')+' MT'
+    document.getElementById('recharge-checkout-title').textContent='Recarga de saldo'
     document.getElementById('recharge-checkout-frame').src=checkoutUrl
     document.getElementById('recharge-selection').style.display='none'
     document.getElementById('recharge-checkout').style.display='block'
