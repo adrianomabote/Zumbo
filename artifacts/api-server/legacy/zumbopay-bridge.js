@@ -36,6 +36,16 @@ const PAYMENT_API_ROUTE    = configuredPaymentProvider === 'paysuite'
         ? 'mozpayment'
         : 'pagar'
 const PAYMENT_PROVIDERS = new Set(['pagar', 'debitopay', 'paysuite', 'vpay', 'mozpayment'])
+const PAYNICE_RECHARGE_CHECKOUT_URLS = Object.freeze({
+  20: 'https://paynice.online/c/recarga-de-20-qvgle',
+  50: 'https://paynice.online/c/recarga-de-50-biong',
+  100: 'https://paynice.online/c/recarga-de-100-jtv1x',
+  250: 'https://paynice.online/c/recarga-de-250-yrcne',
+  500: 'https://paynice.online/c/recarga-de-500-9b82p',
+  1000: 'https://paynice.online/c/recarga-de-1000-5ip1g',
+  2000: 'https://paynice.online/c/recarga-de-2000-yxn65',
+  5000: 'https://paynice.online/c/recarga-de-5000-muzo1',
+})
 const DATA_DIR             = process.env.NET_SERVICOS_DATA_DIR || '.'
 const ORDERS_FILE          = join(DATA_DIR, 'orders.json')
 const USERS_FILE           = join(DATA_DIR, 'users.json')
@@ -358,6 +368,7 @@ let   orders        = []           // persiste em ORDERS_FILE
 let   rechargeCredits = []         // diário de créditos de saldo recuperável
 let   maintenanceEnabled = false
 let   rechargeCreditQueue = Promise.resolve()
+const rechargeReviewLocks = new Set()
 
 // ── Anti-brute-force: login ───────────────────────────────────────────────────
 const loginAttempts = new Map()   // ip → { count, lockedUntil }
@@ -728,7 +739,7 @@ function creditRechargeOnce(tx) {
   return work
 }
 async function creditRechargeOnceLocked(tx) {
-  if (tx.type !== 'recharge' || !tx.userId) return false
+  if (!['recharge', 'paynice-recharge'].includes(tx.type) || !tx.userId) return false
   const rec = orders.find(o => o.txId === tx.id)
   const user = findUserById(tx.userId)
   if (!user) return false
@@ -742,7 +753,7 @@ async function creditRechargeOnceLocked(tx) {
   if (!appliedCredits.includes(tx.id)) {
     user.balance = (user.balance||0) + tx.amount
     user.rechargeCredits = [...appliedCredits, tx.id]
-    await writeJsonAtomic(USERS_FILE, users)
+    await saveUsers()
   }
   if (!journal.balanceApplied) {
     journal.balanceApplied = true
@@ -750,7 +761,7 @@ async function creditRechargeOnceLocked(tx) {
   }
   if (rec && !rec.rechargeCredited) {
     rec.rechargeCredited = true
-    await writeJsonAtomic(ORDERS_FILE, orders)
+    await saveOrders()
   }
   return true
 }
@@ -1798,6 +1809,38 @@ self.addEventListener('fetch',e=>{
   }
 
   // ── Recarga de crédito ────────────────────────────────────────────────────
+  if (method === 'POST' && path === '/api/recharge/checkout') {
+    const user = checkUserCookie(req)
+    if (!user) return json(res, { error:'Faça login para recarregar.' }, 401)
+    let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
+    const amount = Number(body.amount)
+    const checkoutUrl = PAYNICE_RECHARGE_CHECKOUT_URLS[amount]
+    if (!Number.isInteger(amount) || !checkoutUrl)
+      return json(res, { error:'Escolha um dos valores disponíveis para a recarga.' }, 400)
+
+    const txId = randomBytes(12).toString('hex')
+    const ts = new Date().toISOString()
+    orders.unshift({
+      txId,
+      type:'paynice-recharge',
+      phone:user.phone,
+      customerName:user.name,
+      beneficiaryPhone:null,
+      bundleId:null,
+      bundleLabel:`Recarga ${amount} MT`,
+      amount,
+      method:'paynice',
+      status:'pending',
+      sourceId:randomUUID(),
+      checkoutUrl,
+      ts,
+      userId:user.id,
+      rechargeCredited:false,
+    })
+    await saveOrders()
+    return json(res, { ok:true, checkoutUrl }, 201)
+  }
+
   if (method === 'POST' && path === '/api/recharge') {
     const user = checkUserCookie(req)
     if (!user) return json(res, { error:'Faça login para recarregar.' }, 401)
@@ -2125,6 +2168,53 @@ NOTAS
       const remaining = recordFailedLogin(ip)
       const hint = remaining > 0 ? ` ${remaining} tentativa(s) restante(s).` : ' Conta bloqueada por 15 min.'
       return html(res, adminLoginPage('Senha incorrecta.' + hint))
+    }
+  }
+
+  if (method === 'POST' && path === '/admin/recharge-requests/approve') {
+    if (!checkAdminCookie(req)) return json(res, { error:'Não autorizado.' }, 401)
+    let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
+    const rec = orders.find(order => order.txId === String(body.txId || '') && order.type === 'paynice-recharge')
+    if (!rec) return json(res, { error:'Pedido de recarga não encontrado.' }, 404)
+    if (rec.status !== 'pending') return json(res, { error:'Este pedido já foi processado.' }, 409)
+    if (rechargeReviewLocks.has(rec.txId)) return json(res, { error:'Este pedido já está a ser processado.' }, 409)
+    rechargeReviewLocks.add(rec.txId)
+    try {
+      const credited = await creditRechargeOnce({
+        id:rec.txId,
+        type:'paynice-recharge',
+        userId:rec.userId,
+        amount:rec.amount,
+      })
+      if (!credited) return json(res, { error:'A conta associada ao pedido não foi encontrada.' }, 404)
+      rec.status = 'succeeded'
+      rec.approvedAt = new Date().toISOString()
+      await saveOrders()
+      return json(res, { ok:true, status:rec.status })
+    } finally {
+      rechargeReviewLocks.delete(rec.txId)
+    }
+  }
+
+  if (method === 'POST' && path === '/admin/recharge-requests/reject') {
+    if (!checkAdminCookie(req)) return json(res, { error:'Não autorizado.' }, 401)
+    let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
+    const rec = orders.find(order => order.txId === String(body.txId || '') && order.type === 'paynice-recharge')
+    if (!rec) return json(res, { error:'Pedido de recarga não encontrado.' }, 404)
+    if (rec.status !== 'pending') return json(res, { error:'Este pedido já foi processado.' }, 409)
+    if (rechargeReviewLocks.has(rec.txId)) return json(res, { error:'Este pedido já está a ser processado.' }, 409)
+    const user = findUserById(rec.userId)
+    if (rec.rechargeCredited || user?.rechargeCredits?.includes(rec.txId)) {
+      return json(res, { error:'Este pedido já teve o saldo creditado e não pode ser rejeitado.' }, 409)
+    }
+    rechargeReviewLocks.add(rec.txId)
+    try {
+      rec.status = 'rejected'
+      rec.rejectedAt = new Date().toISOString()
+      await saveOrders()
+      return json(res, { ok:true, status:rec.status })
+    } finally {
+      rechargeReviewLocks.delete(rec.txId)
     }
   }
 
@@ -2936,7 +3026,8 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 #recharge-modal .auth-card{width:100%;max-width:none;max-height:calc(100dvh - 80px);background:#fff;border:1px solid #e5e5ea;color:#1c1c1e;}
 #recharge-modal .auth-card-title{color:#1c1c1e;}
 #recharge-modal .auth-close{color:#636366;}
-#recharge-modal .recharge-checkout-frame{display:block;width:calc(100% - 32px);height:min(60dvh,560px);min-height:180px;margin:48px 16px 16px;border:0;border-radius:12px;background:#fff;overflow:hidden;}
+#recharge-modal .recharge-payment-notice{margin:12px 16px 0;padding:11px 13px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff;color:#1e3a8a;font-size:13px;line-height:1.45;text-align:center;}
+#recharge-modal .recharge-checkout-frame{display:block;width:calc(100% - 32px);height:min(60dvh,560px);min-height:180px;margin:12px 16px 16px;border:0;border-radius:12px;background:#fff;overflow:hidden;}
 #auth-modal.auth-modal{padding:20px 16px;}
 #auth-modal .auth-card-wrap{width:min(360px,calc(100vw - 32px));}
 #auth-modal .auth-card{width:100%;max-width:none;}
@@ -3432,6 +3523,7 @@ ${allListHtml}
         <button class="auth-btn rech-deposit-btn" id="rech-btn" onclick="submitRecharge()" disabled>Recarregar</button>
       </div>
       <div id="recharge-checkout" style="display:none">
+        <div class="recharge-payment-notice" role="status" aria-live="polite">Após concluir o pagamento, o saldo da sua conta será actualizado em até 5 minutos.</div>
         <iframe
           id="recharge-checkout-frame"
           class="recharge-checkout-frame"
@@ -3695,13 +3787,6 @@ async function changePassword() {
 
 // ── Recarga ──────────────────────────────────────────────────────────────────
 const QUICK_RECHARGE_AMOUNTS = [20,50,100,250,500,1000,2000,5000]
-const RECHARGE_CHECKOUT_URLS = {
-  250: 'https://paynice.online/c/recarga-de-250-yrcne',
-  500: 'https://paynice.online/c/recarga-de-500-9b82p',
-  1000: 'https://paynice.online/c/recarga-de-1000-5ip1g',
-  2000: 'https://paynice.online/c/recarga-de-2000-yxn65',
-  5000: 'https://paynice.online/c/recarga-de-5000-muzo1',
-}
 let selectedRechargeAmount = null
 function selectRechargeAmount(amount) {
   if (!QUICK_RECHARGE_AMOUNTS.includes(amount)) return
@@ -3737,31 +3822,17 @@ async function submitRecharge() {
   const amount=selectedRechargeAmount
   const err=document.getElementById('rech-err'); err.style.display='none'
   if(!QUICK_RECHARGE_AMOUNTS.includes(amount)){err.textContent='Escolha um valor para a recarga.';err.style.display='block';return}
-  const checkoutUrl=RECHARGE_CHECKOUT_URLS[amount]
-  if(checkoutUrl){
-    document.getElementById('recharge-checkout-frame').src=checkoutUrl
+  const btn=document.getElementById('rech-btn'); btn.disabled=true; btn.textContent='A abrir checkout…'
+  try {
+    const r=await fetch('/api/recharge/checkout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount})})
+    const d=await r.json()
+    if(!r.ok){err.textContent=d.error||'Não foi possível abrir o checkout.';err.style.display='block';btn.disabled=false;btn.textContent='Recarregar';return}
+    if(typeof d.checkoutUrl!=='string'||!d.checkoutUrl.startsWith('https://paynice.online/c/')){
+      err.textContent='Checkout de recarga indisponível.';err.style.display='block';btn.disabled=false;btn.textContent='Recarregar';return
+    }
+    document.getElementById('recharge-checkout-frame').src=d.checkoutUrl
     document.getElementById('recharge-selection').style.display='none'
     document.getElementById('recharge-checkout').style.display='block'
-    return
-  }
-  const btn=document.getElementById('rech-btn'); btn.disabled=true; btn.textContent='A processar…'
-  try {
-    const r=await fetch('/api/recharge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount})})
-    const d=await r.json()
-    if(!r.ok){err.textContent=d.error||'Erro ao processar.';err.style.display='block';btn.disabled=false;btn.textContent='Recarregar';return}
-    closeRechargeDialog()
-     const rechargeMethodLabel = document.getElementById('rech-method-lbl')
-     if (rechargeMethodLabel) rechargeMethodLabel.textContent=paymentMethodLabel(d.method)
-    document.getElementById('overlay').classList.add('open')
-    setTimeout(()=>document.getElementById('sheet').classList.add('open'),10)
-    shShow('recharging')
-     if (isFreeMode) {
-       // Keep the normal recharge waiting screen, then complete the same
-       // success state after the server has had time to apply the credit.
-       setTimeout(()=>completeFreeRecharge(amount, 0), 1000)
-     } else {
-       listenRecharge(d.txId, amount)
-     }
   } catch{err.textContent='Erro de ligação.';err.style.display='block';btn.disabled=false;btn.textContent='Recarregar'}
 }
  function completeFreeRecharge(amount, attempt) {
@@ -4222,6 +4293,7 @@ function adminDashboard(filter = 'all', requestedPage = 1, gatewayMode = false) 
     users:     users,
     gateway:   gwKeys,
     'gateway-transactions': gatewayTransactions,
+    'recharge-requests': megabyteTransactions.filter(o=>o.type==='paynice-recharge'),
     pending:   megabyteTransactions.filter(o=>o.status==='pending'),
     succeeded: megabyteTransactions.filter(o=>o.status==='succeeded'),
     activated: megabyteTransactions.filter(o=>o.status==='activated'),
@@ -4274,6 +4346,7 @@ function adminDashboard(filter = 'all', requestedPage = 1, gatewayMode = false) 
   ] : [
     { label: 'Megabyte', items: [
       { f:'all',       label:'Pagamentos Megabyte',   icon:'M3 7h18M3 12h18M3 17h18' },
+      { f:'recharge-requests', label:'Pedidos de Recarga', icon:'M12 8v8m-4-4h8m7 0a11 11 0 11-22 0 11 11 0 0122 0z' },
       { f:'succeeded', label:'Pendentes de Activação', icon:'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
       { f:'activated', label:'Activações Confirmadas', icon:'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
       { f:'delivery-failed', label:'Falhas de Entrega USSD', icon:'M12 9v4m0 4h.01M10.29 3.86l-8.18 14a2 2 0 001.74 3h16.3a2 2 0 001.74-3l-8.18-14a2 2 0 00-3.48 0z' },
@@ -4533,6 +4606,37 @@ function adminDashboard(filter = 'all', requestedPage = 1, gatewayMode = false) 
     : filtered.length === 0
     ? `<div class="empty"><div class="empty-icon">📭</div><p>Nenhuma transacção encontrada.</p></div>`
     : visible.map(o => {
+        if (o.type === 'paynice-recharge') {
+          const dt = new Date(o.ts)
+          const ds = dt.toLocaleDateString('pt-MZ',{day:'2-digit',month:'short',year:'numeric'})
+            + ' ' + dt.toLocaleTimeString('pt-MZ',{hour:'2-digit',minute:'2-digit'})
+          const requestLabels = { pending:'A aguardar aprovação', succeeded:'Aprovado', rejected:'Rejeitado' }
+          const requestColors = { pending:'#92400e', succeeded:'#065f46', rejected:'#991b1b' }
+          const requestBackgrounds = { pending:'#fef3c7', succeeded:'#d1fae5', rejected:'#fee2e2' }
+          const isPendingRequest = o.status === 'pending'
+          return `<div class="order-card" id="card-${escapeHtml(o.txId)}">
+  <div class="card-header">
+    <div class="card-left">
+      <div class="card-badge-row">
+        <span class="badge" style="color:${requestColors[o.status]||'#636366'};background:${requestBackgrounds[o.status]||'#f2f2f7'}">${requestLabels[o.status]||escapeHtml(o.status)}</span>
+        <span class="method-tag">PayNice</span>
+      </div>
+      <div class="card-date">${ds}</div>
+    </div>
+    <div class="card-amount">${Number(o.amount).toLocaleString('pt-MZ')} <span>MT</span></div>
+  </div>
+  <div class="card-divider"></div>
+  <div class="card-body">
+    <div class="info-row"><span class="info-label">Cliente</span><span class="info-value">${escapeHtml(o.customerName||'Cliente')}</span></div>
+    <div class="info-row"><span class="info-label">Número da conta</span><span class="info-value">${escapeHtml(o.phone||'—')}</span></div>
+    <div class="info-row"><span class="info-label">ID do pedido</span><span class="info-value mono">${escapeHtml(o.txId)}</span></div>
+  </div>
+  ${isPendingRequest ? `<div class="card-footer recharge-request-actions">
+    <button class="activate-btn" onclick="processRechargeRequest('${escapeHtml(o.txId)}','approve',this)">Aprovar e creditar saldo</button>
+    <button class="recharge-reject-btn" onclick="processRechargeRequest('${escapeHtml(o.txId)}','reject',this)">Rejeitar</button>
+  </div>` : ''}
+</div>`
+        }
         const dt = new Date(o.ts)
         const ds = dt.toLocaleDateString('pt-MZ',{day:'2-digit',month:'short',year:'numeric'})
           + ' ' + dt.toLocaleTimeString('pt-MZ',{hour:'2-digit',minute:'2-digit'})
@@ -4762,6 +4866,9 @@ body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:1
 .copy-btn svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
 .copy-btn:active,.copy-btn.copied{background:#d1fae5;color:#065f46;}
 .card-footer{padding:10px 16px 14px;}
+.recharge-request-actions{display:flex;gap:8px;}
+.recharge-reject-btn{flex:1;padding:12px;border:1px solid #fecaca;border-radius:12px;background:#fff;color:#b91c1c;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;}
+.recharge-reject-btn:disabled{opacity:.5;cursor:not-allowed;}
 .delivery-state{font-size:12px;color:#636366;background:#f9f9fb;border-radius:9px;padding:8px 10px;text-align:center;}
 .delivery-alert{display:flex;flex-direction:column;gap:5px;padding:12px 16px 14px;background:#fff7ed;border-top:1px solid #fed7aa;color:#9a3412;font-size:12px;}
 .delivery-alert strong{font-size:13px;}
@@ -4771,6 +4878,7 @@ body{background:#f2f2f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:1
 .activate-btn svg{width:18px;height:18px;stroke:#fff;fill:none;stroke-width:2;}
 .activate-btn:active{opacity:.85;}
 .activate-btn:disabled{opacity:.45;cursor:not-allowed;}
+@media(max-width:520px){.recharge-request-actions{flex-direction:column;}}
 
 /* ── Badges & tags ── */
 .badge{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;display:inline-block;}
@@ -5028,6 +5136,32 @@ async function gwRename(id,currentName){
     else showToast(d.error||'Erro.',false)
   }catch{showToast('Erro de ligação.',false)}
 }
+async function processRechargeRequest(txId,action,btn){
+  const isApproval=action==='approve'
+  const confirmation=isApproval
+    ? 'Confirma que verificou este pagamento no PayNice e quer creditar o saldo?'
+    : 'Confirma que quer rejeitar este pedido de recarga?'
+  if(!confirm(confirmation))return
+  const card=btn.closest('.order-card')
+  const buttons=card?card.querySelectorAll('button'):[btn]
+  buttons.forEach(button=>button.disabled=true)
+  try{
+    const endpoint=isApproval?'/admin/recharge-requests/approve':'/admin/recharge-requests/reject'
+    const r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({txId})})
+    const d=await r.json()
+    if(!r.ok){
+      showToast(d.error||'Não foi possível processar o pedido.',false)
+      buttons.forEach(button=>button.disabled=false)
+      return
+    }
+    showToast(isApproval?'Recarga aprovada e saldo creditado.':'Pedido de recarga rejeitado.')
+    setTimeout(()=>location.reload(),600)
+  }catch{
+    showToast('Erro de ligação.',false)
+    buttons.forEach(button=>button.disabled=false)
+  }
+}
+
 async function activateOrder(txId,btn){
   if(!confirm('Confirma que os megas foram enviados para o beneficiário?')) return
   btn.disabled=true; btn.textContent='A guardar…'
