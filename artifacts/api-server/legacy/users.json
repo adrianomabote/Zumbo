@@ -39,5 +39,14 @@
     "balance": 0,
     "createdAt": "2026-09-23T13:55:34.251Z",
     "passwordHash": "4ee48fd63d1d9957059d5d7789690193f09ca343cc132a345e7f28571e0e6324"
+  },
+  {
+    "id": "efea3fa6760b",
+    "name": "Adriano Mabote",
+    "phone": "848060300",
+    "passwordHash": "187da9ab13dc7bf8e01e26fa17b428e1315a63775f033816d6d37f4ab7926f51",
+    "salt": "937a0e5c3cfa9f5ef2162414d2ee9fcd",
+    "balance": 0,
+    "createdAt": "2026-10-12T05:03:25.617Z"
   }
 ]

@@ -2931,9 +2931,19 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
  .profile-modal .auth-card-head>div:first-child{justify-content:flex-start!important;}
 
 /* ── Recharge modal (reutiliza .auth-modal + .auth-card) ── */
-.rech-amount-wrap{position:relative;}
-.rech-amount-prefix{position:absolute;left:16px;top:50%;transform:translateY(-50%);font-size:15px;font-weight:700;color:#1c1c1e;}
-.rech-inp{padding-left:40px;}
+#recharge-modal .auth-card{background:#171c22;border:1px solid #303740;color:#f3f5f7;}
+#recharge-modal .auth-card-title{color:#f3f5f7;}
+#recharge-modal .auth-card-sub{color:#aeb6c0;}
+#recharge-modal .auth-close{color:#f3f5f7;}
+.rech-quick-title{font-size:12px;font-weight:800;color:#d5dbe2;letter-spacing:.07em;margin:2px 0 10px;}
+.rech-quick-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;}
+.rech-quick-option{min-height:62px;padding:10px 8px;border:1.5px solid #343b44;border-radius:9px;background:#22272e;color:#f3f5f7;font-family:inherit;font-size:17px;font-weight:700;cursor:pointer;transition:background .15s,border-color .15s,color .15s;}
+.rech-quick-option:hover,.rech-quick-option.is-selected{background:#29333c;border-color:#00c853;color:#00c853;}
+.rech-quick-option:focus-visible{outline:3px solid #00c853;outline-offset:2px;}
+.rech-deposit-btn{margin-top:18px!important;background:#00c853!important;color:#071b10!important;box-shadow:none!important;}
+.rech-deposit-btn:hover{filter:brightness(1.06);}
+.rech-deposit-btn:disabled{background:#178348!important;color:#d5e7dc!important;cursor:not-allowed;opacity:.72;}
+#recharge-modal .auth-err{color:#ffc4c4;background:#3a2024;border-color:#71343c;}
 
 /* ── Success credit ── */
 .credit-badge{display:inline-flex;align-items:center;gap:5px;background:#fff0f0;border:1px solid #ffcdd2;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:700;color:#cc0000;margin-bottom:14px;}
@@ -3400,15 +3410,22 @@ ${allListHtml}
       <div class="auth-card-head">
         <div style="margin-bottom:12px;display:flex;justify-content:center"><img src="/static/coins.png" style="width:56px;height:56px" alt="saldo"></div>
         <div class="auth-card-title">Recarregar Saldo</div>
-         <div class="auth-card-sub">M-Pesa ou e-Mola, conforme o número da conta · mínimo 10 MT</div>
+        <div class="auth-card-sub">M-Pesa ou e-Mola, conforme o número da conta.</div>
       </div>
       <div class="auth-body">
-        <div class="rech-amount-wrap">
-          <span class="rech-amount-prefix">MT</span>
-           <input class="auth-inp rech-inp" id="rech-amount" type="number" min="10" max="40000" step="1" placeholder="Mínimo 10 MT" inputmode="numeric">
+        <div class="rech-quick-title">VALOR RÁPIDO</div>
+        <div class="rech-quick-grid" role="group" aria-label="Escolha o valor da recarga">
+          <button type="button" class="rech-quick-option" data-amount="20" aria-pressed="false" onclick="selectRechargeAmount(20)">20 MT</button>
+          <button type="button" class="rech-quick-option" data-amount="50" aria-pressed="false" onclick="selectRechargeAmount(50)">50 MT</button>
+          <button type="button" class="rech-quick-option" data-amount="100" aria-pressed="false" onclick="selectRechargeAmount(100)">100 MT</button>
+          <button type="button" class="rech-quick-option" data-amount="250" aria-pressed="false" onclick="selectRechargeAmount(250)">250 MT</button>
+          <button type="button" class="rech-quick-option" data-amount="500" aria-pressed="false" onclick="selectRechargeAmount(500)">500 MT</button>
+          <button type="button" class="rech-quick-option" data-amount="1000" aria-pressed="false" onclick="selectRechargeAmount(1000)">1,000 MT</button>
+          <button type="button" class="rech-quick-option" data-amount="2000" aria-pressed="false" onclick="selectRechargeAmount(2000)">2,000 MT</button>
+          <button type="button" class="rech-quick-option" data-amount="5000" aria-pressed="false" onclick="selectRechargeAmount(5000)">5,000 MT</button>
         </div>
         <div class="auth-err" id="rech-err"></div>
-         <button class="auth-btn" id="rech-btn" onclick="submitRecharge()">Continuar</button>
+        <button class="auth-btn rech-deposit-btn" id="rech-btn" onclick="submitRecharge()" disabled>Depositar</button>
       </div>
     </div>
   </div>
@@ -3663,10 +3680,27 @@ async function changePassword() {
 }
 
 // ── Recarga ──────────────────────────────────────────────────────────────────
-function openRechargeDialog() {
-  document.getElementById('rech-amount').value=''
+const QUICK_RECHARGE_AMOUNTS = [20,50,100,250,500,1000,2000,5000]
+let selectedRechargeAmount = null
+function selectRechargeAmount(amount) {
+  if (!QUICK_RECHARGE_AMOUNTS.includes(amount)) return
+  selectedRechargeAmount = amount
+  document.querySelectorAll('.rech-quick-option').forEach(option => {
+    const selected = Number(option.dataset.amount) === amount
+    option.classList.toggle('is-selected', selected)
+    option.setAttribute('aria-pressed', String(selected))
+  })
   document.getElementById('rech-err').style.display='none'
-  const btn=document.getElementById('rech-btn'); btn.disabled=false; btn.textContent='Continuar'
+  document.getElementById('rech-btn').disabled=false
+}
+function openRechargeDialog() {
+  selectedRechargeAmount = null
+  document.querySelectorAll('.rech-quick-option').forEach(option => {
+    option.classList.remove('is-selected')
+    option.setAttribute('aria-pressed','false')
+  })
+  document.getElementById('rech-err').style.display='none'
+  const btn=document.getElementById('rech-btn'); btn.disabled=true; btn.textContent='Depositar'
   document.getElementById('recharge-modal').style.display='flex'
   setTimeout(()=>document.getElementById('recharge-card').classList.add('open'),10)
 }
@@ -3675,14 +3709,14 @@ function closeRechargeDialog() {
   setTimeout(()=>{document.getElementById('recharge-modal').style.display='none'},250)
 }
 async function submitRecharge() {
-  const amount=Number(document.getElementById('rech-amount').value)
+  const amount=selectedRechargeAmount
   const err=document.getElementById('rech-err'); err.style.display='none'
-  if(!Number.isInteger(amount)||amount<10||amount>40000){err.textContent='A recarga deve ser um número inteiro entre 10 e 40000 MT.';err.style.display='block';return}
+  if(!QUICK_RECHARGE_AMOUNTS.includes(amount)){err.textContent='Escolha um valor para a recarga.';err.style.display='block';return}
   const btn=document.getElementById('rech-btn'); btn.disabled=true; btn.textContent='A processar…'
   try {
     const r=await fetch('/api/recharge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount})})
     const d=await r.json()
-    if(!r.ok){err.textContent=d.error||'Erro ao processar.';err.style.display='block';btn.disabled=false;btn.textContent='Continuar';return}
+    if(!r.ok){err.textContent=d.error||'Erro ao processar.';err.style.display='block';btn.disabled=false;btn.textContent='Depositar';return}
     closeRechargeDialog()
      const rechargeMethodLabel = document.getElementById('rech-method-lbl')
      if (rechargeMethodLabel) rechargeMethodLabel.textContent=paymentMethodLabel(d.method)
@@ -3696,7 +3730,7 @@ async function submitRecharge() {
      } else {
        listenRecharge(d.txId, amount)
      }
-  } catch{err.textContent='Erro de ligação.';err.style.display='block';btn.disabled=false;btn.textContent='Continuar'}
+  } catch{err.textContent='Erro de ligação.';err.style.display='block';btn.disabled=false;btn.textContent='Depositar'}
 }
  function completeFreeRecharge(amount, attempt) {
    fetch('/api/auth/me')
