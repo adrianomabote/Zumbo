@@ -2931,12 +2931,13 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
  .profile-modal .auth-card-head>div:first-child{justify-content:flex-start!important;}
 
 /* ── Recharge modal (reutiliza .auth-modal + .auth-card) ── */
-#recharge-modal .auth-card{max-width:340px;background:#fff;border:1px solid #e5e5ea;color:#1c1c1e;}
+#recharge-modal.auth-modal{padding:12px;}
+#recharge-modal .auth-card{max-width:420px;background:#fff;border:1px solid #e5e5ea;color:#1c1c1e;}
 #recharge-modal .auth-card-title{color:#1c1c1e;}
 #recharge-modal .auth-close{color:#636366;}
 .rech-quick-title{font-size:12px;font-weight:800;color:#636366;letter-spacing:.07em;margin:2px 0 10px;}
 .rech-quick-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;}
-.rech-quick-option{min-height:62px;padding:10px 8px;border:1.5px solid #e5e5ea;border-radius:9px;background:#f9f9fb;color:#1c1c1e;font-family:inherit;font-size:17px;font-weight:700;cursor:pointer;transition:background .15s,border-color .15s,color .15s;}
+.rech-quick-option{min-height:62px;padding:10px 8px;border:1.5px solid #e5e5ea;border-radius:9px;background:#f9f9fb;color:#1c1c1e;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;transition:background .15s,border-color .15s,color .15s;}
 .rech-quick-option:hover,.rech-quick-option.is-selected{background:#fff0f0;border-color:#cc0000;color:#cc0000;}
 .rech-quick-option:focus-visible{outline:3px solid #cc0000;outline-offset:2px;}
 .rech-deposit-btn{margin-top:18px!important;background:#cc0000!important;color:#fff!important;box-shadow:none!important;}
