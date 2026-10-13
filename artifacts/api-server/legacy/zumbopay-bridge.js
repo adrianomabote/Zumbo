@@ -1227,7 +1227,7 @@ async function initiateCharge(tx, customerName) {
     await creditRechargeOnce(tx)
     notifyTx(tx.id, { status:'succeeded', method:tx.method, testMode:isTestMode, freeMode:isFreeMode })
     gwFinalize(tx)
-    return
+    return isTestMode ? 'simulated' : 'free'
   }
   try {
     const resp = await fetch(`http://localhost:${process.env.MAIN_API_PORT}/api/${PAYMENT_API_ROUTE}/internal/payments`, {
@@ -1250,12 +1250,25 @@ async function initiateCharge(tx, customerName) {
     if (PAYMENT_PROVIDERS.has(data.provider)) {
       tx.pagarProvider = data.provider
     } else {
+      const definiteRejection = [400, 401, 403, 404, 422].includes(resp.status) &&
+        PAYMENT_PROVIDERS.has(PAYMENT_API_ROUTE) &&
+        typeof data.error === 'string' &&
+        data.error.trim().length > 0
+      if (definiteRejection) {
+        tx.pagarProvider = PAYMENT_API_ROUTE
+        tx.status = 'failed'
+        tx.error = data.error
+        notifyTx(tx.id, { status:'failed', error:tx.error, method:tx.method })
+        await updateOrderStatus(tx.id, 'failed', { pagarProvider:tx.pagarProvider })
+        gwFinalize(tx)
+        return 'failed'
+      }
       tx.pagarProvider = null
       await requireManualPagarReconciliation(
         tx,
         'Não foi possível identificar com segurança o provedor desta cobrança. É necessária confirmação manual.',
       )
-      return
+      return 'unknown'
     }
     if (resp.status === 202) {
       tx.ref = data.reference || tx.ref || pagarReference
@@ -1267,14 +1280,15 @@ async function initiateCharge(tx, customerName) {
           }
         } catch {}
       }
-      const providerStatus = String(data.status || 'PENDING').toUpperCase()
+      const providerStatus = String(data.status || '').toUpperCase()
       if (PAYMENT_API_ROUTE === 'mozpayment' && providerStatus === 'RECONCILIATION_REQUIRED') {
         const message = 'Não foi possível confirmar o resultado automaticamente. Não tente pagar novamente enquanto a confirmação estiver em análise; contacte o suporte.'
         await requireManualPagarReconciliation(tx, message)
-        return
+        return 'unknown'
       }
       if (providerStatus === 'PAID') {
         await applyPagarProviderStatus(tx, providerStatus, { reference: tx.ref })
+        return 'confirmed'
       } else if (['FAILED','CANCELLED','REFUNDED'].includes(providerStatus)) {
         await applyPagarProviderStatus(tx, providerStatus, {
           reference: tx.ref,
@@ -1282,6 +1296,7 @@ async function initiateCharge(tx, customerName) {
             ? { failureReason: 'EMOLA_PIN_INCORRECT' }
             : {}),
         })
+        return 'failed'
       } else {
         tx.status = 'pending'
         notifyTx(tx.id, { status:'pending', method:tx.method, checkoutUrl:tx.checkoutUrl || null })
@@ -1294,8 +1309,10 @@ async function initiateCharge(tx, customerName) {
           pagarReconciliationError: null,
         })
         schedulePagarReconciliation(tx)
+        return ['PENDING', 'PROCESSING', 'AUTHORIZED', 'AWAITING_CUSTOMER'].includes(providerStatus)
+          ? 'submitted'
+          : 'unknown'
       }
-      return
     }
     const msg = data.error || data.message || `Erro ${resp.status}`
     if (tx.pagarProvider === 'mozpayment') {
@@ -1303,11 +1320,12 @@ async function initiateCharge(tx, customerName) {
         tx,
         'Não foi possível confirmar o resultado automaticamente. Não tente pagar novamente enquanto a confirmação estiver em análise; contacte o suporte.',
       )
-      return
+      return 'unknown'
     }
     tx.status = 'failed'; tx.error = msg
     notifyTx(tx.id, { status:'failed', error:msg, method:tx.method })
     await updateOrderStatus(tx.id, 'failed'); gwFinalize(tx)
+    return 'failed'
   } catch (err) {
     console.error(`[${PAYMENT_API_ROUTE}]`, err.message)
     tx.ref = tx.ref || pagarReference
@@ -1316,7 +1334,7 @@ async function initiateCharge(tx, customerName) {
         tx,
         'Não foi possível confirmar o resultado automaticamente. Não tente pagar novamente enquanto a confirmação estiver em análise; contacte o suporte.',
       )
-      return
+      return 'unknown'
     }
     tx.status = 'pending'
     tx.error = `A confirmar o pagamento com o ${PAYMENT_API_ROUTE}.`
@@ -1329,6 +1347,7 @@ async function initiateCharge(tx, customerName) {
       pagarReconciliationError: tx.error,
     })
     schedulePagarReconciliation(tx, 15_000)
+    return 'unknown'
   }
 }
 
@@ -1849,9 +1868,20 @@ self.addEventListener('fetch',e=>{
     }
     transactions.set(txId, tx)
     trackOrder(tx)
-    json(res, { ok:true, txId, status:'pending', method:'mpesa', paymentPhone }, 201)
-    initiateCharge(tx, `Recarga Megabyte ${amount} MT`)
-    return
+    const requestState = await initiateCharge(tx, `Recarga Megabyte ${amount} MT`)
+    if (requestState === 'failed') {
+      return json(res, { error:tx.error || 'O provedor recusou a cobrança. Verifique os dados e tente novamente.' }, 502)
+    }
+    return json(res, {
+      ok:true,
+      txId,
+      status:tx.status,
+      method:'mpesa',
+      paymentPhone,
+      requestState,
+      testMode:isTestMode,
+      freeMode:isFreeMode,
+    }, 201)
   }
 
   if (method === 'POST' && path === '/api/recharge') {
@@ -1868,9 +1898,19 @@ self.addEventListener('fetch',e=>{
     const tx = { id:txId, type:'recharge', bundleId:null, bundleLabel:`Recarga ${amount} MT`, phone:user.phone, paymentPhone, beneficiaryPhone:null, msisdn:normalizeMsisdn(paymentPhone), amount, method:'mpesa', status:'pending', ref:null, error:null, sourceId:randomUUID(), ts:new Date().toISOString(), userId:user.id }
     transactions.set(txId, tx)
     trackOrder(tx)
-    json(res, { txId, status:'pending', method:'mpesa', paymentPhone })
-    initiateCharge(tx, `Recarga Megabyte ${amount} MT`)
-    return
+    const requestState = await initiateCharge(tx, `Recarga Megabyte ${amount} MT`)
+    if (requestState === 'failed') {
+      return json(res, { error:tx.error || 'O provedor recusou a cobrança. Verifique os dados e tente novamente.' }, 502)
+    }
+    return json(res, {
+      txId,
+      status:tx.status,
+      method:'mpesa',
+      paymentPhone,
+      requestState,
+      testMode:isTestMode,
+      freeMode:isFreeMode,
+    })
   }
 
   // ── Compra com crédito ────────────────────────────────────────────────────
@@ -3884,7 +3924,18 @@ async function submitRecharge() {
     }
     document.getElementById('recharge-selection').style.display='none'
     document.getElementById('recharge-checkout').style.display='block'
-    document.getElementById('recharge-payment-notice').textContent=\`Pedido enviado para \${d.paymentPhone||paymentPhone}. Confirme no M-Pesa; o saldo será creditado nesta conta após a confirmação.\`
+    const notice=document.getElementById('recharge-payment-notice')
+    if(d.testMode){
+      notice.textContent='Modo de teste: nenhum pedido foi enviado ao M-Pesa e não houve cobrança real.'
+    }else if(d.freeMode){
+      notice.textContent='Esta recarga foi aplicada sem pagamento; nenhum pedido M-Pesa foi enviado.'
+    }else if(d.requestState==='submitted'){
+      notice.textContent=\`Pedido M-Pesa enviado para \${d.paymentPhone||paymentPhone}. Confirme no telemóvel; o saldo será actualizado após a confirmação.\`
+    }else if(d.requestState==='confirmed'){
+      notice.textContent='Pagamento confirmado pelo provedor. O saldo será actualizado nesta conta.'
+    }else{
+      notice.textContent='Ainda não foi possível confirmar se o pedido chegou ao M-Pesa. Não repita a recarga por enquanto; verifique o estado ou contacte o suporte.'
+    }
     listenRecharge(d.txId,amount)
   } catch{err.textContent='Erro de ligação.';err.style.display='block';btn.disabled=false;btn.textContent='Recarregar'}
 }

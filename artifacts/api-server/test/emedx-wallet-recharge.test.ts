@@ -200,6 +200,11 @@ test("inicia recargas de saldo apenas com M-Pesa e mantém separado o telefone d
     "recharge-payment-notice": { textContent: "" },
   };
   let submittedRecharge: { amount: number; paymentPhone: string } | undefined;
+  let checkoutResponse: Record<string, unknown> = {
+    txId: "test-recharge",
+    paymentPhone: "841112223",
+    requestState: "submitted",
+  };
   const submitRecharge = new Function(
     "document",
     "fetch",
@@ -217,7 +222,7 @@ test("inicia recargas de saldo apenas com M-Pesa e mantém separado o telefone d
       submittedRecharge = JSON.parse(request.body);
       return {
         ok: true,
-        json: async () => ({ txId: "test-recharge", paymentPhone: "841112223" }),
+        json: async () => checkoutResponse,
       };
     },
     () => {},
@@ -225,6 +230,17 @@ test("inicia recargas de saldo apenas com M-Pesa e mantém separado o telefone d
   await submitRecharge();
   assert.deepEqual(submittedRecharge, { amount: 75, paymentPhone: "841112223" });
   assert.equal(formElements["rech-err"].style.display, "none");
+  assert.match(formElements["recharge-payment-notice"].textContent, /Pedido M-Pesa enviado para 841112223/);
+
+  checkoutResponse = {
+    txId: "test-recharge-preview",
+    paymentPhone: "841112223",
+    requestState: "simulated",
+    testMode: true,
+  };
+  await submitRecharge();
+  assert.match(formElements["recharge-payment-notice"].textContent, /Modo de teste/);
+  assert.match(formElements["recharge-payment-notice"].textContent, /nenhum pedido foi enviado ao M-Pesa/);
 
   const response = await postJson("/api/recharge/checkout", {
     amount: 20,
@@ -233,7 +249,9 @@ test("inicia recargas de saldo apenas com M-Pesa e mantém separado o telefone d
   assert.equal(response.status, 201);
   const result = await response.json() as Record<string, unknown>;
   assert.equal(result.ok, true);
-  assert.equal(result.status, "pending");
+  assert.equal(result.status, "succeeded");
+  assert.equal(result.requestState, "simulated");
+  assert.equal(result.testMode, true);
   assert.equal(result.method, "mpesa");
   assert.equal(result.paymentPhone, "841112223");
   assert.equal(typeof result.txId, "string");
@@ -251,6 +269,8 @@ test("inicia recargas de saldo apenas com M-Pesa e mantém separado o telefone d
   }, userCookie);
   assert.equal(customRechargeResponse.status, 201);
   const customRecharge = await customRechargeResponse.json() as Record<string, unknown>;
+  assert.equal(customRecharge.requestState, "simulated");
+  assert.equal(customRecharge.testMode, true);
   const customOrder = await waitForRecharge(String(customRecharge.txId));
   assert.equal(customOrder.amount, 75);
   assert.equal(customOrder.bundleLabel, "Recarga 75 MT");
