@@ -1207,8 +1207,8 @@ function notifyTx(txId, data) {
 
 async function initiateCharge(tx, customerName) {
   tx.pagarProvider = PAYMENT_API_ROUTE
-  const pagarReference = PAYMENT_API_ROUTE === 'paysuite'
-    ? String(tx.pagarRef || pagarReferenceFor(tx)).replace(/[^A-Za-z0-9]/g, '').slice(0, 50)
+  const pagarReference = (PAYMENT_API_ROUTE === 'paysuite' || PAYMENT_API_ROUTE === 'emedx')
+    ? String(tx.pagarRef || pagarReferenceFor(tx)).replace(/[^A-Za-z0-9]/g, '').slice(0, 20)
     : (tx.pagarRef || pagarReferenceFor(tx))
   tx.pagarRef = pagarReference
   tx.pagarTitle = pagarTitleFor(tx, customerName)
