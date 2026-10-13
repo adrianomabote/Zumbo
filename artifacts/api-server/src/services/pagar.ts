@@ -22,7 +22,7 @@ let vpayTokenCache: { key: string; token: string; expiresAt: number } | null = n
 let vpayTokenRequest: { key: string; promise: Promise<string> } | null = null;
 
 function activeProvider(): PaymentProvider {
-  const configuredProvider = process.env.PAYMENT_PROVIDER?.trim().toLowerCase() || "pagar";
+  const configuredProvider = process.env.PAYMENT_PROVIDER?.trim().toLowerCase() || "emedx";
   if (configuredProvider === "vpay") return "vpay";
   if (configuredProvider === "mozpayment") return "mozpayment";
   if (configuredProvider === "emedx") return "emedx";

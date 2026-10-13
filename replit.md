@@ -10,7 +10,7 @@ Plataforma de venda de pacotes de dados e entrega USSD em Moçambique.
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - Required env: `DATABASE_URL` — Postgres connection string
-- Payment env (server-only): `PAGAR_API_BASE_URL`, `PAGAR_API_KEY`, `PAGAR_SIGNING_SECRET`, `PAGAR_WEBHOOK_SECRET`
+- Payment env (server-only): `PAYMENT_PROVIDER=emedx`, `EMEDX_API_BASE_URL`, `EMEDX_CLIENT_KEY`, `EMEDX_CLIENT_SECRET`, `EMEDX_WEBHOOK_SECRET`
 
 ## Stack
 

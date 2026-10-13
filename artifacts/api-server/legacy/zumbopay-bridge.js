@@ -25,7 +25,7 @@ const PAYMENT_MODE         = String(
 ).toLowerCase()
 const isTestMode           = PAYMENT_MODE === 'mock' || PAYMENT_MODE === 'test'
 const isFreeMode           = PAYMENT_MODE === 'free'
-const configuredPaymentProvider = (process.env.PAYMENT_PROVIDER || 'pagar').trim().toLowerCase()
+const configuredPaymentProvider = (process.env.PAYMENT_PROVIDER || 'emedx').trim().toLowerCase()
 const PAYMENT_API_ROUTE    = configuredPaymentProvider === 'paysuite'
   ? 'paysuite'
   : configuredPaymentProvider === 'debitopay'
@@ -34,9 +34,9 @@ const PAYMENT_API_ROUTE    = configuredPaymentProvider === 'paysuite'
       ? 'vpay'
       : configuredPaymentProvider === 'mozpayment'
         ? 'mozpayment'
-        : configuredPaymentProvider === 'emedx'
-          ? 'emedx'
-        : 'pagar'
+        : configuredPaymentProvider === 'pagar'
+          ? 'pagar'
+        : 'emedx'
 const PAYMENT_PROVIDERS = new Set(['pagar', 'debitopay', 'paysuite', 'vpay', 'mozpayment', 'emedx'])
 const MIN_RECHARGE_AMOUNT = 20
 const MAX_RECHARGE_AMOUNT = 40000
@@ -4805,7 +4805,7 @@ function adminDashboard(filter = 'all', requestedPage = 1, gatewayMode = false) 
   </div>
   ${reconciliationAttention ? `<div class="delivery-alert pagar-reconciliation-alert">
      <strong>${o.pagarReconciliationStatus === 'manual_required' ? 'Confirmação manual necessária' : 'Pagamento em reconciliação'}</strong>
-     <span>${escapeHtml(o.pagarReconciliationError || (o.pagarProvider === 'mozpayment' ? 'Confirme o estado no painel MozPayment. Não pague novamente.' : 'A confirmar o estado desta cobrança com o Pagar. O pagamento não foi marcado como falhado.'))}</span>
+     <span>${escapeHtml(o.pagarReconciliationError || (o.pagarProvider === 'mozpayment' ? 'Confirme o estado no painel MozPayment. Não pague novamente.' : o.pagarProvider === 'emedx' ? 'A confirmar o estado desta cobrança com o eMedx. O pagamento não foi marcado como falhado.' : 'A confirmar o estado desta cobrança com o Pagar. O pagamento não foi marcado como falhado.'))}</span>
      ${manualMozPaymentConfirmation ? `<button class="activate-btn" onclick="confirmMozPayment('${escapeHtml(o.txId)}',this)">Confirmar pagamento no MozPayment</button>` : ''}
    </div>` : ''}${forwardingAttention ? `<div class="delivery-alert pagar-forwarding-alert">
     <strong>${o.pagarForwardingStatus === 'failed' ? 'Encaminhamento Pagar falhou' : o.pagarForwardingStatus === 'forwarding' ? 'A encaminhar confirmação Pagar' : 'A aguardar encaminhamento Pagar'}</strong>
