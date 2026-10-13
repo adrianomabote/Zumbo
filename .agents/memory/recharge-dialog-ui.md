@@ -9,8 +9,8 @@ Keep the recharge panel wide, close to the screen edges; shrink the amount-choic
 
 **How to apply:** For future recharge-panel changes, preserve the large panel footprint, reduce button height/padding before changing label typography, omit custom checkout headings and the selected amount, and keep the centered layout with side and bottom insets.
 
-The storefront's inline browser script is embedded in a server-side JavaScript template literal. Avoid browser regex escapes that the outer template can consume; verify the rendered script, not just the source file.
+When a user says a number was entered but rejected, investigate the system validation before suggesting a different input format. The storefront's inline browser script is embedded in a server-side JavaScript template literal, so verify the rendered script, not just the source.
 
-**Why:** Phone normalization appeared valid in the server source, but the generated browser script lost the `\D` escape and failed to remove spaces and country-code punctuation.
+**Why:** The user clarified that the failure was in the system. A single-backslash `\d` in the source was consumed by the outer template, so the generated browser validator rejected all phone numbers.
 
-**How to apply:** When changing inline storefront JavaScript, test the response HTML and execute or parse the emitted script. Prefer `[0-9]` over `\D` where appropriate, or escape backslashes for the outer template.
+**How to apply:** When changing inline storefront JavaScript, test the response HTML and execute the actual submit handler. Prefer `[0-9]` and `[^0-9]` over `\d` and `\D` in embedded regexes.

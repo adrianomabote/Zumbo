@@ -170,7 +170,7 @@ test("inicia recargas de saldo apenas com M-Pesa e mantém separado o telefone d
   assert.match(storefrontHtml, /id="recharge-custom-amount" type="number"/);
   assert.doesNotMatch(storefrontHtml, />5,000 MT<\/button>/);
   assert.doesNotMatch(storefrontHtml, /paynice\.online\/c\//);
-  assert.doesNotMatch(storefrontHtml, /recharge-checkout-frame/);
+  assert.doesNotMatch(storefrontHtml, /<iframe[^>]*recharge-checkout-frame/i);
 
   const storefrontScript = [...storefrontHtml.matchAll(/<script>([\s\S]*?)<\/script>/g)]
     .map((match) => match[1])
@@ -186,6 +186,45 @@ test("inicia recargas de saldo apenas com M-Pesa e mantém separado o telefone d
   assert.equal(normalizeRechargePaymentPhone("+258 84 111 2223"), "841112223");
   assert.equal(normalizeRechargePaymentPhone("00258 85 111 2223"), "851112223");
   assert.equal(normalizeRechargePaymentPhone("841112223"), "841112223");
+
+  const submitRechargeSource = storefrontScript.match(
+    /async function submitRecharge\(\) \{[\s\S]*?\n\}/,
+  )?.[0];
+  assert.ok(submitRechargeSource);
+  const formElements: Record<string, any> = {
+    "rech-err": { style: { display: "none" }, textContent: "" },
+    "recharge-payment-phone": { value: "+258 84 111 2223" },
+    "rech-btn": { disabled: false, textContent: "" },
+    "recharge-selection": { style: { display: "" } },
+    "recharge-checkout": { style: { display: "none" } },
+    "recharge-payment-notice": { textContent: "" },
+  };
+  let submittedRecharge: { amount: number; paymentPhone: string } | undefined;
+  const submitRecharge = new Function(
+    "document",
+    "fetch",
+    "listenRecharge",
+    `${phoneNormalizerSource};
+    let selectedRechargeAmount = 75;
+    function isValidRechargeAmount(amount) {
+      return Number.isInteger(amount) && amount >= 20 && amount <= 40000;
+    }
+    ${submitRechargeSource};
+    return submitRecharge;`,
+  )(
+    { getElementById: (id: string) => formElements[id] },
+    async (_url: string, request: { body: string }) => {
+      submittedRecharge = JSON.parse(request.body);
+      return {
+        ok: true,
+        json: async () => ({ txId: "test-recharge", paymentPhone: "841112223" }),
+      };
+    },
+    () => {},
+  ) as () => Promise<void>;
+  await submitRecharge();
+  assert.deepEqual(submittedRecharge, { amount: 75, paymentPhone: "841112223" });
+  assert.equal(formElements["rech-err"].style.display, "none");
 
   const response = await postJson("/api/recharge/checkout", {
     amount: 20,

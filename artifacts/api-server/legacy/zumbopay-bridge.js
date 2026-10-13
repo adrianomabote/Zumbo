@@ -3852,9 +3852,9 @@ function openRechargeDialog() {
   document.getElementById('recharge-checkout').style.display='none'
   document.getElementById('recharge-custom-amount-wrap').style.display='none'
   document.getElementById('recharge-custom-amount').value=''
-  const rawPhone=String(authState.user?.phone||'').replace(/\D/g,'')
+  const rawPhone=String(authState.user?.phone||'').replace(/[^0-9]/g,'')
   const localPhone=rawPhone.startsWith('258')?rawPhone.slice(3):rawPhone
-  document.getElementById('recharge-payment-phone').value=/^(84|85)\d{7}$/.test(localPhone)?localPhone:''
+  document.getElementById('recharge-payment-phone').value=/^(84|85)[0-9]{7}$/.test(localPhone)?localPhone:''
   document.querySelectorAll('.rech-quick-option').forEach(option => {
     option.classList.remove('is-selected')
     option.setAttribute('aria-pressed','false')
@@ -3873,7 +3873,7 @@ async function submitRecharge() {
   const err=document.getElementById('rech-err'); err.style.display='none'
   if(!isValidRechargeAmount(amount)){err.textContent='Introduza um valor inteiro entre 20 e 40.000 MT.';err.style.display='block';return}
   const paymentPhone=normalizeRechargePaymentPhone(document.getElementById('recharge-payment-phone').value)
-  if(!/^(84|85)\d{7}$/.test(paymentPhone)){err.textContent='Introduza um número M-Pesa válido com 9 dígitos, começando por 84 ou 85. Pode incluir +258.';err.style.display='block';return}
+  if(!/^(84|85)[0-9]{7}$/.test(paymentPhone)){err.textContent='Introduza um número M-Pesa válido com 9 dígitos, começando por 84 ou 85. Pode incluir +258.';err.style.display='block';return}
   const btn=document.getElementById('rech-btn'); btn.disabled=true; btn.textContent='A enviar pedido M-Pesa…'
   try {
     const r=await fetch('/api/recharge/checkout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount,paymentPhone})})
