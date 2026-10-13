@@ -514,7 +514,7 @@ async function request(
   }
   // MozPayment's synchronous C2B response can wait while the customer confirms
   // the wallet prompt. A short generic timeout can lose a paid result.
-  const timeoutMs = configuration.provider === "mozpayment" ? 30_000 : 15_000;
+  const timeoutMs = configuration.provider === "emedx" ? 45_000 : configuration.provider === "mozpayment" ? 30_000 : 15_000;
   const startedAt = configuration.provider === "mozpayment" ? Date.now() : undefined;
   let response: Response;
   try {
@@ -703,7 +703,29 @@ export type EmedxC2BResult = {
   status: "PAID" | "FAILED" | "PENDING" | "RECONCILIATION_REQUIRED";
   operationId?: string;
   queryReference?: string;
+  failureReason?: string;
 };
+
+function translateMpesaError(code?: string, desc?: string): string {
+  const c = String(code || "").toUpperCase();
+  const d = String(desc || "").toLowerCase();
+  if (c === "INS-1" || d.includes("insufficient")) {
+    return "Saldo insuficiente na sua conta M-Pesa.";
+  }
+  if (c === "INS-2051" || d.includes("cancelled") || d.includes("canceled")) {
+    return "Pagamento cancelado no telemóvel.";
+  }
+  if (c === "INS-2006" || c === "INS-2057" || d.includes("pin")) {
+    return "PIN M-Pesa incorrecto.";
+  }
+  if (d.includes("timeout") || d.includes("expired") || c === "INS-9") {
+    return "O tempo para introduzir o PIN no M-Pesa expirou.";
+  }
+  if (desc && desc.trim().length > 0 && desc.trim().length < 120) {
+    return desc.trim();
+  }
+  return "O pagamento não foi concluído na rede M-Pesa.";
+}
 
 export function parseEmedxC2BResponse(
   data: unknown,
@@ -736,8 +758,15 @@ export function parseEmedxC2BResponse(
   if (status === "PAID" && identityMatches) {
     return { status: "PAID", operationId, ...(queryReference ? { queryReference } : {}) };
   }
+  const rawFailureDesc = typeof operation.mpesaResponseDesc === "string" && operation.mpesaResponseDesc.trim()
+    ? operation.mpesaResponseDesc.trim()
+    : typeof operation.message === "string" && operation.message.trim()
+      ? operation.message.trim()
+      : undefined;
+  const mpesaCode = typeof operation.mpesaResponseCode === "string" ? operation.mpesaResponseCode.trim() : undefined;
+  const failureReason = rawFailureDesc || mpesaCode ? translateMpesaError(mpesaCode, rawFailureDesc) : undefined;
   if (status === "FAILED" && identityMatches) {
-    return { status: "FAILED", operationId, ...(queryReference ? { queryReference } : {}) };
+    return { status: "FAILED", operationId, ...(queryReference ? { queryReference } : {}), ...(failureReason ? { failureReason } : {}) };
   }
   if (status === "PENDING" && reference === expected.reference) {
     return { status: "PENDING", operationId, ...(queryReference ? { queryReference } : {}) };
@@ -1001,11 +1030,15 @@ export async function createPagarPayment(input: PagarPaymentInput) {
           RETURNING *`,
         [result.operationId || null, result.queryReference || null, result.status, input.localTransactionId],
       );
-      return updated.rows[0] || {
+      const payment = updated.rows[0] || {
         ...inserted.rows[0],
         pagar_operation_id: result.operationId || null,
         provider_query_reference: result.queryReference || null,
         status: result.status,
+      };
+      return {
+        ...payment,
+        emedx_failure_reason: result.failureReason || null,
       };
     } else {
       data = await request("POST", isDebitoPay ? "/payment-orchestrator" : "/payments", body, input.idempotencyKey, provider);

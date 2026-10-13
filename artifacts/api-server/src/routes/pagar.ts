@@ -109,6 +109,12 @@ router.post(["/pagar/internal/payments", "/debitopay/internal/payments", "/paysu
         payment.mozpayment_failure_reason === "EMOLA_PIN_INCORRECT"
         ? { failureReason: "EMOLA_PIN_INCORRECT" }
         : {}),
+      ...(payment.provider === "emedx" && (payment as Record<string, unknown>).emedx_failure_reason
+        ? {
+            failureReason: (payment as Record<string, unknown>).emedx_failure_reason,
+            error: (payment as Record<string, unknown>).emedx_failure_reason,
+          }
+        : {}),
     });
   } catch (error) {
     return res.status(400).json({ error: error instanceof Error ? error.message : "Pagamento inválido." });

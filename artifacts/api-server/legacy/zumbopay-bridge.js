@@ -1270,7 +1270,7 @@ async function initiateCharge(tx, customerName) {
       )
       return 'unknown'
     }
-    if (resp.status === 202) {
+    if (resp.status === 200 || resp.status === 202) {
       tx.ref = data.reference || tx.ref || pagarReference
       if (PAYMENT_API_ROUTE === 'vpay' && typeof data.checkoutUrl === 'string') {
         try {
@@ -1292,6 +1292,7 @@ async function initiateCharge(tx, customerName) {
       } else if (['FAILED','CANCELLED','REFUNDED'].includes(providerStatus)) {
         await applyPagarProviderStatus(tx, providerStatus, {
           reference: tx.ref,
+          error: data.failureReason || data.error || (PAYMENT_API_ROUTE === 'emedx' ? 'Pagamento M-Pesa não concluído.' : undefined),
           ...(data.failureReason === 'EMOLA_PIN_INCORRECT'
             ? { failureReason: 'EMOLA_PIN_INCORRECT' }
             : {}),
@@ -3506,7 +3507,7 @@ ${allListHtml}
     <div class="sh-state">
       <div class="res-icon bad">✗</div>
       <div class="res-t">Recarga não confirmada</div>
-      <p class="res-s">O PIN não foi introduzido ou o tempo expirou.</p>
+      <p class="res-s" id="recharge-fail-reason">O PIN não foi introduzido ou o tempo expirou.</p>
       <button class="res-btn" onclick="closeSheet();openRechargeDialog()">Tentar novamente</button>
       <button class="res-btn res-btn-g" onclick="closeSheet()">Cancelar</button>
     </div>
@@ -3920,6 +3921,20 @@ async function submitRecharge() {
     if(typeof d.txId!=='string'||!d.txId){
       err.textContent='Não foi possível acompanhar a confirmação da recarga.';err.style.display='block';btn.disabled=false;btn.textContent='Recarregar';return
     }
+    if(d.status==='succeeded'||d.requestState==='confirmed'){
+      fetch('/api/auth/me')
+        .then(r=>r.ok ? r.json() : null)
+        .then(u=>{
+          if(u){
+            authState.user=u
+            updateNavAuth()
+            document.getElementById('sh-rech-bal').textContent=(u.balance||0)+' MT'
+            closeRechargeDialog()
+            shShow('recharge-ok')
+          }
+        })
+      return
+    }
     document.getElementById('recharge-selection').style.display='none'
     document.getElementById('recharge-checkout').style.display='block'
     const notice=document.getElementById('recharge-payment-notice')
@@ -3976,6 +3991,8 @@ function listenRecharge(txId, amount) {
       if (isFreeMode) setTimeout(()=>listenRecharge(txId, amount), 700)
       else {
         closeRechargeDialog()
+        const failReasonEl = document.getElementById('recharge-fail-reason')
+        if (failReasonEl && d.error) failReasonEl.textContent = d.error
         shShow('recharge-fail')
       }
     }
@@ -5344,7 +5361,7 @@ async function retryPagarForwarding(eventId,btn){
 const paymentRequiredConfig = configuredPaymentProvider === 'paysuite'
   ? ['PAYSUITE_API_KEY', 'PAYSUITE_WEBHOOK_SECRET']
   : configuredPaymentProvider === 'emedx'
-    ? ['EMEDX_CLIENT_KEY', 'EMEDX_CLIENT_SECRET', 'EMEDX_WEBHOOK_SECRET']
+    ? ['EMEDX_CLIENT_KEY', 'EMEDX_CLIENT_SECRET']
   : configuredPaymentProvider === 'vpay'
     ? ['VPAY_CLIENT_ID', 'VPAY_CLIENT_SECRET']
     : configuredPaymentProvider === 'mozpayment'
