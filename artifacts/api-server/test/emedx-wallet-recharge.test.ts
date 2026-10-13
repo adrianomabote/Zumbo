@@ -165,15 +165,31 @@ test("inicia recargas de saldo apenas com M-Pesa e mantém separado o telefone d
   assert.equal(storefront.status, 200);
   const storefrontHtml = await storefront.text();
   assert.match(storefrontHtml, /recharge-payment-phone/);
+  assert.match(storefrontHtml, /id="recharge-payment-phone"[^>]*maxlength="20"/);
   assert.match(storefrontHtml, /data-custom="true"[^>]*>Outro<\/button>/);
   assert.match(storefrontHtml, /id="recharge-custom-amount" type="number"/);
   assert.doesNotMatch(storefrontHtml, />5,000 MT<\/button>/);
   assert.doesNotMatch(storefrontHtml, /paynice\.online\/c\//);
   assert.doesNotMatch(storefrontHtml, /recharge-checkout-frame/);
 
+  const storefrontScript = [...storefrontHtml.matchAll(/<script>([\s\S]*?)<\/script>/g)]
+    .map((match) => match[1])
+    .find((script) => script.includes("normalizeRechargePaymentPhone"));
+  assert.ok(storefrontScript);
+  const phoneNormalizerSource = storefrontScript.match(
+    /function normalizeRechargePaymentPhone\(value\) \{[\s\S]*?\n\}/,
+  )?.[0];
+  assert.ok(phoneNormalizerSource);
+  const normalizeRechargePaymentPhone = new Function(
+    `${phoneNormalizerSource}; return normalizeRechargePaymentPhone;`,
+  )() as (value: string) => string;
+  assert.equal(normalizeRechargePaymentPhone("+258 84 111 2223"), "841112223");
+  assert.equal(normalizeRechargePaymentPhone("00258 85 111 2223"), "851112223");
+  assert.equal(normalizeRechargePaymentPhone("841112223"), "841112223");
+
   const response = await postJson("/api/recharge/checkout", {
     amount: 20,
-    paymentPhone: "841112223",
+    paymentPhone: "+258 84 111 2223",
   }, userCookie);
   assert.equal(response.status, 201);
   const result = await response.json() as Record<string, unknown>;

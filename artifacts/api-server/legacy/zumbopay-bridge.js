@@ -3527,8 +3527,8 @@ ${allListHtml}
       </div>
       <div class="auth-body" id="recharge-selection">
         <label for="recharge-payment-phone">Número M-Pesa para confirmar</label>
-        <input class="auth-inp" id="recharge-payment-phone" type="tel" inputmode="numeric" maxlength="9" autocomplete="tel-national" placeholder="84xxxxxxx">
-        <div class="profile-edit-hint">Use um número M-Pesa 84 ou 85. O saldo será creditado nesta conta.</div>
+        <input class="auth-inp" id="recharge-payment-phone" type="tel" inputmode="tel" maxlength="20" autocomplete="tel" placeholder="84xxxxxxx ou +258 84 xxx xxxx">
+        <div class="profile-edit-hint">Use um número M-Pesa 84 ou 85 com 9 dígitos. Pode incluir +258 e espaços.</div>
         <div class="rech-quick-title">VALOR RÁPIDO</div>
         <div class="rech-quick-grid" role="group" aria-label="Escolha o valor da recarga">
           <button type="button" class="rech-quick-option" data-amount="20" aria-pressed="false" onclick="selectRechargeAmount(20)">20 MT</button>
@@ -3841,6 +3841,11 @@ function updateCustomRechargeAmount() {
   document.getElementById('rech-btn').disabled = selectedRechargeAmount === null
   document.getElementById('rech-err').style.display='none'
 }
+function normalizeRechargePaymentPhone(value) {
+  const digits = String(value || '').replace(/[^0-9]/g,'')
+  if (digits.startsWith('00258')) return digits.slice(5)
+  return digits.startsWith('258') ? digits.slice(3) : digits
+}
 function openRechargeDialog() {
   selectedRechargeAmount = null
   document.getElementById('recharge-selection').style.display=''
@@ -3867,8 +3872,8 @@ async function submitRecharge() {
   const amount=selectedRechargeAmount
   const err=document.getElementById('rech-err'); err.style.display='none'
   if(!isValidRechargeAmount(amount)){err.textContent='Introduza um valor inteiro entre 20 e 40.000 MT.';err.style.display='block';return}
-  const paymentPhone=String(document.getElementById('recharge-payment-phone').value||'').replace(/\D/g,'')
-  if(!/^(84|85)\d{7}$/.test(paymentPhone)){err.textContent='Introduza um número M-Pesa válido (84 ou 85).';err.style.display='block';return}
+  const paymentPhone=normalizeRechargePaymentPhone(document.getElementById('recharge-payment-phone').value)
+  if(!/^(84|85)\d{7}$/.test(paymentPhone)){err.textContent='Introduza um número M-Pesa válido com 9 dígitos, começando por 84 ou 85. Pode incluir +258.';err.style.display='block';return}
   const btn=document.getElementById('rech-btn'); btn.disabled=true; btn.textContent='A enviar pedido M-Pesa…'
   try {
     const r=await fetch('/api/recharge/checkout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount,paymentPhone})})
