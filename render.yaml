@@ -14,7 +14,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: NET_SERVICOS_PAYMENT_MODE
-        value: free
+        value: live
       - key: NET_SERVICOS_DATA_DIR
         value: /var/data/net-servicos
       - key: DATABASE_URL
@@ -22,7 +22,15 @@ services:
       - key: SITE_URL
         sync: false
       - key: PAYMENT_PROVIDER
-        value: paysuite
+        value: emedx
+      - key: EMEDX_API_BASE_URL
+        value: https://api.payments.emedx.co.mz
+      - key: EMEDX_CLIENT_KEY
+        sync: false
+      - key: EMEDX_CLIENT_SECRET
+        sync: false
+      - key: EMEDX_WEBHOOK_SECRET
+        sync: false
       - key: PAYSUITE_API_BASE_URL
         value: https://paysuite.tech/api/v1
       - key: PAYSUITE_API_KEY

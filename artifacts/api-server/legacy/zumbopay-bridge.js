@@ -34,18 +34,11 @@ const PAYMENT_API_ROUTE    = configuredPaymentProvider === 'paysuite'
       ? 'vpay'
       : configuredPaymentProvider === 'mozpayment'
         ? 'mozpayment'
+        : configuredPaymentProvider === 'emedx'
+          ? 'emedx'
         : 'pagar'
-const PAYMENT_PROVIDERS = new Set(['pagar', 'debitopay', 'paysuite', 'vpay', 'mozpayment'])
-const PAYNICE_RECHARGE_CHECKOUT_URLS = Object.freeze({
-  20: 'https://paynice.online/c/recarga-de-20-qvgle',
-  50: 'https://paynice.online/c/recarga-de-50-biong',
-  100: 'https://paynice.online/c/recarga-de-100-jtv1x',
-  250: 'https://paynice.online/c/recarga-de-250-yrcne',
-  500: 'https://paynice.online/c/recarga-de-500-9b82p',
-  1000: 'https://paynice.online/c/recarga-de-1000-5ip1g',
-  2000: 'https://paynice.online/c/recarga-de-2000-yxn65',
-  5000: 'https://paynice.online/c/recarga-de-5000-muzo1',
-})
+const PAYMENT_PROVIDERS = new Set(['pagar', 'debitopay', 'paysuite', 'vpay', 'mozpayment', 'emedx'])
+const QUICK_RECHARGE_AMOUNTS = [20,50,100,250,500,1000,2000,5000]
 const DATA_DIR             = process.env.NET_SERVICOS_DATA_DIR || '.'
 const ORDERS_FILE          = join(DATA_DIR, 'orders.json')
 const USERS_FILE           = join(DATA_DIR, 'users.json')
@@ -139,7 +132,7 @@ function referencePart(value) {
 
 function pagarReferenceFor(tx) {
   const amount = Math.round(Number(tx.amount) || 0)
-  const prefix = tx.type === 'gateway'
+  const prefix = tx.type === 'gateway' || tx.type === 'recharge'
     ? `recarga-${amount}mt`
     : `megabyte-${referencePart(tx.bundleLabel || `${amount} MT`)}`
   const reference = `${prefix}-${tx.id}`
@@ -149,13 +142,13 @@ function pagarReferenceFor(tx) {
 }
 
 function pagarTitleFor(tx, customerName) {
-  if (tx.type === 'gateway') return `Recarga ${Math.round(Number(tx.amount) || 0)} MT`
+  if (tx.type === 'gateway' || tx.type === 'recharge') return `Recarga ${Math.round(Number(tx.amount) || 0)} MT`
   return String(customerName || `Compra de ${tx.bundleLabel || 'megas'}`).slice(0, 120)
 }
 
 function pagarDescriptionFor(tx, customerName) {
   const mega = tx.megabytes || megaDetailsForAmount(tx.amount).megabytes
-  if (tx.type === 'gateway') {
+  if (tx.type === 'gateway' || tx.type === 'recharge') {
     return `Recarga ${Math.round(Number(tx.amount) || 0)} MT`
   }
   return `Compra de ${mega} MB por ${tx.amount} MT`.slice(0, 240)
@@ -249,23 +242,23 @@ const PUBLIC_INFO_PAGES = {
     ],
   },
   '/pagar-megas-mpesa-emola': {
-    title: 'Recarregar Saldo com M-Pesa ou e-Mola | Megabyte',
-    description: 'Recarregue o saldo da sua conta Megabyte com M-Pesa ou e-Mola e use-o para activar pacotes de megas.',
-    heading: 'Recarregar saldo com M-Pesa ou e-Mola',
-    intro: 'Adicione saldo à sua conta Megabyte por M-Pesa ou e-Mola. Depois, use o saldo para comprar pacotes de internet Vodacom.',
+    title: 'Recarregar Saldo com M-Pesa via eMedx | Megabyte',
+    description: 'Recarregue o saldo da sua conta Megabyte com M-Pesa via eMedx e use-o para activar pacotes de megas.',
+    heading: 'Recarregar saldo com M-Pesa',
+    intro: 'Adicione saldo à sua conta Megabyte por M-Pesa através do eMedx. Depois, use o saldo para comprar pacotes de internet Vodacom.',
     sections: [
       {
         heading: 'Como recarregar e comprar pacotes',
         steps: [
           'Entre na sua conta Megabyte e escolha a opção para recarregar saldo.',
-          'Confirme a recarga com M-Pesa ou e-Mola no telemóvel associado à conta.',
+          'Confirme o pedido no número M-Pesa 84 ou 85 associado à recarga.',
           'Escolha um pacote e pague com o saldo disponível na sua conta.',
         ],
       },
       {
         heading: 'Pagamento de pacotes',
         paragraphs: [
-          'M-Pesa e e-Mola servem para adicionar saldo à conta; não são métodos de pagamento directo de pacotes.',
+          'M-Pesa via eMedx serve para adicionar saldo à conta; não é um método de pagamento directo de pacotes.',
           'Ao comprar um pacote, o valor é descontado do saldo da conta Megabyte.',
         ],
       },
@@ -289,7 +282,7 @@ const PUBLIC_INFO_PAGES = {
         steps: [
           'Compare o preço, a quantidade de megas e o período de validade.',
           'Escolha o número Vodacom que deve receber o pacote.',
-          'Escolha o pacote e pague com o saldo da sua conta. Se precisar, recarregue o saldo com M-Pesa ou e-Mola.',
+          'Escolha o pacote e pague com o saldo da sua conta. Se precisar, recarregue o saldo com M-Pesa via eMedx.',
         ],
       },
     ],
@@ -684,6 +677,7 @@ async function saveMaintenance() {
 function trackOrder(tx, extra = {}) {
   const rec = {
     txId: tx.id, type: tx.type || 'bundle', phone: tx.phone,
+    payerPhone: tx.paymentPhone || tx.phone,
     beneficiaryPhone: tx.beneficiaryPhone || null,
     bundleId: tx.bundleId || null, bundleLabel: tx.bundleLabel || null,
     gatewayName: tx.gatewayName || null, megabytes: tx.megabytes || null,
@@ -1034,16 +1028,21 @@ function gatewayDocsPage() {
   const baseUrl = escapeHtml(SITE_URL)
   const isVpay = PAYMENT_API_ROUTE === 'vpay'
   const isMozPayment = PAYMENT_API_ROUTE === 'mozpayment'
+  const isEmedx = PAYMENT_API_ROUTE === 'emedx'
   const providerDescription = isVpay
     ? 'Documentação da API Gateway Megabyte para iniciar pagamentos através do checkout hospedado Vpay.'
     : isMozPayment
       ? 'Documentação da API Gateway Megabyte para criar recargas C2B MozPayment, confirmar o pagamento pela resposta da API e acompanhar a activação automática.'
-      : 'Documentação da API Gateway Megabyte para receber pagamentos M-Pesa e e-Mola em projectos externos.'
+      : isEmedx
+        ? 'Documentação da API Gateway Megabyte para receber pagamentos M-Pesa C2B através do eMedx em projectos externos.'
+        : 'Documentação da API Gateway Megabyte para receber pagamentos M-Pesa e e-Mola em projectos externos.'
   const paymentFlowDescription = isVpay
     ? 'Cria uma encomenda na Vpay. Abra o checkoutUrl devolvido para o cliente concluir o pagamento.'
     : isMozPayment
       ? 'Cria uma recarga C2B MozPayment no valor exacto indicado. O método é detectado pelo prefixo do telefone; após confirmação, o pacote é enviado para esse número.'
-      : 'Cria uma cobrança e inicia o pedido no M-Pesa ou e-Mola. O método é detectado pelo prefixo do número.'
+      : isEmedx
+        ? 'Cria uma cobrança C2B e envia um pedido de confirmação M-Pesa para um número 84 ou 85. O estado é confirmado pelo eMedx antes da entrega.'
+        : 'Cria uma cobrança e inicia o pedido no M-Pesa ou e-Mola. O método é detectado pelo prefixo do número.'
   const checkoutResponseField = isVpay
     ? '  "checkoutUrl": "https://checkout.vpay.co.mz/exemplo-order-id",\n'
     : ''
@@ -1051,6 +1050,8 @@ function gatewayDocsPage() {
     ? '<div class="callout"><strong>Checkout Vpay:</strong> redireccione o cliente para <code class="inline">checkoutUrl</code>. Esse link também é devolvido pela consulta do estado. Os métodos apresentados dentro do checkout são controlados pela Vpay; esta API não os filtra.</div>'
     : isMozPayment
       ? '<div class="callout"><strong>MozPayment C2B:</strong> o pagamento é confirmado pela resposta imediata da API: <code class="inline">cod: 200</code>, <code class="inline">status: "success"</code> e <code class="inline">transacao</code>. M-Pesa e e-Mola não enviam callback/webhook neste fluxo. A cobrança aparece no painel como <code class="inline">Recarga [valor] MT</code>, pelo montante exacto; após confirmação, a Megabyte coloca a entrega USSD em fila. O <code class="inline">callback_url</code> opcional desta API é apenas uma notificação do Gateway Megabyte para o seu projecto.</div>'
+      : isEmedx
+        ? '<div class="callout"><strong>eMedx C2B:</strong> suporta apenas M-Pesa 84/85. O webhook eMedx é validado com HMAC-SHA256 no corpo bruto; a referência única evita cobranças duplicadas. Não repita o pagamento com uma nova referência enquanto o estado estiver pendente.</div>'
       : ''
   return `<!doctype html><html lang="pt-MZ"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -1065,12 +1066,12 @@ a{color:#0f766e}.wrap{width:min(1120px,calc(100% - 36px));margin:auto}.hero{back
 <header class="hero"><div class="wrap">
   <div class="brand"><span class="brand-mark">◎</span><span>megabyte.live</span></div>
   <div class="eyebrow">Documentação para programadores</div>
-  <div class="hero-grid"><div><h1>Receba pagamentos no seu projecto.</h1><p>Use uma única API para ${isVpay ? 'criar encomendas no checkout hospedado Vpay, acompanhar o resultado e confirmar callbacks assinados.' : isMozPayment ? 'criar recargas MozPayment, confirmar o pagamento pela resposta C2B e acompanhar a activação do pacote.' : 'iniciar cobranças M-Pesa e e-Mola, acompanhar o resultado e confirmar callbacks assinados.'}</p></div><div class="base"><small>Base URL</small><code>${baseUrl}</code></div></div>
+  <div class="hero-grid"><div><h1>Receba pagamentos no seu projecto.</h1><p>Use uma única API para ${isVpay ? 'criar encomendas no checkout hospedado Vpay, acompanhar o resultado e confirmar callbacks assinados.' : isMozPayment ? 'criar recargas MozPayment, confirmar o pagamento pela resposta C2B e acompanhar a activação do pacote.' : isEmedx ? 'iniciar cobranças C2B M-Pesa pelo eMedx, acompanhar o resultado e confirmar callbacks assinados.' : 'iniciar cobranças M-Pesa e e-Mola, acompanhar o resultado e confirmar callbacks assinados.'}</p></div><div class="base"><small>Base URL</small><code>${baseUrl}</code></div></div>
 </div></header>
 <main class="wrap layout">
   <nav class="toc" aria-label="Nesta página"><strong>Nesta página</strong><a href="#inicio">Visão geral</a><a href="#autenticacao">Autenticação</a><a href="#criar">Criar pagamento</a><a href="#estado">Consultar estado</a><a href="#callback">Callback</a><a href="#erros">Erros</a></nav>
   <div>
-    <section class="section" id="inicio"><h2>Começar em 3 passos</h2><p class="intro">Crie uma chave no painel Gateway, guarde-a no seu servidor e use o fluxo abaixo. O Gateway regista cada cobrança como uma compra de megas na rede móvel.</p><div class="grid2"><div class="card"><h3>1. Obter credenciais</h3><p>No painel admin, abra <strong>Gateway → Chaves de API</strong>. Copie a chave e o segredo para as variáveis privadas do seu servidor.</p></div><div class="card"><h3>2. Iniciar cobrança</h3><p>${isVpay ? 'Envie o número do cliente e o valor em MT. Abra o checkout hospedado indicado em checkoutUrl.' : isMozPayment ? 'Envie o telefone que vai pagar e receber os megas, e o valor inteiro da recarga em MT (de 10 a 40000 MT).' : 'Envie o número do cliente e o valor em MT para receber o pedido de PIN no telemóvel.'}</p></div><div class="card"><h3>3. Confirmar resultado</h3><p>Use o callback assinado e confirme o estado com o endpoint de consulta antes de entregar o seu produto. A entrega de megas da Megabyte é iniciada automaticamente após confirmação.</p></div><div class="card"><h3>Ambiente</h3><p>Esta documentação aponta para produção. Use sempre HTTPS e nunca exponha credenciais no browser.</p></div></div><div class="callout"><strong>Importante:</strong> a chave <code class="inline">gw_live_...</code> autentica os pedidos. O segredo <code class="inline">gwsec_...</code> serve apenas para verificar callbacks no seu backend.</div></section>
+    <section class="section" id="inicio"><h2>Começar em 3 passos</h2><p class="intro">Crie uma chave no painel Gateway, guarde-a no seu servidor e use o fluxo abaixo. O Gateway regista cada cobrança como uma compra de megas na rede móvel.</p><div class="grid2"><div class="card"><h3>1. Obter credenciais</h3><p>No painel admin, abra <strong>Gateway → Chaves de API</strong>. Copie a chave e o segredo para as variáveis privadas do seu servidor.</p></div><div class="card"><h3>2. Iniciar cobrança</h3><p>${isVpay ? 'Envie o número do cliente e o valor em MT. Abra o checkout hospedado indicado em checkoutUrl.' : isMozPayment ? 'Envie o telefone que vai pagar e receber os megas, e o valor inteiro da recarga em MT (de 10 a 40000 MT).' : isEmedx ? 'Envie um número M-Pesa 84/85 e o valor inteiro em MT para receber o pedido de confirmação no telemóvel.' : 'Envie o número do cliente e o valor em MT para receber o pedido de PIN no telemóvel.'}</p></div><div class="card"><h3>3. Confirmar resultado</h3><p>Use o callback assinado e confirme o estado com o endpoint de consulta antes de entregar o seu produto. A entrega de megas da Megabyte é iniciada automaticamente após confirmação.</p></div><div class="card"><h3>Ambiente</h3><p>Esta documentação aponta para produção. Use sempre HTTPS e nunca exponha credenciais no browser.</p></div></div><div class="callout"><strong>Importante:</strong> a chave <code class="inline">gw_live_...</code> autentica os pedidos. O segredo <code class="inline">gwsec_...</code> serve apenas para verificar callbacks no seu backend.</div></section>
     <section class="section" id="autenticacao"><h2>Autenticação</h2><p>Envie a chave em todos os pedidos de pagamento e de consulta:</p><pre>X-API-Key: gw_live_SUA_CHAVE</pre><p>Guarde ambos os valores em variáveis de ambiente. Não os coloque em aplicações mobile, JavaScript do frontend, páginas HTML ou repositórios públicos.</p></section>
     <section class="section" id="criar"><h2>Criar um pagamento</h2><div class="endpoint"><div class="endpoint-head"><span class="method">POST</span><code>/gateway/api/pay</code></div><div class="endpoint-body"><p>${paymentFlowDescription}${isVpay ? ' O campo method indica a carteira inferida pelo prefixo do telefone, mas não garante o método efectivamente escolhido no checkout.' : isMozPayment ? ' O telefone recebe o pedido de confirmação PIN. Não repita a cobrança enquanto o estado estiver pending.' : ''}</p><h3>Pedido</h3><pre>curl -X POST ${baseUrl}/gateway/api/pay \\
   -H "Content-Type: application/json" \\
@@ -1081,14 +1082,14 @@ a{color:#0f766e}.wrap{width:min(1120px,calc(100% - 36px));margin:auto}.hero{back
     "reference": "pedido-123",
     "description": "Compra na minha loja",
     "callback_url": "https://seusite.com/api/gateway/callback"
-  }'</pre><p><code class="inline">phone</code> e <code class="inline">amount</code> são obrigatórios.${isMozPayment ? ' O valor deve ser inteiro entre 10 e 40000 MT e é enviado sem arredondamento.' : ''} <code class="inline">reference</code> tem no máximo 64 caracteres. <code class="inline">description</code> tem no máximo 120. O <code class="inline">callback_url</code> é opcional, mas deve ser HTTPS público.</p><h3>Resposta <span class="pill">202 Accepted</span></h3><pre>{
+  }'</pre><p><code class="inline">phone</code> e <code class="inline">amount</code> são obrigatórios.${isMozPayment ? ' O valor deve ser inteiro entre 10 e 40000 MT e é enviado sem arredondamento.' : isEmedx ? ' O eMedx aceita apenas números M-Pesa 84/85 e valores inteiros a partir de 20 MT.' : ''} <code class="inline">reference</code> tem no máximo 64 caracteres. <code class="inline">description</code> tem no máximo 120. O <code class="inline">callback_url</code> é opcional, mas deve ser HTTPS público.</p><h3>Resposta <span class="pill">202 Accepted</span></h3><pre>{
   "ok": true,
   "txId": "a1b2c3d4e5f6",
   "status": "pending",
   "method": "mpesa",
   "megabytes": 4096,
 ${checkoutResponseField}  "statusUrl": "${baseUrl}/gateway/api/status/a1b2c3d4e5f6"
-}</pre></div></div><div class="callout"><strong>Conversão em megas:</strong> valores iguais aos pacotes normais usam a quantidade exacta do catálogo. Outros valores usam <code class="inline">amount × 40 MB</code>. ${isMozPayment ? 'O valor cobrado pela MozPayment é exactamente o <code class="inline">amount</code> enviado.' : ''} Por exemplo: 25 MT = 1024 MB; 100 MT = 4096 MB.</div></section>
+ }</pre></div></div><div class="callout"><strong>Conversão em megas:</strong> valores iguais aos pacotes normais usam a quantidade exacta do catálogo. Outros valores usam <code class="inline">amount × 40 MB</code>. ${isMozPayment ? 'O valor cobrado pela MozPayment é exactamente o <code class="inline">amount</code> enviado.' : isEmedx ? 'O valor enviado ao eMedx é exactamente o montante indicado em MT.' : ''} Por exemplo: 25 MT = 1024 MB; 100 MT = 4096 MB.</div></section>
     <section class="section" id="estado"><h2>Consultar o estado</h2><div class="endpoint"><div class="endpoint-head"><span class="method get">GET</span><code>/gateway/api/status/&lt;txId&gt;</code></div><div class="endpoint-body"><pre>curl ${baseUrl}/gateway/api/status/a1b2c3d4e5f6 \\
   -H "X-API-Key: gw_live_SUA_CHAVE"</pre><h3>Resposta</h3><pre>{
   "ok": true,
@@ -1104,7 +1105,7 @@ ${checkoutResponseField}  "reference": "pedido-123",
   "ts": "2026-09-21T12:00:00.000Z"
  }</pre><p>Consulte a cada 3–5 segundos enquanto o estado for <code class="inline">pending</code>. Pare quando chegar a <code class="inline">succeeded</code> ou <code class="inline">failed</code>. Quando disponível, <code class="inline">deliveryStatus</code> indica o estado da entrega USSD dos megas.</p></div></div></section>
 ${checkoutCallout}
-    <section class="section" id="callback"><h2>Callback assinado do Gateway</h2><p>Se enviar <code class="inline">callback_url</code>, o Gateway Megabyte fará um POST ao seu projecto quando o pagamento terminar. Este callback é enviado pelo Gateway; não é um webhook da MozPayment.</p><pre>Content-Type: application/json
+    <section class="section" id="callback"><h2>Callback assinado do Gateway</h2><p>Se enviar <code class="inline">callback_url</code>, o Gateway Megabyte fará um POST ao seu projecto quando o pagamento terminar. Este callback é enviado pelo Gateway; não é um webhook ${isMozPayment ? 'da MozPayment' : isEmedx ? 'do eMedx' : 'do provedor de pagamento'}.</p><pre>Content-Type: application/json
 X-Gateway-Signature: assinatura_hmac_sha256</pre><pre>{
   "event": "payment.succeeded",
   "txId": "a1b2c3d4e5f6",
@@ -1146,7 +1147,7 @@ const response = await fetch(baseUrl + "/gateway/api/pay", {
  const payment = await response.json();
  console.log(payment.txId, payment.status, payment.statusUrl);</pre></section>
   </div>
-</main><footer class="footer"><div class="wrap">Gateway Megabyte · ${isVpay ? 'Checkout Vpay' : isMozPayment ? 'MozPayment C2B' : 'M-Pesa e e-Mola'} · <a href="${baseUrl}/megas">Voltar à loja</a></div></footer>
+</main><footer class="footer"><div class="wrap">Gateway Megabyte · ${isVpay ? 'Checkout Vpay' : isMozPayment ? 'MozPayment C2B' : isEmedx ? 'eMedx C2B M-Pesa' : 'M-Pesa e e-Mola'} · <a href="${baseUrl}/megas">Voltar à loja</a></div></footer>
 </body></html>`
 }
 function redirect(res, url, headers = {}) {
@@ -1236,7 +1237,7 @@ async function initiateCharge(tx, customerName) {
         description: tx.pagarDescription,
         amountMzn: tx.amount,
         method: tx.method === 'mpesa' ? 'MPESA' : 'EMOLA',
-        payerPhone: tx.phone,
+        payerPhone: tx.paymentPhone || tx.phone,
           idempotencyKey: `${PAYMENT_API_ROUTE}-${tx.id}`,
       }),
     })
@@ -1665,10 +1666,13 @@ self.addEventListener('fetch',e=>{
     const isVpay = configuredPaymentProvider === 'vpay'
     const isPaysuite = configuredPaymentProvider === 'paysuite'
     const isMozPayment = configuredPaymentProvider === 'mozpayment'
+    const isEmedx = configuredPaymentProvider === 'emedx'
     return json(res, {
-      registered: isVpay || isMozPayment ? false : Boolean(isPaysuite ? process.env.PAYSUITE_WEBHOOK_SECRET : process.env.PAGAR_WEBHOOK_SECRET),
+      registered: isVpay || isMozPayment ? false : Boolean(isEmedx ? process.env.EMEDX_WEBHOOK_SECRET : isPaysuite ? process.env.PAYSUITE_WEBHOOK_SECRET : process.env.PAGAR_WEBHOOK_SECRET),
       url: isVpay || isMozPayment
         ? null
+        : isEmedx
+          ? `${SITE_URL}/api/emedx/webhook`
         : isPaysuite
         ? (process.env.PAYSUITE_WEBHOOK_URL || 'https://megabyte.live/api/paysuite/webhook')
         : (process.env.PAGAR_WEBHOOK_URL || null),
@@ -1676,6 +1680,8 @@ self.addEventListener('fetch',e=>{
         ? Boolean(process.env.VPAY_CLIENT_ID && process.env.VPAY_CLIENT_SECRET)
         : isMozPayment
           ? Boolean(process.env.MOZPAYMENT_WALLET_ID)
+          : isEmedx
+            ? Boolean(process.env.EMEDX_CLIENT_KEY && process.env.EMEDX_CLIENT_SECRET)
           : Boolean(isPaysuite ? process.env.PAYSUITE_API_KEY : process.env.PAGAR_API_KEY),
     })
   }
@@ -1724,7 +1730,7 @@ self.addEventListener('fetch',e=>{
     return json(res, {
       ok: true,
       paymentMode: isFreeMode ? 'free' : isTestMode ? 'test' : 'live',
-      minAmountMzn: 10,
+      minAmountMzn: PAYMENT_API_ROUTE === 'mozpayment' ? 10 : 20,
       maxAmountMzn: 40000,
     })
   }
@@ -1814,31 +1820,34 @@ self.addEventListener('fetch',e=>{
     if (!user) return json(res, { error:'Faça login para recarregar.' }, 401)
     let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
     const amount = Number(body.amount)
-    const checkoutUrl = PAYNICE_RECHARGE_CHECKOUT_URLS[amount]
-    if (!Number.isInteger(amount) || !checkoutUrl)
+    if (!QUICK_RECHARGE_AMOUNTS.includes(amount))
       return json(res, { error:'Escolha um dos valores disponíveis para a recarga.' }, 400)
-
-    const txId = randomBytes(12).toString('hex')
-    const ts = new Date().toISOString()
-    orders.unshift({
-      txId,
-      type:'paynice-recharge',
-      phone:user.phone,
-      customerName:user.name,
-      beneficiaryPhone:null,
+    const paymentPhone = normalizeLocalPhone(String(body.paymentPhone || user.phone || ''))
+    if (!/^(84|85)\d{7}$/.test(paymentPhone))
+      return json(res, { error:'Introduza um número M-Pesa válido (84 ou 85) para confirmar a recarga.' }, 400)
+    const txId = randomBytes(6).toString('hex')
+    const tx = {
+      id:txId,
+      type:'recharge',
       bundleId:null,
       bundleLabel:`Recarga ${amount} MT`,
+      phone:user.phone,
+      paymentPhone,
+      beneficiaryPhone:null,
       amount,
-      method:'paynice',
+      method:'mpesa',
       status:'pending',
+      ref:null,
+      error:null,
       sourceId:randomUUID(),
-      checkoutUrl,
-      ts,
+      ts:new Date().toISOString(),
       userId:user.id,
-      rechargeCredited:false,
-    })
-    await saveOrders()
-    return json(res, { ok:true, checkoutUrl }, 201)
+    }
+    transactions.set(txId, tx)
+    trackOrder(tx)
+    json(res, { ok:true, txId, status:'pending', method:'mpesa', paymentPhone }, 201)
+    initiateCharge(tx, `Recarga Megabyte ${amount} MT`)
+    return
   }
 
   if (method === 'POST' && path === '/api/recharge') {
@@ -1846,15 +1855,16 @@ self.addEventListener('fetch',e=>{
     if (!user) return json(res, { error:'Faça login para recarregar.' }, 401)
     let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
     const amount = Number(body.amount)
-    if (!Number.isInteger(amount) || amount < 10 || amount > 40000)
-      return json(res, { error:'O valor da recarga deve ser um número inteiro entre 10 e 40000 MT.' }, 400)
-    const msisdn = normalizeMsisdn(user.phone), meth = detectMethod(msisdn)
-    if (!meth) return json(res, { error:'Número de conta inválido para STK Push.' }, 400)
+    if (!Number.isInteger(amount) || amount < 20 || amount > 40000)
+      return json(res, { error:'O valor da recarga deve ser um número inteiro entre 20 e 40000 MT.' }, 400)
+    const paymentPhone = normalizeLocalPhone(String(body.paymentPhone || user.phone || ''))
+    if (!/^(84|85)\d{7}$/.test(paymentPhone))
+      return json(res, { error:'Introduza um número M-Pesa válido (84 ou 85) para confirmar a recarga.' }, 400)
     const txId = randomBytes(6).toString('hex')
-    const tx = { id:txId, type:'recharge', bundleId:null, bundleLabel:`Recarga ${amount} MT`, phone:user.phone, beneficiaryPhone:null, msisdn, amount, method:meth, status:'pending', ref:null, error:null, sourceId:randomUUID(), ts:new Date().toISOString(), userId:user.id }
+    const tx = { id:txId, type:'recharge', bundleId:null, bundleLabel:`Recarga ${amount} MT`, phone:user.phone, paymentPhone, beneficiaryPhone:null, msisdn:normalizeMsisdn(paymentPhone), amount, method:'mpesa', status:'pending', ref:null, error:null, sourceId:randomUUID(), ts:new Date().toISOString(), userId:user.id }
     transactions.set(txId, tx)
     trackOrder(tx)
-    json(res, { txId, status:'pending', method:meth })
+    json(res, { txId, status:'pending', method:'mpesa', paymentPhone })
     initiateCharge(tx, `Recarga Megabyte ${amount} MT`)
     return
   }
@@ -1998,10 +2008,13 @@ NOTAS
     if (!gk) return json(res, { error:'Chave de API inválida ou inactiva. Use o header X-API-Key.' }, 401)
     const amountNumber = Number(body.amount)
     const amount = Math.round(amountNumber)
-    if (!Number.isInteger(amountNumber) || amount < 10 || amount > 40000)
-      return json(res, { error:'O valor (amount) deve ser um número inteiro entre 10 e 40000 MT.' }, 400)
+    const minimumGatewayAmount = PAYMENT_API_ROUTE === 'mozpayment' ? 10 : 20
+    if (!Number.isInteger(amountNumber) || amount < minimumGatewayAmount || amount > 40000)
+      return json(res, { error:`O valor (amount) deve ser um número inteiro entre ${minimumGatewayAmount} e 40000 MT.` }, 400)
     const msisdn = normalizeMsisdn(body.phone), meth = detectMethod(msisdn)
     if (!meth) return json(res, { error:'Número inválido. Use M-Pesa 84/85 ou e-Mola 86/87.' }, 400)
+    if (PAYMENT_API_ROUTE === 'emedx' && meth !== 'mpesa')
+      return json(res, { error:'O eMedx aceita apenas números M-Pesa 84/85.' }, 400)
     let callbackUrl = null
     if (body.callback_url) {
       callbackUrl = await gwValidateCallbackUrl(body.callback_url)
@@ -3508,6 +3521,9 @@ ${allListHtml}
         <div class="auth-card-title">Recarregar Saldo</div>
       </div>
       <div class="auth-body" id="recharge-selection">
+        <label for="recharge-payment-phone">Número M-Pesa para confirmar</label>
+        <input class="auth-inp" id="recharge-payment-phone" type="tel" inputmode="numeric" maxlength="9" autocomplete="tel-national" placeholder="84xxxxxxx">
+        <div class="profile-edit-hint">Use um número M-Pesa 84 ou 85. O saldo será creditado nesta conta.</div>
         <div class="rech-quick-title">VALOR RÁPIDO</div>
         <div class="rech-quick-grid" role="group" aria-label="Escolha o valor da recarga">
           <button type="button" class="rech-quick-option" data-amount="20" aria-pressed="false" onclick="selectRechargeAmount(20)">20 MT</button>
@@ -3523,15 +3539,7 @@ ${allListHtml}
         <button class="auth-btn rech-deposit-btn" id="rech-btn" onclick="submitRecharge()" disabled>Recarregar</button>
       </div>
       <div id="recharge-checkout" style="display:none">
-        <div class="recharge-payment-notice" role="status" aria-live="polite">Após concluir o pagamento, o saldo da sua conta será actualizado em até 5 minutos.</div>
-        <iframe
-          id="recharge-checkout-frame"
-          class="recharge-checkout-frame"
-          title="Checkout de recarga"
-          src="about:blank"
-          referrerpolicy="strict-origin-when-cross-origin"
-          allow="payment; clipboard-write"
-        ></iframe>
+        <div class="recharge-payment-notice" id="recharge-payment-notice" role="status" aria-live="polite">Confirme o pedido no telemóvel M-Pesa. O saldo será actualizado após a confirmação.</div>
       </div>
     </div>
   </div>
@@ -3803,7 +3811,9 @@ function openRechargeDialog() {
   selectedRechargeAmount = null
   document.getElementById('recharge-selection').style.display=''
   document.getElementById('recharge-checkout').style.display='none'
-  document.getElementById('recharge-checkout-frame').src='about:blank'
+  const rawPhone=String(authState.user?.phone||'').replace(/\D/g,'')
+  const localPhone=rawPhone.startsWith('258')?rawPhone.slice(3):rawPhone
+  document.getElementById('recharge-payment-phone').value=/^(84|85)\d{7}$/.test(localPhone)?localPhone:''
   document.querySelectorAll('.rech-quick-option').forEach(option => {
     option.classList.remove('is-selected')
     option.setAttribute('aria-pressed','false')
@@ -3815,24 +3825,26 @@ function openRechargeDialog() {
 }
 function closeRechargeDialog() {
   document.getElementById('recharge-card').classList.remove('open')
-  document.getElementById('recharge-checkout-frame').src='about:blank'
   setTimeout(()=>{document.getElementById('recharge-modal').style.display='none'},250)
 }
 async function submitRecharge() {
   const amount=selectedRechargeAmount
   const err=document.getElementById('rech-err'); err.style.display='none'
   if(!QUICK_RECHARGE_AMOUNTS.includes(amount)){err.textContent='Escolha um valor para a recarga.';err.style.display='block';return}
-  const btn=document.getElementById('rech-btn'); btn.disabled=true; btn.textContent='A abrir checkout…'
+  const paymentPhone=String(document.getElementById('recharge-payment-phone').value||'').replace(/\D/g,'')
+  if(!/^(84|85)\d{7}$/.test(paymentPhone)){err.textContent='Introduza um número M-Pesa válido (84 ou 85).';err.style.display='block';return}
+  const btn=document.getElementById('rech-btn'); btn.disabled=true; btn.textContent='A enviar pedido M-Pesa…'
   try {
-    const r=await fetch('/api/recharge/checkout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount})})
+    const r=await fetch('/api/recharge/checkout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount,paymentPhone})})
     const d=await r.json()
-    if(!r.ok){err.textContent=d.error||'Não foi possível abrir o checkout.';err.style.display='block';btn.disabled=false;btn.textContent='Recarregar';return}
-    if(typeof d.checkoutUrl!=='string'||!d.checkoutUrl.startsWith('https://paynice.online/c/')){
-      err.textContent='Checkout de recarga indisponível.';err.style.display='block';btn.disabled=false;btn.textContent='Recarregar';return
+    if(!r.ok){err.textContent=d.error||'Não foi possível iniciar a recarga.';err.style.display='block';btn.disabled=false;btn.textContent='Recarregar';return}
+    if(typeof d.txId!=='string'||!d.txId){
+      err.textContent='Não foi possível acompanhar a confirmação da recarga.';err.style.display='block';btn.disabled=false;btn.textContent='Recarregar';return
     }
-    document.getElementById('recharge-checkout-frame').src=d.checkoutUrl
     document.getElementById('recharge-selection').style.display='none'
     document.getElementById('recharge-checkout').style.display='block'
+    document.getElementById('recharge-payment-notice').textContent=`Pedido enviado para ${d.paymentPhone||paymentPhone}. Confirme no M-Pesa; o saldo será creditado nesta conta após a confirmação.`
+    listenRecharge(d.txId,amount)
   } catch{err.textContent='Erro de ligação.';err.style.display='block';btn.disabled=false;btn.textContent='Recarregar'}
 }
  function completeFreeRecharge(amount, attempt) {
@@ -3860,6 +3872,7 @@ function listenRecharge(txId, amount) {
           authState.user=u
           updateNavAuth()
           document.getElementById('sh-rech-bal').textContent=(u.balance||0)+' MT'
+          closeRechargeDialog()
           shShow('recharge-ok')
         })
         .catch(()=>{
@@ -3871,7 +3884,10 @@ function listenRecharge(txId, amount) {
     if(d.status==='failed'){
       es.close()
       if (isFreeMode) setTimeout(()=>listenRecharge(txId, amount), 700)
-      else shShow('recharge-fail')
+      else {
+        closeRechargeDialog()
+        shShow('recharge-fail')
+      }
     }
   }
   es.onerror=()=>{es.close();setTimeout(()=>listenRecharge(txId,amount),3000)}
@@ -4271,6 +4287,8 @@ const ADMIN_HISTORY_PAGE_SIZE = 50
 function adminDashboard(filter = 'all', requestedPage = 1, gatewayMode = false) {
   const gatewayPaymentCopy = PAYMENT_API_ROUTE === 'vpay'
     ? 'Crie chaves para outros sites iniciarem pagamentos pelo checkout hospedado Vpay. A resposta inclui checkoutUrl; os métodos apresentados no checkout são controlados pela Vpay.'
+    : PAYMENT_API_ROUTE === 'emedx'
+      ? 'Crie chaves para outros sites iniciarem cobranças C2B M-Pesa 84/85 pelo eMedx.'
     : 'Crie chaves para outros sites iniciarem pagamentos M-Pesa ou e-Mola através deste gateway.'
   const megabyteTransactions = orders.filter(o => o.type !== 'gateway')
   const gatewayTransactions = orders.filter(o => o.type === 'gateway')

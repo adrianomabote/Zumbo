@@ -16,7 +16,7 @@ const knownPaymentStates = new Set([
 const forwardableEventTypes = new Set(["payment.succeeded", "payment.failed"]);
 const forwardingStatuses = new Set(["pending", "forwarding", "failed", "delivered"]);
 
-type PaymentProvider = "pagar" | "debitopay" | "paysuite" | "vpay" | "mozpayment";
+type PaymentProvider = "pagar" | "debitopay" | "paysuite" | "vpay" | "mozpayment" | "emedx";
 
 let vpayTokenCache: { key: string; token: string; expiresAt: number } | null = null;
 let vpayTokenRequest: { key: string; promise: Promise<string> } | null = null;
@@ -25,6 +25,7 @@ function activeProvider(): PaymentProvider {
   const configuredProvider = process.env.PAYMENT_PROVIDER?.trim().toLowerCase() || "pagar";
   if (configuredProvider === "vpay") return "vpay";
   if (configuredProvider === "mozpayment") return "mozpayment";
+  if (configuredProvider === "emedx") return "emedx";
   if (configuredProvider === "pagar" || configuredProvider === "debitopay" || configuredProvider === "paysuite") {
     return configuredProvider;
   }
@@ -34,6 +35,7 @@ function activeProvider(): PaymentProvider {
 function providerName(provider: PaymentProvider = activeProvider()) {
   if (provider === "vpay") return "Vpay";
   if (provider === "mozpayment") return "MozPayment";
+  if (provider === "emedx") return "eMedx";
   if (provider === "paysuite") return "Paysuite";
   return provider === "debitopay" ? "Debito Pay" : "Pagar";
 }
@@ -43,6 +45,13 @@ function normalizeDebitoPhone(phone: string) {
   return digits.startsWith("258") ? `+${digits}` : `+258${digits}`;
 }
 
+function emedxLocalPhone(phone: unknown) {
+  if (typeof phone !== "string") return undefined;
+  const digits = phone.replace(/\D/g, "");
+  const local = digits.startsWith("258") ? digits.slice(3) : digits;
+  return /^(84|85)\d{7}$/.test(local) ? local : undefined;
+}
+
 function normalizePaysuiteStatus(status: string | undefined) {
   if (!status) return undefined;
   if (["SUCCESS", "SUCCEEDED", "COMPLETED", "PAID", "CONFIRMED"].includes(status)) return "PAID";
@@ -50,6 +59,14 @@ function normalizePaysuiteStatus(status: string | undefined) {
     return status === "REFUNDED" ? "REFUNDED" : "FAILED";
   }
   if (["PENDING", "PROCESSING", "AUTHORIZED", "AWAITING_CUSTOMER"].includes(status)) return "PENDING";
+  return undefined;
+}
+
+function normalizeEmedxStatus(status: string | undefined) {
+  if (!status) return undefined;
+  if (["COMPLETED", "SUCCESS", "SUCCEEDED", "PAID", "CONFIRMED"].includes(status)) return "PAID";
+  if (["FAILED", "DECLINED", "EXPIRED", "CANCELLED", "CANCELED", "REJECTED"].includes(status)) return "FAILED";
+  if (["PENDING", "PROCESSING", "INITIATED", "IN_PROGRESS", "AWAITING_CUSTOMER"].includes(status)) return "PENDING";
   return undefined;
 }
 
@@ -180,21 +197,22 @@ export function vpayOperationAmountMatches(operation: Record<string, unknown>, l
 }
 
 function providerOperationId(operation: Record<string, unknown>) {
-  for (const key of ["id", "payment_id", "paymentId", "transaction_id", "transactionId"]) {
+  for (const key of ["id", "payment_id", "paymentId", "transaction_id", "transactionId", "output_TransactionID"]) {
     if (typeof operation[key] === "string" && operation[key]) return operation[key] as string;
   }
   return undefined;
 }
 
 function providerReference(operation: Record<string, unknown>) {
-  for (const key of ["reference", "order_reference", "orderReference", "merchant_reference"]) {
+  for (const key of ["reference", "order_reference", "orderReference", "merchant_reference", "thirdPartyReference", "output_ThirdPartyReference"]) {
     if (typeof operation[key] === "string" && operation[key]) return operation[key] as string;
   }
   return undefined;
 }
 
 function providerStatus(operation: Record<string, unknown>) {
-  const raw = operation.status ?? operation.payment_status ?? operation.paymentStatus ?? operation.order_status;
+  const raw = operation.status ?? operation.payment_status ?? operation.paymentStatus ?? operation.order_status ??
+    operation.output_ResponseTransactionStatus;
   return typeof raw === "string" ? raw.trim().toUpperCase() : undefined;
 }
 
@@ -207,8 +225,11 @@ function normalizeDebitoStatus(status: string | undefined) {
 }
 
 function providerAmount(operation: Record<string, unknown>) {
-  for (const key of ["amountMzn", "amount", "value"]) {
+  for (const key of ["amountMzn", "amount", "value", "output_Amount"]) {
     if (typeof operation[key] === "number" && Number.isFinite(operation[key])) return operation[key] as number;
+    if (typeof operation[key] === "string" && operation[key].trim() && Number.isFinite(Number(operation[key]))) {
+      return Number(operation[key]);
+    }
   }
   return undefined;
 }
@@ -247,6 +268,20 @@ export interface PagarPaymentInput {
 }
 
 function config(provider: PaymentProvider = activeProvider()) {
+  if (provider === "emedx") {
+    const clientKey = process.env.EMEDX_CLIENT_KEY?.trim();
+    const clientSecret = process.env.EMEDX_CLIENT_SECRET?.trim();
+    if (!clientKey || !clientSecret) {
+      throw new Error("eMedx API não está configurada no servidor.");
+    }
+    return {
+      provider: "emedx" as const,
+      baseUrl: process.env.EMEDX_API_BASE_URL || "https://api.payments.emedx.co.mz",
+      clientKey,
+      clientSecret,
+    };
+  }
+
   if (provider === "mozpayment") {
     const walletId = process.env.MOZPAYMENT_WALLET_ID?.trim();
     if (!walletId) {
@@ -258,7 +293,6 @@ function config(provider: PaymentProvider = activeProvider()) {
       walletId,
     };
   }
-
   if (provider === "vpay") {
     const clientId = process.env.VPAY_CLIENT_ID;
     const clientSecret = process.env.VPAY_CLIENT_SECRET;
@@ -443,6 +477,10 @@ async function request(
   if (configuration.provider === "vpay") {
     headers.Authorization = `Bearer ${await vpayAccessToken(configuration)}`;
     if (rawBody !== undefined) headers["Content-Type"] = "application/json";
+  } else if (configuration.provider === "emedx") {
+    headers["X-Client-Key"] = configuration.clientKey;
+    headers["X-Client-Secret"] = configuration.clientSecret;
+    headers["Content-Type"] = "application/json";
   } else if (configuration.provider === "paysuite") {
     headers.Authorization = `Bearer ${configuration.apiKey}`;
     headers["Content-Type"] = "application/json";
@@ -552,7 +590,9 @@ function validateInput(input: PagarPaymentInput, provider: PaymentProvider) {
   }
   const digits = input.payerPhone.replace(/\D/g, "");
   const local = digits.startsWith("258") ? digits.slice(3) : digits;
-   const valid = input.method === "MPESA" ? /^(84|85)\d{7}$/.test(local) : /^(86|87)\d{7}$/.test(local);
+   const valid = provider === "emedx"
+     ? input.method === "MPESA" && /^(84|85)\d{7}$/.test(local)
+     : input.method === "MPESA" ? /^(84|85)\d{7}$/.test(local) : /^(86|87)\d{7}$/.test(local);
   if (!valid) throw new Error("O telefone não corresponde ao método de pagamento.");
 }
 
@@ -659,6 +699,81 @@ export async function createMozPaymentC2B(input: Pick<
   return parseMozPaymentC2BResponse(data, httpStatus);
 }
 
+export type EmedxC2BResult = {
+  status: "PAID" | "FAILED" | "PENDING" | "RECONCILIATION_REQUIRED";
+  operationId?: string;
+  queryReference?: string;
+};
+
+export function parseEmedxC2BResponse(
+  data: unknown,
+  expected: { reference: string; amountMzn: number; payerPhone: string },
+): EmedxC2BResult {
+  const root = data && typeof data === "object" && !Array.isArray(data)
+    ? data as Record<string, unknown>
+    : {};
+  const operation = extractProviderOperation(root);
+  const rawStatus = providerStatus(operation);
+  const status = normalizeEmedxStatus(rawStatus);
+  const operationId = providerOperationId(operation);
+  const queryReference = [operation.transactionReference, operation.queryReference]
+    .find((value): value is string => typeof value === "string" && value.trim().length > 0);
+  const amount = providerAmount(operation);
+  const reference = typeof operation.thirdPartyReference === "string"
+    ? operation.thirdPartyReference
+    : providerReference(operation);
+  const expectedPhone = emedxLocalPhone(expected.payerPhone);
+  const responsePhone = emedxLocalPhone(operation.msisdn);
+  const identityMatches = operation.type === "C2B" &&
+    String(operation.currency || "").toUpperCase() === "MZN" &&
+    reference === expected.reference &&
+    amount === expected.amountMzn &&
+    Boolean(expectedPhone && responsePhone === expectedPhone);
+
+  if (!status || !operationId || !reference) {
+    return { status: "RECONCILIATION_REQUIRED", ...(operationId ? { operationId } : {}), ...(queryReference ? { queryReference } : {}) };
+  }
+  if (status === "PAID" && identityMatches) {
+    return { status: "PAID", operationId, ...(queryReference ? { queryReference } : {}) };
+  }
+  if (status === "FAILED" && identityMatches) {
+    return { status: "FAILED", operationId, ...(queryReference ? { queryReference } : {}) };
+  }
+  if (status === "PENDING" && reference === expected.reference) {
+    return { status: "PENDING", operationId, ...(queryReference ? { queryReference } : {}) };
+  }
+  return { status: "RECONCILIATION_REQUIRED", operationId, ...(queryReference ? { queryReference } : {}) };
+}
+
+export async function createEmedxC2BPayment(input: Pick<
+  PagarPaymentInput,
+  "reference" | "amountMzn" | "payerPhone" | "idempotencyKey"
+>): Promise<EmedxC2BResult> {
+  const phone = emedxLocalPhone(input.payerPhone);
+  if (!phone) throw new Error("O eMedx aceita apenas números M-Pesa 84/85.");
+  const body = {
+    msisdn: phone,
+    amount: input.amountMzn,
+    thirdPartyReference: input.reference,
+  };
+  let data: Record<string, unknown>;
+  try {
+    data = await request("POST", "/api/v1/payments/c2b", body, undefined, "emedx");
+  } catch (error) {
+    if (!isUncertainProviderError(error)) throw error;
+    // eMedx treats thirdPartyReference as idempotent: retrying the same value
+    // returns the original transaction instead of charging the customer twice.
+    try {
+      data = await request("POST", "/api/v1/payments/c2b", body, undefined, "emedx");
+    } catch {
+      const uncertain = new Error("A resposta do eMedx não confirmou se o pedido foi aceite.");
+      Object.assign(uncertain, { status: 503 });
+      throw uncertain;
+    }
+  }
+  return parseEmedxC2BResponse(data, input);
+}
+
 export async function createVpayHostedOrder(input: Pick<
   PagarPaymentInput,
   "sourceId" | "title" | "description" | "amountMzn" | "payerPhone"
@@ -699,7 +814,8 @@ function isConfigurationError(error: unknown) {
     error.message === "Debito Pay API não está configurada no servidor." ||
     error.message === "Paysuite API não está configurada no servidor." ||
     error.message === "Vpay API não está configurada no servidor." ||
-    error.message === "MozPayment não está configurado no servidor."
+    error.message === "MozPayment não está configurado no servidor." ||
+    error.message === "eMedx API não está configurada no servidor."
   );
 }
 
@@ -721,6 +837,7 @@ export async function ensurePagarTables() {
       provider text,
       pagar_operation_id text UNIQUE,
       pagar_reference text NOT NULL UNIQUE,
+      provider_query_reference text,
       type text NOT NULL,
       amount_mzn integer NOT NULL,
       status text NOT NULL,
@@ -737,6 +854,7 @@ export async function ensurePagarTables() {
       confirmed_at timestamptz
     );
     ALTER TABLE pagar_operations ADD COLUMN IF NOT EXISTS provider text;
+    ALTER TABLE pagar_operations ADD COLUMN IF NOT EXISTS provider_query_reference text;
     ALTER TABLE pagar_operations ALTER COLUMN provider DROP NOT NULL;
     ALTER TABLE pagar_operations ALTER COLUMN provider DROP DEFAULT;
     ALTER TABLE pagar_operations ADD COLUMN IF NOT EXISTS checkout_url text;
@@ -783,7 +901,7 @@ export async function createPagarPayment(input: PagarPaymentInput) {
     : input;
   validateInput(normalizedInput, provider);
   const existing = await database.query(
-    "SELECT internal_id, provider, pagar_operation_id, pagar_reference, amount_mzn, status, checkout_url FROM pagar_operations WHERE local_transaction_id = $1 OR idempotency_key = $2",
+    "SELECT internal_id, provider, pagar_operation_id, pagar_reference, provider_query_reference, amount_mzn, status, checkout_url FROM pagar_operations WHERE local_transaction_id = $1 OR idempotency_key = $2",
     [input.localTransactionId, input.idempotencyKey],
   );
   if (existing.rows[0]) return existing.rows[0];
@@ -797,6 +915,7 @@ export async function createPagarPayment(input: PagarPaymentInput) {
   const isPaysuite = provider === "paysuite";
   const isVpay = provider === "vpay";
   const isMozPayment = provider === "mozpayment";
+  const isEmedx = provider === "emedx";
   try {
   let paysuiteContactId: string | undefined;
   if (isPaysuite) {
@@ -865,6 +984,29 @@ export async function createPagarPayment(input: PagarPaymentInput) {
         ...payment,
         mozpayment_failure_reason: result.failureReason || null,
       };
+    } else if (isEmedx) {
+      const result = await createEmedxC2BPayment({
+        reference: normalizedInput.reference,
+        amountMzn: input.amountMzn,
+        payerPhone: input.payerPhone,
+        idempotencyKey: input.idempotencyKey,
+      });
+      const updated = await database.query(
+        `UPDATE pagar_operations
+            SET pagar_operation_id = $1,
+                provider_query_reference = $2,
+                status = $3,
+                confirmed_at = CASE WHEN $3 = 'PAID' THEN COALESCE(confirmed_at, now()) ELSE confirmed_at END
+          WHERE internal_id = $4
+          RETURNING *`,
+        [result.operationId || null, result.queryReference || null, result.status, input.localTransactionId],
+      );
+      return updated.rows[0] || {
+        ...inserted.rows[0],
+        pagar_operation_id: result.operationId || null,
+        provider_query_reference: result.queryReference || null,
+        status: result.status,
+      };
     } else {
       data = await request("POST", isDebitoPay ? "/payment-orchestrator" : "/payments", body, input.idempotencyKey, provider);
     }
@@ -904,13 +1046,25 @@ export async function createPagarPayment(input: PagarPaymentInput) {
 }
 
 export async function getPagarPayment(
-  identifier: { id?: string; reference?: string },
+  identifier: { id?: string; reference?: string; queryReference?: string },
   provider: PaymentProvider = activeProvider(),
 ) {
   if (provider === "mozpayment") {
     const error = new Error("A documentação pública do MozPayment não disponibiliza consulta de estado.");
     Object.assign(error, { status: 501 });
     throw error;
+  }
+  if (provider === "emedx") {
+    if (!identifier.reference || !identifier.queryReference) {
+      const error = new Error("O eMedx ainda não devolveu as referências necessárias para consultar o pagamento.");
+      Object.assign(error, { status: 409 });
+      throw error;
+    }
+    const params = new URLSearchParams({
+      queryReference: identifier.queryReference,
+      thirdPartyReference: identifier.reference,
+    });
+    return request("GET", `/api/v1/payments/status?${params.toString()}`, undefined, undefined, provider);
   }
   if (provider === "vpay") {
     if (!identifier.id) {
@@ -950,7 +1104,7 @@ export async function getPagarPayment(
 export async function reconcilePagarPayment(localTransactionId: string) {
   const database = requirePool();
   const localResult = await database.query(
-    `SELECT internal_id, provider, pagar_operation_id, pagar_reference, amount_mzn, status
+    `SELECT internal_id, provider, pagar_operation_id, pagar_reference, provider_query_reference, amount_mzn, status
        FROM pagar_operations WHERE internal_id = $1`,
     [localTransactionId],
   );
@@ -962,7 +1116,7 @@ export async function reconcilePagarPayment(localTransactionId: string) {
   }
   if (terminalStates.has(normalizePaymentStatus(local.status) || "")) return local;
   const provider = local.provider as PaymentProvider;
-  if (!["pagar", "debitopay", "paysuite", "vpay", "mozpayment"].includes(provider)) {
+  if (!["pagar", "debitopay", "paysuite", "vpay", "mozpayment", "emedx"].includes(provider)) {
     const error = new Error("O provedor original desta operação não está identificado; é necessária confirmação manual.");
     Object.assign(error, { status: 409 });
     throw error;
@@ -978,14 +1132,18 @@ export async function reconcilePagarPayment(localTransactionId: string) {
   const data = await getPagarPayment({
     id: local.pagar_operation_id || undefined,
     reference: local.pagar_reference,
+    queryReference: local.provider_query_reference || undefined,
   }, provider);
   const isVpay = provider === "vpay";
+  const isEmedx = provider === "emedx";
   const operation = isVpay ? extractVpayOperation(data) : extractProviderOperation(data);
   const rawProviderStatus = providerStatus(operation);
   const normalizedProviderStatus = provider === "debitopay"
     ? normalizeDebitoStatus(rawProviderStatus)
     : provider === "paysuite"
       ? normalizePaysuiteStatus(rawProviderStatus)
+      : isEmedx
+        ? normalizeEmedxStatus(rawProviderStatus)
       : isVpay
         ? vpayResponseStatus(data)
         : normalizePaymentStatus(rawProviderStatus);
@@ -1011,10 +1169,21 @@ export async function reconcilePagarPayment(localTransactionId: string) {
   if (local.pagar_reference && reference && local.pagar_reference !== reference) {
     throw new Error(`A referência devolvida pelo ${providerName(provider)} não corresponde ao pagamento local.`);
   }
+  if (isEmedx && normalizedProviderStatus === "PAID" &&
+      (reference !== local.pagar_reference || !operationId)) {
+    throw new Error("O eMedx não confirmou a identidade do pagamento.");
+  }
+  const queryReference = isEmedx && typeof operation.output_ConversationID === "string"
+    ? operation.output_ConversationID
+    : undefined;
+  if (isEmedx && local.provider_query_reference && queryReference &&
+      local.provider_query_reference !== queryReference) {
+    throw new Error("A referência de consulta devolvida pelo eMedx não corresponde ao pagamento local.");
+  }
   const amountMatches = isVpay
     ? vpayOperationAmountMatches(data, local.amount_mzn)
     : providerAmountMatches(providerAmount(operation), local.amount_mzn, provider);
-  if ((isVpay && normalizedProviderStatus === "PAID" && amountMatches !== true) || amountMatches === false) {
+  if (((isVpay || isEmedx) && normalizedProviderStatus === "PAID" && amountMatches !== true) || amountMatches === false) {
     throw new Error(`O valor devolvido pelo ${providerName(provider)} não corresponde ao pagamento local.`);
   }
 
@@ -1042,14 +1211,16 @@ export async function reconcilePagarPayment(localTransactionId: string) {
       `UPDATE pagar_operations
           SET status = $1,
               pagar_operation_id = COALESCE($2, pagar_operation_id),
-              receipt_number = COALESCE($3, receipt_number),
-              receipt_url = COALESCE($4, receipt_url),
+              provider_query_reference = COALESCE($3, provider_query_reference),
+              receipt_number = COALESCE($4, receipt_number),
+              receipt_url = COALESCE($5, receipt_url),
               confirmed_at = CASE WHEN $1 = 'PAID' THEN COALESCE(confirmed_at, now()) ELSE confirmed_at END
-        WHERE internal_id = $5
+        WHERE internal_id = $6
         RETURNING *`,
       [
         nextStatus,
         operationId || null,
+        queryReference || null,
         typeof receipt.number === "string" ? receipt.number : null,
         typeof receipt.url === "string" ? receipt.url : null,
         localTransactionId,
@@ -1116,6 +1287,15 @@ export function verifyPaysuiteWebhook(rawBody: Buffer, signatureHeader: string) 
   return Boolean(secret && timingSafeSignature(rawBody, signatureHeader, secret));
 }
 
+export function verifyEmedxWebhook(rawBody: Buffer, signatureHeader: string) {
+  const secret = process.env.EMEDX_WEBHOOK_SECRET;
+  const match = /^sha256=([a-f0-9]{64})$/i.exec(signatureHeader.trim());
+  if (!secret || !match) return false;
+  const expected = createHmac("sha256", secret).update(rawBody).digest();
+  const received = Buffer.from(match[1], "hex");
+  return received.length === expected.length && timingSafeEqual(received, expected);
+}
+
 function paysuiteEventType(payload: Record<string, unknown>) {
   const event = typeof payload.event === "string" ? payload.event.toLowerCase() : "";
   if (event === "payment.success") return "payment.succeeded";
@@ -1147,6 +1327,80 @@ export async function processPaysuiteWebhook(rawBody: Buffer) {
     eventId,
     paysuiteEventType(payload),
     Buffer.from(JSON.stringify(normalizedBody)),
+  );
+}
+
+export async function processEmedxWebhook(rawBody: Buffer) {
+  const payload = JSON.parse(rawBody.toString("utf8")) as Record<string, unknown>;
+  const data = payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)
+    ? payload.data as Record<string, unknown>
+    : {};
+  const event = typeof payload.event === "string" ? payload.event.trim() : "";
+  const reference = typeof data.thirdPartyReference === "string"
+    ? data.thirdPartyReference
+    : providerReference(data);
+  const amount = providerAmount(data);
+  const status = normalizeEmedxStatus(providerStatus(data));
+  const phone = emedxLocalPhone(data.msisdn);
+  const operationId = providerOperationId(data);
+  if (!event || !reference || amount === undefined || data.type !== "C2B" ||
+      String(data.currency || "").toUpperCase() !== "MZN" || !phone) {
+    const error = new Error("Payload eMedx inválido ou incompleto.");
+    Object.assign(error, { status: 400 });
+    throw error;
+  }
+
+  const database = requirePool();
+  const localResult = await database.query(
+    "SELECT amount_mzn, payer_phone FROM pagar_operations WHERE provider = 'emedx' AND pagar_reference = $1",
+    [reference],
+  );
+  const local = localResult.rows[0];
+  if (local && (
+    Number(local.amount_mzn) !== amount ||
+    emedxLocalPhone(local.payer_phone) !== phone
+  )) {
+    const error = new Error("Os dados do webhook eMedx não correspondem à cobrança.");
+    Object.assign(error, { status: 400 });
+    throw error;
+  }
+
+  const queryReference = [data.transactionReference, data.queryReference]
+    .find((value): value is string => typeof value === "string" && value.trim().length > 0);
+  if (local && queryReference) {
+    await database.query(
+      `UPDATE pagar_operations
+          SET provider_query_reference = COALESCE(provider_query_reference, $1)
+        WHERE provider = 'emedx' AND pagar_reference = $2`,
+      [queryReference, reference],
+    );
+  }
+
+  const eventName = event.toLowerCase();
+  const eventType = eventName === "transaction.completed" && status === "PAID"
+    ? "payment.succeeded"
+    : ["transaction.failed", "transaction.cancelled", "transaction.canceled"].includes(eventName) && status === "FAILED"
+      ? "payment.failed"
+      : "payment.pending";
+  const normalizedStatus = eventType === "payment.succeeded"
+    ? "PAID"
+    : eventType === "payment.failed"
+      ? "FAILED"
+      : status || "PENDING";
+  const eventId = `emedx:${event.toLowerCase()}:${operationId || reference}`;
+  const normalizedBody = {
+    data: {
+      id: operationId,
+      reference,
+      status: normalizedStatus,
+      amountMzn: amount,
+    },
+  };
+  return processPagarWebhook(
+    eventId,
+    eventType,
+    Buffer.from(JSON.stringify(normalizedBody)),
+    "emedx",
   );
 }
 

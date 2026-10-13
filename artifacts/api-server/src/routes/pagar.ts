@@ -9,8 +9,10 @@ import {
   reconcilePagarPayment,
   retryPagarWebhookForwarding,
   processDebitoPayWebhook,
+  processEmedxWebhook,
   processPaysuiteWebhook,
   verifyDebitoPayWebhook,
+  verifyEmedxWebhook,
   verifyPaysuiteWebhook,
   verifyPagarWebhook,
 } from "../services/pagar";
@@ -73,7 +75,25 @@ router.post("/paysuite/webhook", async (req, res) => {
   }
 });
 
-router.post(["/pagar/internal/payments", "/debitopay/internal/payments", "/paysuite/internal/payments", "/vpay/internal/payments", "/mozpayment/internal/payments"], async (req, res) => {
+router.post("/emedx/webhook", async (req, res) => {
+  const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from("");
+  const signature = req.header("x-webhook-signature") || "";
+  if (!verifyEmedxWebhook(rawBody, signature)) {
+    return res.status(401).json({ error: "Webhook eMedx inválido." });
+  }
+  try {
+    const result = await processEmedxWebhook(rawBody);
+    if (result.forwardingStatus === "pending" || result.forwardingStatus === "failed") {
+      await forwardPagarWebhook(result, { force: result.duplicate });
+    }
+    return res.sendStatus(204);
+  } catch (error) {
+    const status = (error as { status?: unknown })?.status === 400 ? 400 : 500;
+    return res.status(status).json({ error: status === 400 ? "Webhook eMedx inválido." : "Webhook eMedx não processado." });
+  }
+});
+
+router.post(["/pagar/internal/payments", "/debitopay/internal/payments", "/paysuite/internal/payments", "/vpay/internal/payments", "/mozpayment/internal/payments", "/emedx/internal/payments"], async (req, res) => {
   if (!process.env.SESSION_SECRET || req.header("x-internal-payment-key") !== process.env.SESSION_SECRET) {
     return res.status(401).json({ error: "Origem não autorizada." });
   }
@@ -95,7 +115,7 @@ router.post(["/pagar/internal/payments", "/debitopay/internal/payments", "/paysu
   }
 });
 
-router.post(["/pagar/internal/payments/:localTransactionId/reconcile", "/debitopay/internal/payments/:localTransactionId/reconcile", "/paysuite/internal/payments/:localTransactionId/reconcile", "/vpay/internal/payments/:localTransactionId/reconcile", "/mozpayment/internal/payments/:localTransactionId/reconcile"], async (req, res) => {
+router.post(["/pagar/internal/payments/:localTransactionId/reconcile", "/debitopay/internal/payments/:localTransactionId/reconcile", "/paysuite/internal/payments/:localTransactionId/reconcile", "/vpay/internal/payments/:localTransactionId/reconcile", "/mozpayment/internal/payments/:localTransactionId/reconcile", "/emedx/internal/payments/:localTransactionId/reconcile"], async (req, res) => {
   if (!process.env.SESSION_SECRET || req.header("x-internal-payment-key") !== process.env.SESSION_SECRET) {
     return res.status(401).json({ error: "Origem não autorizada." });
   }
@@ -122,7 +142,7 @@ router.get(["/pagar/payments", "/debitopay/payments", "/paysuite/payments"], asy
   try { return res.json(await listPagarPayments({ status: String(req.query.status || ""), cursor: String(req.query.cursor || ""), limit: String(req.query.limit || "") })); } catch { return res.status(502).json({ error: "Não foi possível consultar os pagamentos." }); }
 });
 
-router.get(["/pagar/admin/webhook-deliveries", "/debitopay/admin/webhook-deliveries", "/paysuite/admin/webhook-deliveries"], async (req, res) => {
+router.get(["/pagar/admin/webhook-deliveries", "/debitopay/admin/webhook-deliveries", "/paysuite/admin/webhook-deliveries", "/emedx/admin/webhook-deliveries"], async (req, res) => {
   if (!process.env.SESSION_SECRET || req.header("x-internal-payment-key") !== process.env.SESSION_SECRET) {
     return res.status(401).json({ error: "Acção administrativa não autorizada." });
   }
@@ -133,7 +153,7 @@ router.get(["/pagar/admin/webhook-deliveries", "/debitopay/admin/webhook-deliver
   }
 });
 
-router.post(["/pagar/admin/webhook-deliveries/:eventId/retry", "/debitopay/admin/webhook-deliveries/:eventId/retry", "/paysuite/admin/webhook-deliveries/:eventId/retry"], async (req, res) => {
+router.post(["/pagar/admin/webhook-deliveries/:eventId/retry", "/debitopay/admin/webhook-deliveries/:eventId/retry", "/paysuite/admin/webhook-deliveries/:eventId/retry", "/emedx/admin/webhook-deliveries/:eventId/retry"], async (req, res) => {
   if (!process.env.SESSION_SECRET || req.header("x-internal-payment-key") !== process.env.SESSION_SECRET) {
     return res.status(401).json({ error: "Acção administrativa não autorizada." });
   }

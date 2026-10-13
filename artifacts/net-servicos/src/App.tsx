@@ -173,22 +173,22 @@ const SEO_PAGES: Record<string, SeoPage> = {
     cta: "Começar uma compra",
   },
   "/pagar-megas-mpesa-emola": {
-    title: "Recarregar Saldo com M-Pesa ou e-Mola | Megabyte",
+    title: "Recarregar Saldo com M-Pesa via eMedx | Megabyte",
     description:
-      "Recarregue o saldo da sua conta Megabyte com M-Pesa ou e-Mola e use-o para activar pacotes de megas.",
+      "Recarregue o saldo da sua conta Megabyte com M-Pesa via eMedx e use-o para activar pacotes de megas.",
     canonical: "https://megabyte.live/pagar-megas-mpesa-emola/",
     eyebrow: "Recargas de saldo",
-    heading: "Recarregar saldo com M-Pesa ou e-Mola",
+    heading: "Recarregar saldo com M-Pesa",
     lead:
-      "Adicione saldo à sua conta Megabyte por M-Pesa ou e-Mola. Depois, use o saldo para comprar pacotes de internet Vodacom.",
+      "Adicione saldo à sua conta Megabyte por M-Pesa através do eMedx. Depois, use o saldo para comprar pacotes de internet Vodacom.",
     sectionHeading: "Como recarregar e comprar pacotes",
     steps: [
       "Entre na sua conta Megabyte e escolha a opção para recarregar saldo.",
-      "Confirme a recarga com M-Pesa ou e-Mola no telemóvel associado à conta.",
+      "Confirme o pedido no número M-Pesa 84 ou 85 associado à recarga.",
       "Escolha um pacote e pague com o saldo disponível na sua conta.",
     ],
     paragraphs: [
-      "M-Pesa e e-Mola servem para adicionar saldo à conta; não são métodos de pagamento directo de pacotes.",
+      "M-Pesa via eMedx serve para adicionar saldo à conta; não é um método de pagamento directo de pacotes.",
       "Ao comprar um pacote, o valor é descontado do saldo da conta Megabyte.",
     ],
     cta: "Comprar agora",
@@ -210,7 +210,7 @@ const SEO_PAGES: Record<string, SeoPage> = {
     steps: [
       "Compare o preço, a quantidade de megas e o período de validade.",
       "Escolha o número Vodacom que deve receber o pacote.",
-      "Escolha o pacote e pague com o saldo da sua conta. Se precisar, recarregue o saldo com M-Pesa ou e-Mola.",
+      "Escolha o pacote e pague com o saldo da sua conta. Se precisar, recarregue o saldo com M-Pesa via eMedx.",
     ],
     cta: "Ver megas disponíveis",
   },

@@ -1,16 +1,126 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 import {
+  createEmedxC2BPayment,
   createMozPaymentC2B,
   createVpayHostedOrder,
   getPagarPayment,
   mozPaymentC2BResponseLogFields,
+  parseEmedxC2BResponse,
   parseMozPaymentC2BResponse,
   validatePagarPaymentInput,
+  verifyEmedxWebhook,
   vpayOperationIdentityMatches,
   vpayOperationAmountMatches,
   vpayResponseStatus,
 } from "../src/services/pagar.ts";
+
+test("eMedx C2B uses the documented request, status lookup, and signed webhook contract", async () => {
+  const previousProvider = process.env.PAYMENT_PROVIDER;
+  const previousBaseUrl = process.env.EMEDX_API_BASE_URL;
+  const previousClientKey = process.env.EMEDX_CLIENT_KEY;
+  const previousClientSecret = process.env.EMEDX_CLIENT_SECRET;
+  const previousWebhookSecret = process.env.EMEDX_WEBHOOK_SECRET;
+  const previousFetch = globalThis.fetch;
+  const calls: Array<{ url: URL; method: string; headers: Headers; body?: Record<string, unknown> }> = [];
+  const completed = {
+    id: "emedx-txn-150",
+    transactionReference: "lookup-150",
+    type: "C2B",
+    status: "COMPLETED",
+    amount: "150.00",
+    currency: "MZN",
+    msisdn: "258841234567",
+    thirdPartyReference: "order-150",
+  };
+
+  globalThis.fetch = (async (input, init = {}) => {
+    const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
+    const headers = new Headers(init.headers);
+    const body = typeof init.body === "string" ? JSON.parse(init.body) as Record<string, unknown> : undefined;
+    calls.push({ url, method: init.method || "GET", headers, body });
+    return new Response(JSON.stringify(url.pathname.endsWith("/c2b") ? completed : {
+      output_ResponseTransactionStatus: "COMPLETED",
+      output_ThirdPartyReference: "order-150",
+      output_Amount: "150.00",
+      output_TransactionID: "emedx-txn-150",
+      output_ConversationID: "lookup-150",
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+  }) as typeof fetch;
+
+  try {
+    process.env.PAYMENT_PROVIDER = "emedx";
+    process.env.EMEDX_API_BASE_URL = "https://api.payments.emedx.co.mz";
+    process.env.EMEDX_CLIENT_KEY = "test-client-key";
+    process.env.EMEDX_CLIENT_SECRET = "test-client-secret";
+    process.env.EMEDX_WEBHOOK_SECRET = "test-webhook-secret";
+
+    const input = {
+      localTransactionId: "local-150",
+      sourceId: "source-150",
+      reference: "order-150",
+      title: "Recarga",
+      description: "Recarga de teste",
+      amountMzn: 150,
+      method: "MPESA" as const,
+      payerPhone: "841234567",
+      idempotencyKey: "emedx-local-150",
+    };
+    validatePagarPaymentInput(input);
+    assert.throws(
+      () => validatePagarPaymentInput({ ...input, method: "EMOLA" }),
+      /telefone não corresponde/i,
+    );
+    assert.throws(
+      () => validatePagarPaymentInput({ ...input, amountMzn: 19 }),
+      /entre 20 e 40000/i,
+    );
+
+    const created = await createEmedxC2BPayment(input);
+    assert.deepEqual(created, {
+      status: "PAID",
+      operationId: "emedx-txn-150",
+      queryReference: "lookup-150",
+    });
+    const createCall = calls.find(({ url }) => url.pathname.endsWith("/c2b"));
+    assert.ok(createCall);
+    assert.equal(createCall.method, "POST");
+    assert.equal(createCall.headers.get("x-client-key"), "test-client-key");
+    assert.equal(createCall.headers.get("x-client-secret"), "test-client-secret");
+    assert.deepEqual(createCall.body, {
+      msisdn: "841234567",
+      amount: 150,
+      thirdPartyReference: "order-150",
+    });
+    assert.deepEqual(parseEmedxC2BResponse(completed, input), created);
+
+    await getPagarPayment({ reference: "order-150", queryReference: "lookup-150" });
+    const statusCall = calls.find(({ url }) => url.pathname.endsWith("/status"));
+    assert.ok(statusCall);
+    assert.equal(statusCall.method, "GET");
+    assert.equal(statusCall.url.searchParams.get("queryReference"), "lookup-150");
+    assert.equal(statusCall.url.searchParams.get("thirdPartyReference"), "order-150");
+    assert.equal(statusCall.headers.get("x-client-key"), "test-client-key");
+
+    const rawBody = Buffer.from('{"event":"transaction.completed","data":{"id":"emedx-txn-150"}}');
+    const signature = `sha256=${createHmac("sha256", "test-webhook-secret").update(rawBody).digest("hex")}`;
+    assert.equal(verifyEmedxWebhook(rawBody, signature), true);
+    assert.equal(verifyEmedxWebhook(rawBody, `${signature.slice(0, -1)}0`), false);
+  } finally {
+    globalThis.fetch = previousFetch;
+    for (const [key, previous] of [
+      ["PAYMENT_PROVIDER", previousProvider],
+      ["EMEDX_API_BASE_URL", previousBaseUrl],
+      ["EMEDX_CLIENT_KEY", previousClientKey],
+      ["EMEDX_CLIENT_SECRET", previousClientSecret],
+      ["EMEDX_WEBHOOK_SECRET", previousWebhookSecret],
+    ] as const) {
+      if (previous === undefined) delete process.env[key];
+      else process.env[key] = previous;
+    }
+  }
+});
 
 test("Vpay paid amounts must match one of the accepted MZN amount representations", () => {
   assert.equal(vpayOperationAmountMatches({ amount: 25 }, 25), true);
