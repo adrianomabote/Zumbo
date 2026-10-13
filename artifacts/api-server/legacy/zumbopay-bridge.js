@@ -38,7 +38,11 @@ const PAYMENT_API_ROUTE    = configuredPaymentProvider === 'paysuite'
           ? 'emedx'
         : 'pagar'
 const PAYMENT_PROVIDERS = new Set(['pagar', 'debitopay', 'paysuite', 'vpay', 'mozpayment', 'emedx'])
-const QUICK_RECHARGE_AMOUNTS = [20,50,100,250,500,1000,2000,5000]
+const MIN_RECHARGE_AMOUNT = 20
+const MAX_RECHARGE_AMOUNT = 40000
+function isValidRechargeAmount(amount) {
+  return Number.isInteger(amount) && amount >= MIN_RECHARGE_AMOUNT && amount <= MAX_RECHARGE_AMOUNT
+}
 const DATA_DIR             = process.env.NET_SERVICOS_DATA_DIR || '.'
 const ORDERS_FILE          = join(DATA_DIR, 'orders.json')
 const USERS_FILE           = join(DATA_DIR, 'users.json')
@@ -1820,8 +1824,8 @@ self.addEventListener('fetch',e=>{
     if (!user) return json(res, { error:'Faça login para recarregar.' }, 401)
     let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
     const amount = Number(body.amount)
-    if (!QUICK_RECHARGE_AMOUNTS.includes(amount))
-      return json(res, { error:'Escolha um dos valores disponíveis para a recarga.' }, 400)
+    if (!isValidRechargeAmount(amount))
+      return json(res, { error:'O valor da recarga deve ser um número inteiro entre 20 e 40000 MT.' }, 400)
     const paymentPhone = normalizeLocalPhone(String(body.paymentPhone || user.phone || ''))
     if (!/^(84|85)\d{7}$/.test(paymentPhone))
       return json(res, { error:'Introduza um número M-Pesa válido (84 ou 85) para confirmar a recarga.' }, 400)
@@ -1855,7 +1859,7 @@ self.addEventListener('fetch',e=>{
     if (!user) return json(res, { error:'Faça login para recarregar.' }, 401)
     let body = {}; try { body = JSON.parse((await readBody(req)).toString()) } catch {}
     const amount = Number(body.amount)
-    if (!Number.isInteger(amount) || amount < 20 || amount > 40000)
+    if (!isValidRechargeAmount(amount))
       return json(res, { error:'O valor da recarga deve ser um número inteiro entre 20 e 40000 MT.' }, 400)
     const paymentPhone = normalizeLocalPhone(String(body.paymentPhone || user.phone || ''))
     if (!/^(84|85)\d{7}$/.test(paymentPhone))
@@ -3049,6 +3053,7 @@ body{background:#f2f2f7;color:#1c1c1e;font-family:'Segoe UI',system-ui,sans-seri
 .rech-quick-option{min-height:52px;padding:6px 8px;border:1.5px solid #e5e5ea;border-radius:9px;background:#f9f9fb;color:#1c1c1e;font-family:inherit;font-size:17px;font-weight:700;cursor:pointer;transition:background .15s,border-color .15s,color .15s;}
 .rech-quick-option:hover,.rech-quick-option.is-selected{background:#fff0f0;border-color:#cc0000;color:#cc0000;}
 .rech-quick-option:focus-visible{outline:3px solid #cc0000;outline-offset:2px;}
+#recharge-custom-amount-wrap{display:flex;flex-direction:column;gap:8px;}
 .rech-deposit-btn{margin-top:18px!important;background:#cc0000!important;color:#fff!important;box-shadow:none!important;}
 .rech-deposit-btn:hover{filter:brightness(1.06);}
 .rech-deposit-btn:disabled{background:#cc0000!important;color:#fff!important;cursor:not-allowed;opacity:.5;}
@@ -3533,7 +3538,12 @@ ${allListHtml}
           <button type="button" class="rech-quick-option" data-amount="500" aria-pressed="false" onclick="selectRechargeAmount(500)">500 MT</button>
           <button type="button" class="rech-quick-option" data-amount="1000" aria-pressed="false" onclick="selectRechargeAmount(1000)">1,000 MT</button>
           <button type="button" class="rech-quick-option" data-amount="2000" aria-pressed="false" onclick="selectRechargeAmount(2000)">2,000 MT</button>
-          <button type="button" class="rech-quick-option" data-amount="5000" aria-pressed="false" onclick="selectRechargeAmount(5000)">5,000 MT</button>
+          <button type="button" class="rech-quick-option" data-custom="true" aria-pressed="false" onclick="selectRechargeOtherAmount()">Outro</button>
+        </div>
+        <div id="recharge-custom-amount-wrap" style="display:none">
+          <label for="recharge-custom-amount">Outro valor (MT)</label>
+          <input class="auth-inp" id="recharge-custom-amount" type="number" inputmode="numeric" min="20" max="40000" step="1" placeholder="Introduza o valor" oninput="updateCustomRechargeAmount()">
+          <div class="profile-edit-hint">Introduza um valor inteiro entre 20 e 40.000 MT.</div>
         </div>
         <div class="auth-err" id="rech-err"></div>
         <button class="auth-btn rech-deposit-btn" id="rech-btn" onclick="submitRecharge()" disabled>Recarregar</button>
@@ -3794,23 +3804,49 @@ async function changePassword() {
 }
 
 // ── Recarga ──────────────────────────────────────────────────────────────────
-const QUICK_RECHARGE_AMOUNTS = [20,50,100,250,500,1000,2000,5000]
+const MIN_RECHARGE_AMOUNT = 20
+const MAX_RECHARGE_AMOUNT = 40000
+const QUICK_RECHARGE_AMOUNTS = [20,50,100,250,500,1000,2000]
 let selectedRechargeAmount = null
+function isValidRechargeAmount(amount) {
+  return Number.isInteger(amount) && amount >= MIN_RECHARGE_AMOUNT && amount <= MAX_RECHARGE_AMOUNT
+}
 function selectRechargeAmount(amount) {
   if (!QUICK_RECHARGE_AMOUNTS.includes(amount)) return
   selectedRechargeAmount = amount
   document.querySelectorAll('.rech-quick-option').forEach(option => {
-    const selected = Number(option.dataset.amount) === amount
+    const selected = option.dataset.custom !== 'true' && Number(option.dataset.amount) === amount
     option.classList.toggle('is-selected', selected)
     option.setAttribute('aria-pressed', String(selected))
   })
+  document.getElementById('recharge-custom-amount-wrap').style.display='none'
   document.getElementById('rech-err').style.display='none'
   document.getElementById('rech-btn').disabled=false
+}
+function selectRechargeOtherAmount() {
+  selectedRechargeAmount = null
+  document.querySelectorAll('.rech-quick-option').forEach(option => {
+    const selected = option.dataset.custom === 'true'
+    option.classList.toggle('is-selected', selected)
+    option.setAttribute('aria-pressed', String(selected))
+  })
+  document.getElementById('recharge-custom-amount-wrap').style.display=''
+  document.getElementById('rech-err').style.display='none'
+  updateCustomRechargeAmount()
+}
+function updateCustomRechargeAmount() {
+  const rawAmount = document.getElementById('recharge-custom-amount').value
+  const amount = Number(rawAmount)
+  selectedRechargeAmount = rawAmount && isValidRechargeAmount(amount) ? amount : null
+  document.getElementById('rech-btn').disabled = selectedRechargeAmount === null
+  document.getElementById('rech-err').style.display='none'
 }
 function openRechargeDialog() {
   selectedRechargeAmount = null
   document.getElementById('recharge-selection').style.display=''
   document.getElementById('recharge-checkout').style.display='none'
+  document.getElementById('recharge-custom-amount-wrap').style.display='none'
+  document.getElementById('recharge-custom-amount').value=''
   const rawPhone=String(authState.user?.phone||'').replace(/\D/g,'')
   const localPhone=rawPhone.startsWith('258')?rawPhone.slice(3):rawPhone
   document.getElementById('recharge-payment-phone').value=/^(84|85)\d{7}$/.test(localPhone)?localPhone:''
@@ -3830,7 +3866,7 @@ function closeRechargeDialog() {
 async function submitRecharge() {
   const amount=selectedRechargeAmount
   const err=document.getElementById('rech-err'); err.style.display='none'
-  if(!QUICK_RECHARGE_AMOUNTS.includes(amount)){err.textContent='Escolha um valor para a recarga.';err.style.display='block';return}
+  if(!isValidRechargeAmount(amount)){err.textContent='Introduza um valor inteiro entre 20 e 40.000 MT.';err.style.display='block';return}
   const paymentPhone=String(document.getElementById('recharge-payment-phone').value||'').replace(/\D/g,'')
   if(!/^(84|85)\d{7}$/.test(paymentPhone)){err.textContent='Introduza um número M-Pesa válido (84 ou 85).';err.style.display='block';return}
   const btn=document.getElementById('rech-btn'); btn.disabled=true; btn.textContent='A enviar pedido M-Pesa…'
@@ -3843,7 +3879,7 @@ async function submitRecharge() {
     }
     document.getElementById('recharge-selection').style.display='none'
     document.getElementById('recharge-checkout').style.display='block'
-    document.getElementById('recharge-payment-notice').textContent=`Pedido enviado para ${d.paymentPhone||paymentPhone}. Confirme no M-Pesa; o saldo será creditado nesta conta após a confirmação.`
+    document.getElementById('recharge-payment-notice').textContent=\`Pedido enviado para \${d.paymentPhone||paymentPhone}. Confirme no M-Pesa; o saldo será creditado nesta conta após a confirmação.\`
     listenRecharge(d.txId,amount)
   } catch{err.textContent='Erro de ligação.';err.style.display='block';btn.disabled=false;btn.textContent='Recarregar'}
 }

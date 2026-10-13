@@ -138,10 +138,22 @@ test("inicia recargas de saldo apenas com M-Pesa e mantém separado o telefone d
   assert.equal(unauthenticated.status, 401);
 
   const invalidAmount = await postJson("/api/recharge/checkout", {
-    amount: 75,
+    amount: 19,
     paymentPhone: "841112223",
   }, userCookie);
   assert.equal(invalidAmount.status, 400);
+
+  const fractionalAmount = await postJson("/api/recharge/checkout", {
+    amount: 75.5,
+    paymentPhone: "841112223",
+  }, userCookie);
+  assert.equal(fractionalAmount.status, 400);
+
+  const overMaximumAmount = await postJson("/api/recharge/checkout", {
+    amount: 40001,
+    paymentPhone: "841112223",
+  }, userCookie);
+  assert.equal(overMaximumAmount.status, 400);
 
   const emolaPaymentPhone = await postJson("/api/recharge/checkout", {
     amount: 20,
@@ -153,6 +165,9 @@ test("inicia recargas de saldo apenas com M-Pesa e mantém separado o telefone d
   assert.equal(storefront.status, 200);
   const storefrontHtml = await storefront.text();
   assert.match(storefrontHtml, /recharge-payment-phone/);
+  assert.match(storefrontHtml, /data-custom="true"[^>]*>Outro<\/button>/);
+  assert.match(storefrontHtml, /id="recharge-custom-amount" type="number"/);
+  assert.doesNotMatch(storefrontHtml, />5,000 MT<\/button>/);
   assert.doesNotMatch(storefrontHtml, /paynice\.online\/c\//);
   assert.doesNotMatch(storefrontHtml, /recharge-checkout-frame/);
 
@@ -175,9 +190,19 @@ test("inicia recargas de saldo apenas com M-Pesa e mantém separado o telefone d
   assert.equal(order.payerPhone, "841112223");
   assert.equal(order.method, "mpesa");
 
+  const customRechargeResponse = await postJson("/api/recharge/checkout", {
+    amount: 75,
+    paymentPhone: "841112223",
+  }, userCookie);
+  assert.equal(customRechargeResponse.status, 201);
+  const customRecharge = await customRechargeResponse.json() as Record<string, unknown>;
+  const customOrder = await waitForRecharge(String(customRecharge.txId));
+  assert.equal(customOrder.amount, 75);
+  assert.equal(customOrder.bundleLabel, "Recarga 75 MT");
+
   const userResponse = await fetch(`${baseUrl}/api/auth/me`, { headers: { cookie: userCookie } });
   assert.equal(userResponse.status, 200);
   const user = await userResponse.json() as { balance: number; phone: string };
-  assert.equal(user.balance, 20);
+  assert.equal(user.balance, 95);
   assert.equal(user.phone, "861112223");
 });
