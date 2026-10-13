@@ -3892,9 +3892,7 @@ function openRechargeDialog() {
   document.getElementById('recharge-checkout').style.display='none'
   document.getElementById('recharge-custom-amount-wrap').style.display='none'
   document.getElementById('recharge-custom-amount').value=''
-  const rawPhone=String(authState.user?.phone||'').replace(/[^0-9]/g,'')
-  const localPhone=rawPhone.startsWith('258')?rawPhone.slice(3):rawPhone
-  document.getElementById('recharge-payment-phone').value=/^(84|85)[0-9]{7}$/.test(localPhone)?localPhone:''
+  document.getElementById('recharge-payment-phone').value=''
   document.querySelectorAll('.rech-quick-option').forEach(option => {
     option.classList.remove('is-selected')
     option.setAttribute('aria-pressed','false')

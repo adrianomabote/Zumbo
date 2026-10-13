@@ -187,6 +187,40 @@ test("inicia recargas de saldo apenas com M-Pesa e mantém separado o telefone d
   assert.equal(normalizeRechargePaymentPhone("00258 85 111 2223"), "851112223");
   assert.equal(normalizeRechargePaymentPhone("841112223"), "841112223");
 
+  const openRechargeDialogSource = storefrontScript.match(
+    /function openRechargeDialog\(\) \{[\s\S]*?\n\}/,
+  )?.[0];
+  assert.ok(openRechargeDialogSource);
+  const dialogElements: Record<string, any> = {
+    "recharge-selection": { style: {} },
+    "recharge-checkout": { style: {} },
+    "recharge-custom-amount-wrap": { style: {} },
+    "recharge-custom-amount": { value: "" },
+    "recharge-payment-phone": { value: "841234567" },
+    "rech-err": { style: {} },
+    "rech-btn": { disabled: false, textContent: "" },
+    "recharge-modal": { style: {} },
+    "recharge-card": { classList: { add() {}, remove() {} } },
+  };
+  const openRechargeDialog = new Function(
+    "document",
+    "setTimeout",
+    `const authState = { user: { phone: "841112223" } };
+    ${openRechargeDialogSource};
+    return openRechargeDialog;`,
+  )(
+    {
+      getElementById: (id: string) => dialogElements[id],
+      querySelectorAll: () => [],
+    },
+    (callback: () => void) => callback(),
+  ) as () => void;
+  openRechargeDialog();
+  assert.equal(dialogElements["recharge-payment-phone"].value, "");
+  dialogElements["recharge-payment-phone"].value = "851234567";
+  openRechargeDialog();
+  assert.equal(dialogElements["recharge-payment-phone"].value, "");
+
   const submitRechargeSource = storefrontScript.match(
     /async function submitRecharge\(\) \{[\s\S]*?\n\}/,
   )?.[0];
