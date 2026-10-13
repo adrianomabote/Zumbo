@@ -5294,6 +5294,8 @@ async function retryPagarForwarding(eventId,btn){
 // ── Servidor ──────────────────────────────────────────────────────────────────
 const paymentRequiredConfig = configuredPaymentProvider === 'paysuite'
   ? ['PAYSUITE_API_KEY', 'PAYSUITE_WEBHOOK_SECRET']
+  : configuredPaymentProvider === 'emedx'
+    ? ['EMEDX_CLIENT_KEY', 'EMEDX_CLIENT_SECRET', 'EMEDX_WEBHOOK_SECRET']
   : configuredPaymentProvider === 'vpay'
     ? ['VPAY_CLIENT_ID', 'VPAY_CLIENT_SECRET']
     : configuredPaymentProvider === 'mozpayment'
@@ -5309,7 +5311,7 @@ const requiredConfig = [
   'SESSION_SECRET',
 ]
 const missingConfig = requiredConfig.filter(key => !process.env[key])
-const paymentProviderIsSupported = ['pagar', 'debitopay', 'paysuite', 'vpay', 'mozpayment'].includes(configuredPaymentProvider)
+const paymentProviderIsSupported = ['pagar', 'debitopay', 'paysuite', 'vpay', 'mozpayment', 'emedx'].includes(configuredPaymentProvider)
 const isLiveConfiguration = isTestMode || isFreeMode || (paymentProviderIsSupported && missingConfig.length === 0)
 
 await dbInit()

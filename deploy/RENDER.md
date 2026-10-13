@@ -14,9 +14,8 @@ mantém os dados locais do bridge no disco persistente montado em
    - `SITE_URL`: domínio público, por exemplo `https://exemplo.com`. Se ficar
      vazio, o bridge usa o domínio automático fornecido em
      `RENDER_EXTERNAL_URL`.
-    - `PAYSUITE_API_KEY` e `PAYSUITE_WEBHOOK_SECRET`.
-    - `PAYSUITE_WEBHOOK_URL`: normalmente
-      `https://<dominio>/api/paysuite/webhook`.
+   - O gateway seleccionado por `PAYMENT_PROVIDER=emedx` requer
+     `EMEDX_CLIENT_KEY`, `EMEDX_CLIENT_SECRET` e `EMEDX_WEBHOOK_SECRET`.
    - `ADMIN_PASS` e `SESSION_SECRET`.
 3. Faça o deploy e confirme que `GET /api/healthz` responde com HTTP 200.
 4. No painel admin, crie ou active as chaves do gateway para os projectos
@@ -29,7 +28,7 @@ mantém os dados locais do bridge no disco persistente montado em
 - Gateway: `/gateway/docs`
 - Criar pagamento: `POST /gateway/api/pay`
 - Consultar pagamento: `GET /gateway/api/status/<txId>`
-- Webhook Paysuite: `/api/paysuite/webhook`
+- Webhook eMedx: `/api/emedx/webhook`
 
 O gateway continua separado das transacções normais da Megabyte no painel.
 Cada cobrança enviada à Paysuite identifica uma compra de megas. Para valores
