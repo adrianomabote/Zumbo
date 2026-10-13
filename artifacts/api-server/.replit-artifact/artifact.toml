@@ -10,7 +10,7 @@ name = "API Server"
 paths = ["/api"]
 
 [services.development]
-run = "env -u DATABASE_URL NET_SERVICOS_PAYMENT_MODE=mock NET_SERVICOS_DATA_DIR=$(mktemp -d /tmp/megabyte-preview.XXXXXX) pnpm --filter @workspace/api-server run dev"
+run = "NET_SERVICOS_PAYMENT_MODE=mock PAYMENT_PROVIDER=emedx SITE_URL=https://${REPLIT_DEV_DOMAIN} NET_SERVICOS_DATA_DIR=$(mktemp -d /tmp/megabyte-preview.XXXXXX) pnpm --filter @workspace/api-server run dev"
 
 [services.production]
 
