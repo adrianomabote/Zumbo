@@ -3932,7 +3932,7 @@ async function submitRecharge() {
     }else if(d.requestState==='confirmed'){
       notice.textContent='Pagamento confirmado pelo provedor. O saldo será actualizado nesta conta.'
     }else{
-      notice.textContent='Ainda não foi possível confirmar se o pedido chegou ao M-Pesa. Não repita a recarga por enquanto; verifique o estado ou contacte o suporte.'
+      notice.textContent='Pedido de recarga registado e em verificação. Aguarde a confirmação antes de tentar novamente.'
     }
     listenRecharge(d.txId,amount)
   } catch{err.textContent='Erro de ligação.';err.style.display='block';btn.disabled=false;btn.textContent='Recarregar'}

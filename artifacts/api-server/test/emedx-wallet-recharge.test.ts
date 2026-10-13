@@ -276,6 +276,21 @@ test("inicia recargas de saldo apenas com M-Pesa e mantém separado o telefone d
   assert.match(formElements["recharge-payment-notice"].textContent, /Modo de teste/);
   assert.match(formElements["recharge-payment-notice"].textContent, /nenhum pedido foi enviado ao M-Pesa/);
 
+  checkoutResponse = {
+    txId: "test-recharge-unknown",
+    paymentPhone: "841112223",
+    requestState: "unknown",
+  };
+  await submitRecharge();
+  assert.match(
+    formElements["recharge-payment-notice"].textContent,
+    /Pedido de recarga registado e em verificação/,
+  );
+  assert.doesNotMatch(
+    formElements["recharge-payment-notice"].textContent,
+    /Ainda não foi possível confirmar/,
+  );
+
   const response = await postJson("/api/recharge/checkout", {
     amount: 20,
     paymentPhone: "+258 84 111 2223",
