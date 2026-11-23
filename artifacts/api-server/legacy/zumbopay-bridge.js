@@ -57,6 +57,7 @@ function adminToken() {
   return createHmac('sha256', (process.env.PAGAR_WEBHOOK_SECRET || '') + ADMIN_PASS).update('netservicos:admin').digest('hex')
 }
 function checkAdminCookie(req) {
+  if (!ADMIN_PASS) return false
   const cookies = req.headers.cookie || ''
   const m = cookies.match(/(?:^|;\s*)nsa=([^;]*)/)
   return m ? m[1] === adminToken() : false
@@ -1259,7 +1260,7 @@ async function initiateCharge(tx, customerName) {
     if (PAYMENT_PROVIDERS.has(data.provider)) {
       tx.pagarProvider = data.provider
     } else {
-      const definiteRejection = [400, 401, 403, 404, 422].includes(resp.status) &&
+      const definiteRejection = [400, 401, 402, 403, 404, 408, 422].includes(resp.status) &&
         PAYMENT_PROVIDERS.has(PAYMENT_API_ROUTE) &&
         typeof data.error === 'string' &&
         data.error.trim().length > 0
@@ -1579,19 +1580,6 @@ async function router(req, res) {
   const method = req.method
   const path   = req.url.split('?')[0]
   res.setHeader('Access-Control-Allow-Origin', '*')
-
-  const staticPath = path.startsWith('/static/')
-  const readOnlyPath = [
-    '/', '/megas', '/ping', '/favicon.ico', '/manifest.json', '/sw.js',
-    '/api/config', '/api/bundles', '/api/auth/me', '/api/auth/logout', '/api/maintenance-status', '/gateway/docs',
-  ].includes(path) || staticPath || PUBLIC_CATEGORY_PATHS.includes(path) || PUBLIC_INFO_PATHS_WITH_SLASH.includes(path)
-  const accountSetupPath = ['/api/auth/register', '/api/auth/login'].includes(path)
-  const adminPath = path.startsWith('/admin')
-  if (!isLiveConfiguration && !(method === 'GET' && readOnlyPath) && !accountSetupPath && !adminPath) {
-    return json(res, {
-      error: 'Operações temporariamente indisponíveis enquanto a configuração segura do serviço não é concluída.',
-    }, 503)
-  }
 
   if (maintenanceEnabled && !isMaintenanceBypassPath(path)) {
     return sendMaintenanceResponse(req, res, path)
@@ -2457,7 +2445,7 @@ NOTAS
   if (method === 'GET' && path === '/api/transactions') {
     const auth  = req.headers['authorization'] || ''
     const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
-    const authed = checkAdminCookie(req) || (token && safeEqual(token, ADMIN_PASS))
+    const authed = checkAdminCookie(req) || (Boolean(ADMIN_PASS) && token && safeEqual(token, ADMIN_PASS))
     if (!authed) return json(res, { error:'Não autorizado. Inclua o header: Authorization: Bearer <senha_admin>' }, 401)
     const q     = parseQuery(req)
     const page  = Math.max(1, parseInt(q.page)  || 1)
@@ -5418,9 +5406,8 @@ const requiredConfig = [
 ]
 const missingConfig = requiredConfig.filter(key => !String(process.env[key] || '').trim())
 const paymentProviderIsSupported = ['pagar', 'debitopay', 'paysuite', 'vpay', 'mozpayment', 'emedx', 'kivora'].includes(configuredPaymentProvider)
-const isLiveConfiguration = isTestMode || isFreeMode || (paymentProviderIsSupported && missingConfig.length === 0)
-if (!isLiveConfiguration) {
-  console.warn(`[Config] Operações bloqueadas (provedor=${configuredPaymentProvider || 'não definido'}) — variáveis em falta: ${missingConfig.join(', ') || 'provedor não suportado'}`)
+if (!isTestMode && !isFreeMode && (!paymentProviderIsSupported || missingConfig.length > 0)) {
+  console.warn(`[Config] Variáveis em falta (${configuredPaymentProvider || 'não definido'}): ${missingConfig.join(', ') || 'provedor não suportado'}`)
 }
 
 await dbInit()

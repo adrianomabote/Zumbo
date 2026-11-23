@@ -1,4 +1,6 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { hasDatabase, pool } from "@workspace/db";
 import { logger } from "../lib/logger";
 
@@ -263,11 +265,92 @@ function providerAmountMatches(
     : value === localAmountMzn;
 }
 
-function requirePool() {
-  if (!hasDatabase || !pool) {
-    throw new Error("Pagamentos indisponíveis: PostgreSQL não configurado.");
+interface LocalPagarOperation {
+  internal_id: string;
+  provider: PaymentProvider | null;
+  pagar_operation_id: string | null;
+  pagar_reference: string;
+  provider_query_reference: string | null;
+  type: string;
+  amount_mzn: number;
+  status: string;
+  idempotency_key: string;
+  source_id: string;
+  local_transaction_id: string;
+  title: string;
+  method: string;
+  payer_phone: string;
+  checkout_url: string | null;
+  failure_reason: string | null;
+  receipt_number: string | null;
+  receipt_url: string | null;
+  created_at: string;
+  confirmed_at: string | null;
+}
+
+interface LocalPagarWebhookEvent extends PagarWebhookRow {
+  processed_at: string;
+  forwarding_started_at?: string;
+}
+
+const localOperations = new Map<string, LocalPagarOperation>();
+const localWebhookEvents = new Map<string, LocalPagarWebhookEvent>();
+const localForwardLocks = new Set<string>();
+let localStoreSaveChain: Promise<void> = Promise.resolve();
+
+function localStoreFilePath() {
+  const dir = process.env.NET_SERVICOS_DATA_DIR?.trim();
+  return dir ? path.join(path.resolve(dir), "pagar-store.json") : null;
+}
+
+async function loadLocalPagarStore() {
+  const filePath = localStoreFilePath();
+  if (!filePath) return;
+  try {
+    const raw = await readFile(filePath, "utf8");
+    const parsed = JSON.parse(raw) as {
+      operations?: LocalPagarOperation[];
+      webhookEvents?: LocalPagarWebhookEvent[];
+    };
+    if (Array.isArray(parsed.operations)) {
+      for (const op of parsed.operations) {
+        if (op?.internal_id) localOperations.set(op.internal_id, op);
+      }
+    }
+    if (Array.isArray(parsed.webhookEvents)) {
+      for (const evt of parsed.webhookEvents) {
+        if (evt?.event_id) localWebhookEvents.set(evt.event_id, evt);
+      }
+    }
+  } catch (error) {
+    if ((error as { code?: string })?.code !== "ENOENT") {
+      logger.warn({ err: error }, "Não foi possível carregar o ficheiro local de pagamentos.");
+    }
   }
-  return pool;
+}
+
+async function saveLocalPagarStore() {
+  const filePath = localStoreFilePath();
+  if (!filePath) return;
+  const payload = JSON.stringify({
+    operations: [...localOperations.values()],
+    webhookEvents: [...localWebhookEvents.values()],
+  });
+  localStoreSaveChain = localStoreSaveChain.then(async () => {
+    try {
+      await mkdir(path.dirname(filePath), { recursive: true });
+      const tmpPath = `${filePath}.tmp`;
+      await writeFile(tmpPath, payload, "utf8");
+      await rename(tmpPath, filePath);
+    } catch (error) {
+      logger.warn({ err: error }, "Não foi possível guardar o ficheiro local de pagamentos.");
+    }
+  });
+  await localStoreSaveChain;
+}
+
+function activePool() {
+  return hasDatabase && pool ? pool : null;
 }
 
 export type PagarMethod = "MPESA" | "EMOLA";
@@ -1079,6 +1162,7 @@ export async function createKivoraC2BPayment(input: Pick<
   try {
     data = await request("POST", "/v1/c2b", body, undefined, "kivora");
   } catch (error) {
+    if (isConfigurationError(error)) throw error;
     const errObj = error as { error?: unknown; status?: unknown; requestId?: unknown };
     const code = typeof errObj.error === "string" ? errObj.error.trim() : undefined;
     const desc = error instanceof Error ? error.message : undefined;
@@ -1172,8 +1256,12 @@ function normalizePaymentStatus(value: unknown) {
 }
 
 export async function ensurePagarTables() {
-  if (!hasDatabase || !pool) return;
-  await pool.query(`
+  const database = activePool();
+  if (!database) {
+    await loadLocalPagarStore();
+    return;
+  }
+  await database.query(`
     CREATE TABLE IF NOT EXISTS pagar_operations (
       internal_id text PRIMARY KEY,
       provider text,
@@ -1237,7 +1325,7 @@ export async function ensurePagarTables() {
 }
 
 export async function createPagarPayment(input: PagarPaymentInput) {
-  const database = requirePool();
+  const database = activePool();
   const provider = activeProvider();
   const normalizedInput = provider === "paysuite"
     ? {
@@ -1246,17 +1334,55 @@ export async function createPagarPayment(input: PagarPaymentInput) {
       }
     : input;
   validateInput(normalizedInput, provider);
-  const existing = await database.query(
-    "SELECT internal_id, provider, pagar_operation_id, pagar_reference, provider_query_reference, amount_mzn, status, checkout_url FROM pagar_operations WHERE local_transaction_id = $1 OR idempotency_key = $2",
-    [input.localTransactionId, input.idempotencyKey],
-  );
-  if (existing.rows[0]) return existing.rows[0];
 
-  const inserted = await database.query(
-    `INSERT INTO pagar_operations (internal_id, provider, pagar_reference, type, amount_mzn, status, idempotency_key, source_id, local_transaction_id, title, method, payer_phone)
-     VALUES ($1,$2,$3,'payment',$4,'PENDING',$5,$6,$7,$8,$9,$10) RETURNING *`,
-    [input.localTransactionId, provider, normalizedInput.reference, input.amountMzn, input.idempotencyKey, input.sourceId, input.localTransactionId, input.title, input.method, input.payerPhone],
-  );
+  if (database) {
+    const existing = await database.query(
+      "SELECT internal_id, provider, pagar_operation_id, pagar_reference, provider_query_reference, amount_mzn, status, checkout_url FROM pagar_operations WHERE local_transaction_id = $1 OR idempotency_key = $2",
+      [input.localTransactionId, input.idempotencyKey],
+    );
+    if (existing.rows[0]) return existing.rows[0];
+  } else {
+    const existing = [...localOperations.values()].find(
+      (op) => op.local_transaction_id === input.localTransactionId || op.idempotency_key === input.idempotencyKey,
+    );
+    if (existing) return { ...existing };
+  }
+
+  let baseRow: LocalPagarOperation;
+  if (database) {
+    const inserted = await database.query(
+      `INSERT INTO pagar_operations (internal_id, provider, pagar_reference, type, amount_mzn, status, idempotency_key, source_id, local_transaction_id, title, method, payer_phone)
+       VALUES ($1,$2,$3,'payment',$4,'PENDING',$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [input.localTransactionId, provider, normalizedInput.reference, input.amountMzn, input.idempotencyKey, input.sourceId, input.localTransactionId, input.title, input.method, input.payerPhone],
+    );
+    baseRow = inserted.rows[0];
+  } else {
+    baseRow = {
+      internal_id: input.localTransactionId,
+      provider,
+      pagar_operation_id: null,
+      pagar_reference: normalizedInput.reference,
+      provider_query_reference: null,
+      type: "payment",
+      amount_mzn: input.amountMzn,
+      status: "PENDING",
+      idempotency_key: input.idempotencyKey,
+      source_id: input.sourceId,
+      local_transaction_id: input.localTransactionId,
+      title: input.title,
+      method: input.method,
+      payer_phone: input.payerPhone,
+      checkout_url: null,
+      failure_reason: null,
+      receipt_number: null,
+      receipt_url: null,
+      created_at: new Date().toISOString(),
+      confirmed_at: null,
+    };
+    localOperations.set(input.localTransactionId, baseRow);
+    await saveLocalPagarStore();
+  }
+
   const isDebitoPay = provider === "debitopay";
   const isPaysuite = provider === "paysuite";
   const isVpay = provider === "vpay";
@@ -1313,20 +1439,31 @@ export async function createPagarPayment(input: PagarPaymentInput) {
       checkoutUrl = hostedOrder.checkoutUrl;
     } else if (isMozPayment) {
       const result = await createMozPaymentC2B(input);
-      const updated = await database.query(
-        `UPDATE pagar_operations
-            SET pagar_operation_id = $1,
-                status = $2,
-                confirmed_at = CASE WHEN $2 = 'PAID' THEN COALESCE(confirmed_at, now()) ELSE confirmed_at END
-          WHERE internal_id = $3
-          RETURNING *`,
-        [result.operationId || null, result.status, input.localTransactionId],
-      );
-      const payment = updated.rows[0] || {
-        ...inserted.rows[0],
-        pagar_operation_id: result.operationId || null,
-        status: result.status,
-      };
+      let payment: Record<string, unknown>;
+      if (database) {
+        const updated = await database.query(
+          `UPDATE pagar_operations
+              SET pagar_operation_id = $1,
+                  status = $2,
+                  confirmed_at = CASE WHEN $2 = 'PAID' THEN COALESCE(confirmed_at, now()) ELSE confirmed_at END
+            WHERE internal_id = $3
+            RETURNING *`,
+          [result.operationId || null, result.status, input.localTransactionId],
+        );
+        payment = updated.rows[0] || {
+          ...baseRow,
+          pagar_operation_id: result.operationId || null,
+          status: result.status,
+        };
+      } else {
+        baseRow.pagar_operation_id = result.operationId || null;
+        baseRow.status = result.status;
+        if (result.status === "PAID" && !baseRow.confirmed_at) {
+          baseRow.confirmed_at = new Date().toISOString();
+        }
+        await saveLocalPagarStore();
+        payment = { ...baseRow };
+      }
       return {
         ...payment,
         mozpayment_failure_reason: result.failureReason || null,
@@ -1339,22 +1476,34 @@ export async function createPagarPayment(input: PagarPaymentInput) {
         description: input.description,
         method: input.method,
       });
-      const updated = await database.query(
-        `UPDATE pagar_operations
-            SET pagar_operation_id = $1,
-                status = $2,
-                failure_reason = COALESCE($3, failure_reason),
-                confirmed_at = CASE WHEN $2 = 'PAID' THEN COALESCE(confirmed_at, now()) ELSE confirmed_at END
-          WHERE internal_id = $4
-          RETURNING *`,
-        [result.operationId || null, result.status, result.failureReason || null, input.localTransactionId],
-      );
-      const payment = updated.rows[0] || {
-        ...inserted.rows[0],
-        pagar_operation_id: result.operationId || null,
-        status: result.status,
-        failure_reason: result.failureReason || null,
-      };
+      let payment: Record<string, unknown>;
+      if (database) {
+        const updated = await database.query(
+          `UPDATE pagar_operations
+              SET pagar_operation_id = $1,
+                  status = $2,
+                  failure_reason = COALESCE($3, failure_reason),
+                  confirmed_at = CASE WHEN $2 = 'PAID' THEN COALESCE(confirmed_at, now()) ELSE confirmed_at END
+            WHERE internal_id = $4
+            RETURNING *`,
+          [result.operationId || null, result.status, result.failureReason || null, input.localTransactionId],
+        );
+        payment = updated.rows[0] || {
+          ...baseRow,
+          pagar_operation_id: result.operationId || null,
+          status: result.status,
+          failure_reason: result.failureReason || null,
+        };
+      } else {
+        baseRow.pagar_operation_id = result.operationId || null;
+        baseRow.status = result.status;
+        if (result.failureReason) baseRow.failure_reason = result.failureReason;
+        if (result.status === "PAID" && !baseRow.confirmed_at) {
+          baseRow.confirmed_at = new Date().toISOString();
+        }
+        await saveLocalPagarStore();
+        payment = { ...baseRow };
+      }
       return {
         ...payment,
         kivora_failure_reason: result.failureReason || null,
@@ -1366,22 +1515,34 @@ export async function createPagarPayment(input: PagarPaymentInput) {
         payerPhone: input.payerPhone,
         idempotencyKey: input.idempotencyKey,
       });
-      const updated = await database.query(
-        `UPDATE pagar_operations
-            SET pagar_operation_id = $1,
-                provider_query_reference = $2,
-                status = $3,
-                confirmed_at = CASE WHEN $3 = 'PAID' THEN COALESCE(confirmed_at, now()) ELSE confirmed_at END
-          WHERE internal_id = $4
-          RETURNING *`,
-        [result.operationId || null, result.queryReference || null, result.status, input.localTransactionId],
-      );
-      const payment = updated.rows[0] || {
-        ...inserted.rows[0],
-        pagar_operation_id: result.operationId || null,
-        provider_query_reference: result.queryReference || null,
-        status: result.status,
-      };
+      let payment: Record<string, unknown>;
+      if (database) {
+        const updated = await database.query(
+          `UPDATE pagar_operations
+              SET pagar_operation_id = $1,
+                  provider_query_reference = $2,
+                  status = $3,
+                  confirmed_at = CASE WHEN $3 = 'PAID' THEN COALESCE(confirmed_at, now()) ELSE confirmed_at END
+            WHERE internal_id = $4
+            RETURNING *`,
+          [result.operationId || null, result.queryReference || null, result.status, input.localTransactionId],
+        );
+        payment = updated.rows[0] || {
+          ...baseRow,
+          pagar_operation_id: result.operationId || null,
+          provider_query_reference: result.queryReference || null,
+          status: result.status,
+        };
+      } else {
+        baseRow.pagar_operation_id = result.operationId || null;
+        baseRow.provider_query_reference = result.queryReference || null;
+        baseRow.status = result.status;
+        if (result.status === "PAID" && !baseRow.confirmed_at) {
+          baseRow.confirmed_at = new Date().toISOString();
+        }
+        await saveLocalPagarStore();
+        payment = { ...baseRow };
+      }
       return {
         ...payment,
         emedx_failure_reason: result.failureReason || null,
@@ -1397,29 +1558,43 @@ export async function createPagarPayment(input: PagarPaymentInput) {
       : isPaysuite
         ? normalizePaysuiteStatus(providerStatus(operation))
         : normalizePaymentStatus(operation.status);
-    const updated = await database.query(
-      "UPDATE pagar_operations SET pagar_operation_id = $1, status = $2, checkout_url = $3 WHERE internal_id = $4 RETURNING *",
-      [
-         vpayId || providerOperationId(operation) || null,
-        (() => {
-            if (isVpay) return "PENDING";
-            if (isDebitoPay || isPaysuite) return status || "RECONCILIATION_REQUIRED";
-           return status && knownPaymentStates.has(status) ? status : "RECONCILIATION_REQUIRED";
-        })(),
-         checkoutUrl || null,
-        input.localTransactionId,
-      ],
-    );
-    return updated.rows[0] || inserted.rows[0];
+    const resolvedOpId = vpayId || providerOperationId(operation) || null;
+    const resolvedStatus = (() => {
+      if (isVpay) return "PENDING";
+      if (isDebitoPay || isPaysuite) return status || "RECONCILIATION_REQUIRED";
+      return status && knownPaymentStates.has(status) ? status : "RECONCILIATION_REQUIRED";
+    })();
+    if (database) {
+      const updated = await database.query(
+        "UPDATE pagar_operations SET pagar_operation_id = $1, status = $2, checkout_url = $3 WHERE internal_id = $4 RETURNING *",
+        [resolvedOpId, resolvedStatus, checkoutUrl || null, input.localTransactionId],
+      );
+      return updated.rows[0] || baseRow;
+    }
+    baseRow.pagar_operation_id = resolvedOpId;
+    baseRow.status = resolvedStatus;
+    baseRow.checkout_url = checkoutUrl || null;
+    await saveLocalPagarStore();
+    return { ...baseRow };
   } catch (error) {
     if (isUncertainProviderError(error)) {
-      const recovered = await database.query(
-        "UPDATE pagar_operations SET status = 'RECONCILIATION_REQUIRED' WHERE internal_id = $1 RETURNING *",
-        [input.localTransactionId],
-      );
-      return recovered.rows[0] || { ...inserted.rows[0], status: "RECONCILIATION_REQUIRED" };
+      if (database) {
+        const recovered = await database.query(
+          "UPDATE pagar_operations SET status = 'RECONCILIATION_REQUIRED' WHERE internal_id = $1 RETURNING *",
+          [input.localTransactionId],
+        );
+        return recovered.rows[0] || { ...baseRow, status: "RECONCILIATION_REQUIRED" };
+      }
+      baseRow.status = "RECONCILIATION_REQUIRED";
+      await saveLocalPagarStore();
+      return { ...baseRow };
     }
-    await database.query("UPDATE pagar_operations SET status = 'FAILED' WHERE internal_id = $1", [input.localTransactionId]);
+    if (database) {
+      await database.query("UPDATE pagar_operations SET status = 'FAILED' WHERE internal_id = $1", [input.localTransactionId]);
+    } else {
+      baseRow.status = "FAILED";
+      await saveLocalPagarStore();
+    }
     throw error;
   }
 }
@@ -1489,13 +1664,14 @@ export async function getPagarPayment(
 }
 
 export async function reconcilePagarPayment(localTransactionId: string) {
-  const database = requirePool();
-  const localResult = await database.query(
-    `SELECT internal_id, provider, pagar_operation_id, pagar_reference, provider_query_reference, amount_mzn, status, method, payer_phone
-       FROM pagar_operations WHERE internal_id = $1`,
-    [localTransactionId],
-  );
-  const local = localResult.rows[0];
+  const database = activePool();
+  const local = database
+    ? (await database.query(
+        `SELECT internal_id, provider, pagar_operation_id, pagar_reference, provider_query_reference, amount_mzn, status, method, payer_phone
+           FROM pagar_operations WHERE internal_id = $1`,
+        [localTransactionId],
+      )).rows[0]
+    : localOperations.get(localTransactionId);
   if (!local) {
     const error = new Error("Operação de pagamento não encontrada.");
     Object.assign(error, { status: 404 });
@@ -1593,6 +1769,31 @@ export async function reconcilePagarPayment(localTransactionId: string) {
     : undefined;
 
   const receipt = (operation.receipt || {}) as Record<string, unknown>;
+  if (!database) {
+    const current = localOperations.get(localTransactionId);
+    if (!current) {
+      const error = new Error("Operação de pagamento não encontrada.");
+      Object.assign(error, { status: 404 });
+      throw error;
+    }
+    const nextStatus = current.status === "PAID" && normalizedProviderStatus !== "PAID"
+      ? "PAID"
+      : normalizedProviderStatus;
+    current.status = nextStatus;
+    if (operationId) current.pagar_operation_id = operationId;
+    if (queryReference) current.provider_query_reference = queryReference;
+    if (typeof receipt.number === "string") current.receipt_number = receipt.number;
+    if (typeof receipt.url === "string") current.receipt_url = receipt.url;
+    current.failure_reason = nextStatus === "PAID"
+      ? null
+      : (reconciliationFailureReason || current.failure_reason);
+    if (nextStatus === "PAID" && !current.confirmed_at) {
+      current.confirmed_at = new Date().toISOString();
+    }
+    await saveLocalPagarStore();
+    return { ...current };
+  }
+
   const client = await database.connect();
   try {
     await client.query("BEGIN");
@@ -1739,16 +1940,22 @@ export async function processKivoraWebhook(rawBody: Buffer) {
     throw error;
   }
 
-  const database = requirePool();
-  const localResult = await database.query(
-    `SELECT amount_mzn, method
-       FROM pagar_operations
-      WHERE provider = 'kivora'
-        AND (pagar_operation_id = $1 OR pagar_reference = $2)
-      LIMIT 1`,
-    [operationId || "", reference || ""],
-  );
-  const local = localResult.rows[0];
+  const database = activePool();
+  const local = database
+    ? (await database.query(
+        `SELECT amount_mzn, method
+           FROM pagar_operations
+          WHERE provider = 'kivora'
+            AND (pagar_operation_id = $1 OR pagar_reference = $2)
+          LIMIT 1`,
+        [operationId || "", reference || ""],
+      )).rows[0]
+    : [...localOperations.values()].find(
+        (op) => op.provider === "kivora" && (
+          (operationId && op.pagar_operation_id === operationId) ||
+          (reference && op.pagar_reference === reference)
+        ),
+      );
   if (local && amount !== undefined && Number(local.amount_mzn) !== amount) {
     const error = new Error("Os dados do webhook Kivora não correspondem à cobrança.");
     Object.assign(error, { status: 400 });
@@ -1845,12 +2052,15 @@ export async function processEmedxWebhook(rawBody: Buffer) {
     throw error;
   }
 
-  const database = requirePool();
-  const localResult = await database.query(
-    "SELECT amount_mzn, payer_phone FROM pagar_operations WHERE provider = 'emedx' AND pagar_reference = $1",
-    [reference],
-  );
-  const local = localResult.rows[0];
+  const database = activePool();
+  const local = database
+    ? (await database.query(
+        "SELECT amount_mzn, payer_phone FROM pagar_operations WHERE provider = 'emedx' AND pagar_reference = $1",
+        [reference],
+      )).rows[0]
+    : [...localOperations.values()].find(
+        (op) => op.provider === "emedx" && op.pagar_reference === reference,
+      );
   if (local && (
     Number(local.amount_mzn) !== amount ||
     emedxLocalPhone(local.payer_phone) !== phone
@@ -1863,12 +2073,17 @@ export async function processEmedxWebhook(rawBody: Buffer) {
   const queryReference = [data.transactionReference, data.queryReference]
     .find((value): value is string => typeof value === "string" && value.trim().length > 0);
   if (local && queryReference) {
-    await database.query(
-      `UPDATE pagar_operations
-          SET provider_query_reference = COALESCE(provider_query_reference, $1)
-        WHERE provider = 'emedx' AND pagar_reference = $2`,
-      [queryReference, reference],
-    );
+    if (database) {
+      await database.query(
+        `UPDATE pagar_operations
+            SET provider_query_reference = COALESCE(provider_query_reference, $1)
+          WHERE provider = 'emedx' AND pagar_reference = $2`,
+        [queryReference, reference],
+      );
+    } else if (!local.provider_query_reference) {
+      local.provider_query_reference = queryReference;
+      await saveLocalPagarStore();
+    }
   }
 
   const eventName = event.toLowerCase();
@@ -2140,7 +2355,7 @@ export async function processPagarWebhook(
   rawBody: Buffer,
   provider?: PaymentProvider,
 ): Promise<PagarWebhookEvent & { duplicate: boolean }> {
-  const database = requirePool();
+  const database = activePool();
   const payload = JSON.parse(rawBody.toString("utf8")) as { data?: Record<string, unknown> };
   const data = payload.data || {};
   const operationId = typeof data.id === "string" ? data.id : undefined;
@@ -2149,6 +2364,63 @@ export async function processPagarWebhook(
   const failureReason = typeof data.failureReason === "string" && data.failureReason.trim()
     ? data.failureReason.trim()
     : undefined;
+
+  if (!database) {
+    const existing = localWebhookEvents.get(eventId);
+    if (existing) {
+      return { ...webhookEventFromRow(existing), duplicate: true };
+    }
+    const forwardingStatus = forwardingStatusFor(eventType, operationId, reference);
+    const nowIso = new Date().toISOString();
+    const row: LocalPagarWebhookEvent = {
+      event_id: eventId,
+      event_type: eventType,
+      processed_at: nowIso,
+      operation_id: operationId || undefined,
+      reference: reference || undefined,
+      payment_status: status || undefined,
+      failure_reason: failureReason || undefined,
+      forwarding_status: forwardingStatus,
+      forwarding_attempts: 0,
+      forwarding_last_error: undefined,
+      forwarding_next_retry_at: forwardingStatus === "pending" ? nowIso : undefined,
+      forwarding_started_at: undefined,
+      forwarding_updated_at: nowIso,
+    };
+    localWebhookEvents.set(eventId, row);
+
+    if (eventType === "payment.succeeded" || eventType === "payment.failed") {
+      const local = [...localOperations.values()].find((op) =>
+        ((operationId && op.pagar_operation_id === operationId) || (reference && op.pagar_reference === reference)) &&
+        (!provider || op.provider === provider),
+      );
+      const eventAmount = typeof data.amountMzn === "number" ? data.amountMzn : undefined;
+      const identifiersMatch = Boolean(local && (operationId || reference));
+      const providerStatus = normalizePaymentStatus(status);
+      const nextStatus = eventType === "payment.succeeded"
+        ? "PAID"
+        : eventType === "payment.failed" && (!providerStatus || ["FAILED", "CANCELLED", "REFUNDED"].includes(providerStatus))
+          ? providerStatus || "FAILED"
+          : undefined;
+      if (local && identifiersMatch && nextStatus && providerAmountMatches(eventAmount, local.amount_mzn)) {
+        const receipt = (data.receipt || {}) as Record<string, unknown>;
+        if (!(local.status === "PAID" && nextStatus !== "PAID")) {
+          local.status = nextStatus;
+        }
+        if (operationId && !local.pagar_operation_id) local.pagar_operation_id = operationId;
+        if (typeof receipt.number === "string" && !local.receipt_number) local.receipt_number = receipt.number;
+        if (typeof receipt.url === "string" && !local.receipt_url) local.receipt_url = receipt.url;
+        local.failure_reason = local.status === "PAID" ? null : (failureReason || local.failure_reason);
+        if (local.status === "PAID" && !local.confirmed_at) {
+          local.confirmed_at = nowIso;
+        }
+      }
+    }
+
+    await saveLocalPagarStore();
+    return { ...webhookEventFromRow(row), duplicate: false };
+  }
+
   const client = await database.connect();
   try {
     await client.query("BEGIN");
@@ -2225,10 +2497,75 @@ function retryDelayMs(attempts: number) {
 }
 
 export async function forwardPagarWebhook(event: PagarWebhookEvent, options: { force?: boolean } = {}) {
-  const database = requirePool();
+  const database = activePool();
   if (!forwardableEventTypes.has(event.eventType) || (!event.operationId && !event.reference)) {
     return event;
   }
+
+  if (!database) {
+    if (localForwardLocks.has(event.eventId)) return event;
+    localForwardLocks.add(event.eventId);
+    try {
+      const stored = localWebhookEvents.get(event.eventId);
+      if (!stored) return event;
+      const now = Date.now();
+      const nextRetryMs = stored.forwarding_next_retry_at ? new Date(stored.forwarding_next_retry_at).getTime() : 0;
+      const startedMs = stored.forwarding_started_at ? new Date(stored.forwarding_started_at).getTime() : 0;
+      const eligible =
+        ((stored.forwarding_status === "pending" || stored.forwarding_status === "failed") &&
+          (Boolean(options.force) || !stored.forwarding_next_retry_at || nextRetryMs <= now)) ||
+        (stored.forwarding_status === "forwarding" && startedMs < now - 120_000);
+      if (!eligible) return event;
+
+      stored.forwarding_status = "forwarding";
+      stored.forwarding_attempts = Number(stored.forwarding_attempts || 0) + 1;
+      stored.forwarding_started_at = new Date(now).toISOString();
+      stored.forwarding_updated_at = new Date(now).toISOString();
+      stored.forwarding_last_error = undefined;
+
+      try {
+        const bridgePort = process.env.PAGAR_BRIDGE_PORT || process.env.LEGACY_BRIDGE_PORT || "8099";
+        const controller = new AbortController();
+        activeForwardingControllers.add(controller);
+        try {
+          const response = await fetch(`http://127.0.0.1:${bridgePort}/internal/pagar-event`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-internal-payment-key": process.env.SESSION_SECRET || "" },
+            body: JSON.stringify({
+              eventId: event.eventId,
+              eventType: event.eventType,
+              operationId: event.operationId,
+              reference: event.reference,
+              status: event.status,
+              ...(event.failureReason ? { failureReason: event.failureReason } : {}),
+            }),
+            signal: AbortSignal.any([controller.signal, AbortSignal.timeout(5_000)]),
+          });
+          if (!response.ok) throw new Error(`Bridge recusou o encaminhamento (${response.status}).`);
+          stored.forwarding_status = "delivered";
+          stored.forwarding_last_error = undefined;
+          stored.forwarding_next_retry_at = undefined;
+          stored.forwarding_started_at = undefined;
+          stored.forwarding_updated_at = new Date().toISOString();
+        } finally {
+          activeForwardingControllers.delete(controller);
+        }
+      } catch (error) {
+        const attempts = Number(stored.forwarding_attempts || 1);
+        const reason = error instanceof Error ? error.message : "Não foi possível contactar o bridge.";
+        stored.forwarding_status = "failed";
+        stored.forwarding_last_error = reason.slice(0, 500);
+        stored.forwarding_next_retry_at = new Date(Date.now() + retryDelayMs(attempts)).toISOString();
+        stored.forwarding_started_at = undefined;
+        stored.forwarding_updated_at = new Date().toISOString();
+      }
+      await saveLocalPagarStore();
+      return webhookEventFromRow(stored);
+    } finally {
+      localForwardLocks.delete(event.eventId);
+    }
+  }
+
   const client = await database.connect();
   const lockKey = `pagar-webhook-forward:${event.eventId}`;
   let lockAcquired = false;
@@ -2263,7 +2600,7 @@ export async function forwardPagarWebhook(event: PagarWebhookEvent, options: { f
     if (!claimed.rowCount) return event;
 
     try {
-      const bridgePort = process.env.PAGAR_BRIDGE_PORT || "8099";
+      const bridgePort = process.env.PAGAR_BRIDGE_PORT || process.env.LEGACY_BRIDGE_PORT || "8099";
       const controller = new AbortController();
       activeForwardingControllers.add(controller);
       try {
@@ -2328,7 +2665,11 @@ export async function forwardPagarWebhook(event: PagarWebhookEvent, options: { f
 }
 
 export async function getPagarWebhookEvent(eventId: string) {
-  const database = requirePool();
+  const database = activePool();
+  if (!database) {
+    const stored = localWebhookEvents.get(eventId);
+    return stored ? webhookEventFromRow(stored) : undefined;
+  }
   const result = await database.query(
     `SELECT event_id, event_type, operation_id, reference, payment_status, failure_reason,
             forwarding_status, forwarding_attempts, forwarding_last_error,
@@ -2340,7 +2681,14 @@ export async function getPagarWebhookEvent(eventId: string) {
 }
 
 export async function listPagarWebhookEvents() {
-  const database = requirePool();
+  const database = activePool();
+  if (!database) {
+    return [...localWebhookEvents.values()]
+      .filter((row) => row.forwarding_status !== "not_required")
+      .sort((a, b) => new Date(b.processed_at).getTime() - new Date(a.processed_at).getTime())
+      .slice(0, 200)
+      .map(webhookEventFromRow);
+  }
   const result = await database.query(
     `SELECT event_id, event_type, operation_id, reference, payment_status, failure_reason,
             forwarding_status, forwarding_attempts, forwarding_last_error,
@@ -2354,11 +2702,25 @@ export async function listPagarWebhookEvents() {
 }
 
 export async function retryPagarWebhookForwarding(eventId: string) {
-  const database = requirePool();
+  const database = activePool();
   const event = await getPagarWebhookEvent(eventId);
   if (!event) throw new Error("Evento de pagamento não encontrado.");
   if (!forwardableEventTypes.has(event.eventType) || (!event.operationId && !event.reference)) {
     throw new Error("Este evento não pode ser encaminhado.");
+  }
+  if (!database) {
+    const stored = localWebhookEvents.get(eventId);
+    if (stored && stored.forwarding_status !== "delivered") {
+      const nowIso = new Date().toISOString();
+      stored.forwarding_status = "pending";
+      stored.forwarding_last_error = undefined;
+      stored.forwarding_next_retry_at = nowIso;
+      stored.forwarding_started_at = undefined;
+      stored.forwarding_updated_at = nowIso;
+      await saveLocalPagarStore();
+    }
+    const pending = await getPagarWebhookEvent(eventId);
+    return pending ? forwardPagarWebhook(pending, { force: true }) : event;
   }
   await database.query(
     `UPDATE pagar_webhook_events
@@ -2414,7 +2776,30 @@ export function startPagarWebhookRetryWorker(intervalMs = 30_000) {
     if (forwardingRetryRunning) return;
     forwardingRetryRunning = true;
     try {
-      const due = await requirePool().query(
+      const database = activePool();
+      if (!database) {
+        const now = Date.now();
+        const dueRows = [...localWebhookEvents.values()]
+          .filter((row) =>
+            ((row.forwarding_status === "pending" || row.forwarding_status === "failed") &&
+              (!row.forwarding_next_retry_at || new Date(row.forwarding_next_retry_at).getTime() <= now)) ||
+            (row.forwarding_status === "forwarding" &&
+              row.forwarding_started_at &&
+              new Date(row.forwarding_started_at).getTime() < now - 120_000),
+          )
+          .sort((a, b) => {
+            const ta = a.forwarding_next_retry_at ? new Date(a.forwarding_next_retry_at).getTime() : 0;
+            const tb = b.forwarding_next_retry_at ? new Date(b.forwarding_next_retry_at).getTime() : 0;
+            return ta - tb;
+          })
+          .slice(0, 20);
+        for (const row of dueRows) {
+          if (worker.stopped) break;
+          await forwardPagarWebhook(webhookEventFromRow(row));
+        }
+        return;
+      }
+      const due = await database.query(
         `SELECT event_id, event_type, operation_id, reference, payment_status, failure_reason,
                 forwarding_status, forwarding_attempts, forwarding_last_error,
                 forwarding_next_retry_at, forwarding_updated_at
