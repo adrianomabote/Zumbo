@@ -5416,9 +5416,12 @@ const requiredConfig = [
   'ADMIN_PASS',
   'SESSION_SECRET',
 ]
-const missingConfig = requiredConfig.filter(key => !process.env[key])
+const missingConfig = requiredConfig.filter(key => !String(process.env[key] || '').trim())
 const paymentProviderIsSupported = ['pagar', 'debitopay', 'paysuite', 'vpay', 'mozpayment', 'emedx', 'kivora'].includes(configuredPaymentProvider)
 const isLiveConfiguration = isTestMode || isFreeMode || (paymentProviderIsSupported && missingConfig.length === 0)
+if (!isLiveConfiguration) {
+  console.warn(`[Config] Operações bloqueadas (provedor=${configuredPaymentProvider || 'não definido'}) — variáveis em falta: ${missingConfig.join(', ') || 'provedor não suportado'}`)
+}
 
 await dbInit()
 await loadOrders()
