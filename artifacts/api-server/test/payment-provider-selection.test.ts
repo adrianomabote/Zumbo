@@ -3,14 +3,19 @@ import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import {
   createEmedxC2BPayment,
+  createKivoraC2BPayment,
   createMozPaymentC2B,
   createVpayHostedOrder,
+  extractKivoraFailureReason,
   getPagarPayment,
   mozPaymentC2BResponseLogFields,
   parseEmedxC2BResponse,
+  parseKivoraC2BResponse,
   parseMozPaymentC2BResponse,
+  translateMobileMoneyError,
   validatePagarPaymentInput,
   verifyEmedxWebhook,
+  verifyKivoraWebhook,
   vpayOperationIdentityMatches,
   vpayOperationAmountMatches,
   vpayResponseStatus,
@@ -493,4 +498,234 @@ test("MozPayment response diagnostics retain status fields without logging payme
     transacaoValueType: "string",
     transacaoRecognized: true,
   });
+});
+
+test("Kivora C2B is the default provider and implements POST /v1/c2b, GET /v1/c2b/:id, and HMAC webhooks", async () => {
+  const previousProvider = process.env.PAYMENT_PROVIDER;
+  const previousBaseUrl = process.env.KIVORA_API_BASE_URL;
+  const previousApiKey = process.env.KIVORA_API_KEY;
+  const previousWebhookSecret = process.env.KIVORA_WEBHOOK_SECRET;
+  const previousFetch = globalThis.fetch;
+  const calls: Array<{ url: URL; method: string; headers: Headers; body?: Record<string, unknown> }> = [];
+
+  globalThis.fetch = (async (input, init = {}) => {
+    const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
+    const headers = new Headers(init.headers);
+    const body = typeof init.body === "string" ? JSON.parse(init.body) as Record<string, unknown> : undefined;
+    calls.push({ url, method: init.method || "GET", headers, body });
+
+    if (url.pathname === "/v1/c2b") {
+      if (body?.reference === "ref-fail-error") {
+        return new Response(JSON.stringify({
+          error: { code: "INVALID_PHONE", message: "Número de telefone inválido." },
+        }), { status: 400, headers: { "Content-Type": "application/json" } });
+      }
+      if (body?.reference === "ref-insufficient-balance") {
+        return new Response(JSON.stringify({
+          error: { code: "INSUFFICIENT_FUNDS", message: "Insufficient balance in customer account" },
+        }), { status: 402, headers: { "Content-Type": "application/json" } });
+      }
+      if (body?.reference === "ref-wrong-pin") {
+        return new Response(JSON.stringify({
+          error: { code: "INS-2006", message: "Invalid PIN entered by customer" },
+        }), { status: 400, headers: { "Content-Type": "application/json" } });
+      }
+      if (body?.reference === "ref-timeout") {
+        return new Response(JSON.stringify({
+          error: { code: "INS-9", message: "Request timed out waiting for PIN confirmation" },
+        }), { status: 408, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({
+        id: "pay_kivora_100",
+        status: "pending",
+        amount: body?.amount ?? 100,
+        currency: "MZN",
+        reference: body?.reference,
+        createdAt: "2026-11-23T12:00:00.000Z",
+      }), { status: 201, headers: { "Content-Type": "application/json" } });
+    }
+    if (url.pathname === "/v1/c2b/pay_kivora_100") {
+      return new Response(JSON.stringify({
+        id: "pay_kivora_100",
+        status: "paid",
+        amount: 100,
+        currency: "MZN",
+        reference: "kivora-ref-100",
+      }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    throw new Error(`Unexpected Kivora URL: ${url.href}`);
+  }) as typeof fetch;
+
+  try {
+    delete process.env.PAYMENT_PROVIDER;
+    delete process.env.KIVORA_API_BASE_URL;
+    process.env.KIVORA_API_KEY = "sk_test_kivora_unit";
+    process.env.KIVORA_WEBHOOK_SECRET = "whsec_kivora_unit";
+
+    const mpesaInput = {
+      localTransactionId: "local-kivora-100",
+      sourceId: "source-kivora-100",
+      reference: "kivora-ref-100",
+      title: "Recarga 100 MT",
+      description: "Recarga 100 MT",
+      amountMzn: 100,
+      method: "MPESA" as const,
+      payerPhone: "+258 84 123 4567",
+      idempotencyKey: "kivora-local-100",
+    };
+    const emolaInput = {
+      ...mpesaInput,
+      localTransactionId: "local-kivora-101",
+      sourceId: "source-kivora-101",
+      reference: "kivora-ref-101",
+      method: "EMOLA" as const,
+      payerPhone: "861234567",
+      idempotencyKey: "kivora-local-101",
+    };
+    validatePagarPaymentInput(mpesaInput);
+    validatePagarPaymentInput(emolaInput);
+    assert.throws(
+      () => validatePagarPaymentInput({ ...mpesaInput, amountMzn: 19 }),
+      /entre 20 e 40000/i,
+    );
+    assert.throws(
+      () => validatePagarPaymentInput({ ...mpesaInput, method: "EMOLA", payerPhone: "841234567" }),
+      /telefone não corresponde/i,
+    );
+
+    const createdMpesa = await createKivoraC2BPayment(mpesaInput);
+    assert.deepEqual(createdMpesa, { status: "PENDING", operationId: "pay_kivora_100" });
+
+    const createdEmola = await createKivoraC2BPayment(emolaInput);
+    assert.deepEqual(createdEmola, { status: "PENDING", operationId: "pay_kivora_100" });
+
+    assert.equal(calls[0]?.url.origin, "https://www.kivorapayments.com");
+    assert.equal(calls[0]?.url.pathname, "/v1/c2b");
+    assert.equal(calls[0]?.headers.get("authorization"), "Bearer sk_test_kivora_unit");
+    assert.deepEqual(calls[0]?.body, {
+      phone: "841234567",
+      amount: 100,
+      currency: "MZN",
+      reference: "kivora-ref-100",
+      description: "Recarga 100 MT",
+    });
+    assert.deepEqual(calls[1]?.body, {
+      phone: "861234567",
+      amount: 100,
+      currency: "MZN",
+      reference: "kivora-ref-101",
+      description: "Recarga 100 MT",
+    });
+
+    await assert.rejects(
+      () => createKivoraC2BPayment({ ...mpesaInput, reference: "ref-fail-error" }),
+      /Número de telefone inválido\. Verifique o número e tente novamente\./,
+    );
+    await assert.rejects(
+      () => createKivoraC2BPayment({ ...mpesaInput, reference: "ref-insufficient-balance" }),
+      /Saldo insuficiente na sua conta M-Pesa\. Recarregue a conta e tente novamente\./,
+    );
+    await assert.rejects(
+      () => createKivoraC2BPayment({ ...emolaInput, reference: "ref-wrong-pin" }),
+      /O PIN está incorrecto\. Verifique o seu PIN e tente novamente\./,
+    );
+    await assert.rejects(
+      () => createKivoraC2BPayment({ ...mpesaInput, reference: "ref-timeout" }),
+      /O tempo para confirmar o PIN no M-Pesa expirou\. Tente novamente e confirme rapidamente no telemóvel\./,
+    );
+
+    const statusPayload = await getPagarPayment({ id: "pay_kivora_100" });
+    assert.equal(statusPayload.status, "paid");
+    const getCall = calls.find((c) => c.url.pathname === "/v1/c2b/pay_kivora_100");
+    assert.ok(getCall);
+    assert.equal(getCall.headers.get("authorization"), "Bearer sk_test_kivora_unit");
+
+    assert.deepEqual(
+      parseKivoraC2BResponse(
+        { id: "pay_kivora_100", status: "paid", amount: 100, currency: "MZN", reference: "kivora-ref-100" },
+        { reference: "kivora-ref-100", amountMzn: 100 },
+      ),
+      { status: "PAID", operationId: "pay_kivora_100" },
+    );
+    assert.deepEqual(
+      parseKivoraC2BResponse(
+        { id: "pay_kivora_100", status: "failed", amount: 100, currency: "MZN", message: "Saldo insuficiente" },
+        { reference: "kivora-ref-100", amountMzn: 100, method: "MPESA" },
+      ),
+      {
+        status: "FAILED",
+        operationId: "pay_kivora_100",
+        failureReason: "Saldo insuficiente na sua conta M-Pesa. Recarregue a conta e tente novamente.",
+      },
+    );
+    assert.deepEqual(
+      parseKivoraC2BResponse(
+        {
+          id: "pay_kivora_101",
+          status: "failed",
+          amount: 100,
+          currency: "MZN",
+          provider_response: { mpesaResponseCode: "INS-2057", mpesaResponseDesc: "PIN incorrect" },
+        },
+        { reference: "kivora-ref-100", amountMzn: 100, method: "MPESA" },
+      ),
+      {
+        status: "FAILED",
+        operationId: "pay_kivora_101",
+        failureReason: "O PIN M-Pesa está incorrecto. Verifique o seu PIN e tente novamente.",
+      },
+    );
+    assert.deepEqual(
+      parseKivoraC2BResponse(
+        {
+          id: "pay_kivora_102",
+          status: "expired",
+          amount: 100,
+          currency: "MZN",
+          error: { code: "PAYMENT_TIMEOUT", message: "Transaction expired" },
+        },
+        { reference: "kivora-ref-100", amountMzn: 100, method: "MPESA" },
+      ),
+      {
+        status: "FAILED",
+        operationId: "pay_kivora_102",
+        failureReason: "O tempo para confirmar o PIN no M-Pesa expirou. Tente novamente e confirme rapidamente no telemóvel.",
+      },
+    );
+    assert.equal(
+      extractKivoraFailureReason({ error: { code: "USER_CANCELLED" } }, "MPESA"),
+      "Pagamento cancelado no telemóvel. Pode tentar novamente quando quiser.",
+    );
+    assert.equal(
+      translateMobileMoneyError({ code: "INS-1", method: "EMOLA" }),
+      "Saldo insuficiente na sua conta. Recarregue a conta e tente novamente.",
+    );
+    assert.deepEqual(
+      parseKivoraC2BResponse(
+        { id: "pay_kivora_100", status: "paid", amount: 99, currency: "MZN" },
+        { reference: "kivora-ref-100", amountMzn: 100 },
+      ),
+      { status: "RECONCILIATION_REQUIRED", operationId: "pay_kivora_100" },
+    );
+
+    const rawBody = Buffer.from('{"id":"evt_123","type":"payment.completed","data":{"id":"pay_kivora_100","status":"paid","amount":100,"currency":"MZN"}}');
+    const ts = Math.floor(Date.now() / 1000);
+    const tsSig = createHmac("sha256", "whsec_kivora_unit").update(`${ts}.${rawBody.toString("utf8")}`).digest("hex");
+    assert.equal(verifyKivoraWebhook(rawBody, `t=${ts},v1=${tsSig}`), true);
+    assert.equal(verifyKivoraWebhook(rawBody, `t=${ts - 600},v1=${tsSig}`), false);
+    const hexSig = createHmac("sha256", "whsec_kivora_unit").update(rawBody).digest("hex");
+    assert.equal(verifyKivoraWebhook(rawBody, `sha256=${hexSig}`), true);
+    assert.equal(verifyKivoraWebhook(rawBody, `${hexSig.slice(0, -1)}0`), false);
+  } finally {
+    globalThis.fetch = previousFetch;
+    for (const [key, previous] of [
+      ["PAYMENT_PROVIDER", previousProvider],
+      ["KIVORA_API_BASE_URL", previousBaseUrl],
+      ["KIVORA_API_KEY", previousApiKey],
+      ["KIVORA_WEBHOOK_SECRET", previousWebhookSecret],
+    ] as const) {
+      if (previous === undefined) delete process.env[key];
+      else process.env[key] = previous;
+    }
+  }
 });

@@ -22,7 +22,13 @@ services:
       - key: SITE_URL
         sync: false
       - key: PAYMENT_PROVIDER
-        value: emedx
+        value: kivora
+      - key: KIVORA_API_BASE_URL
+        value: https://www.kivorapayments.com
+      - key: KIVORA_API_KEY
+        sync: false
+      - key: KIVORA_WEBHOOK_SECRET
+        sync: false
       - key: EMEDX_API_BASE_URL
         value: https://api.payments.emedx.co.mz
       - key: EMEDX_CLIENT_KEY

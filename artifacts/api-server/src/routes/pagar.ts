@@ -10,9 +10,11 @@ import {
   retryPagarWebhookForwarding,
   processDebitoPayWebhook,
   processEmedxWebhook,
+  processKivoraWebhook,
   processPaysuiteWebhook,
   verifyDebitoPayWebhook,
   verifyEmedxWebhook,
+  verifyKivoraWebhook,
   verifyPaysuiteWebhook,
   verifyPagarWebhook,
 } from "../services/pagar";
@@ -93,7 +95,29 @@ router.post("/emedx/webhook", async (req, res) => {
   }
 });
 
-router.post(["/pagar/internal/payments", "/debitopay/internal/payments", "/paysuite/internal/payments", "/vpay/internal/payments", "/mozpayment/internal/payments", "/emedx/internal/payments"], async (req, res) => {
+router.post("/kivora/webhook", async (req, res) => {
+  const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from("");
+  const signature = req.header("x-kivora-signature")
+    || req.header("x-webhook-signature")
+    || req.header("x-signature")
+    || req.header("kivora-signature")
+    || "";
+  if (!verifyKivoraWebhook(rawBody, signature)) {
+    return res.status(401).json({ error: "Webhook Kivora inválido." });
+  }
+  try {
+    const result = await processKivoraWebhook(rawBody);
+    if (result.forwardingStatus === "pending" || result.forwardingStatus === "failed") {
+      await forwardPagarWebhook(result, { force: result.duplicate });
+    }
+    return res.sendStatus(204);
+  } catch (error) {
+    const status = (error as { status?: unknown })?.status === 400 ? 400 : 500;
+    return res.status(status).json({ error: status === 400 ? "Webhook Kivora inválido." : "Webhook Kivora não processado." });
+  }
+});
+
+router.post(["/pagar/internal/payments", "/debitopay/internal/payments", "/paysuite/internal/payments", "/vpay/internal/payments", "/mozpayment/internal/payments", "/emedx/internal/payments", "/kivora/internal/payments"], async (req, res) => {
   if (!process.env.SESSION_SECRET || req.header("x-internal-payment-key") !== process.env.SESSION_SECRET) {
     return res.status(401).json({ error: "Origem não autorizada." });
   }
@@ -115,13 +139,19 @@ router.post(["/pagar/internal/payments", "/debitopay/internal/payments", "/paysu
             error: (payment as Record<string, unknown>).emedx_failure_reason,
           }
         : {}),
+      ...(payment.provider === "kivora" && (payment as Record<string, unknown>).kivora_failure_reason
+        ? {
+            failureReason: (payment as Record<string, unknown>).kivora_failure_reason,
+            error: (payment as Record<string, unknown>).kivora_failure_reason,
+          }
+        : {}),
     });
   } catch (error) {
     return res.status(400).json({ error: error instanceof Error ? error.message : "Pagamento inválido." });
   }
 });
 
-router.post(["/pagar/internal/payments/:localTransactionId/reconcile", "/debitopay/internal/payments/:localTransactionId/reconcile", "/paysuite/internal/payments/:localTransactionId/reconcile", "/vpay/internal/payments/:localTransactionId/reconcile", "/mozpayment/internal/payments/:localTransactionId/reconcile", "/emedx/internal/payments/:localTransactionId/reconcile"], async (req, res) => {
+router.post(["/pagar/internal/payments/:localTransactionId/reconcile", "/debitopay/internal/payments/:localTransactionId/reconcile", "/paysuite/internal/payments/:localTransactionId/reconcile", "/vpay/internal/payments/:localTransactionId/reconcile", "/mozpayment/internal/payments/:localTransactionId/reconcile", "/emedx/internal/payments/:localTransactionId/reconcile", "/kivora/internal/payments/:localTransactionId/reconcile"], async (req, res) => {
   if (!process.env.SESSION_SECRET || req.header("x-internal-payment-key") !== process.env.SESSION_SECRET) {
     return res.status(401).json({ error: "Origem não autorizada." });
   }
@@ -132,6 +162,7 @@ router.post(["/pagar/internal/payments/:localTransactionId/reconcile", "/debitop
       status: payment.status,
       reference: payment.pagar_reference,
       provider: payment.provider,
+      ...(payment.failure_reason ? { failureReason: payment.failure_reason } : {}),
     });
   } catch (error) {
     const errorStatus = (error as { status?: unknown })?.status;
@@ -140,7 +171,7 @@ router.post(["/pagar/internal/payments/:localTransactionId/reconcile", "/debitop
   }
 });
 
-router.get(["/pagar/payments/:id", "/debitopay/payments/:id", "/paysuite/payments/:id", "/vpay/payments/:id"], async (req, res) => {
+router.get(["/pagar/payments/:id", "/debitopay/payments/:id", "/paysuite/payments/:id", "/vpay/payments/:id", "/kivora/payments/:id"], async (req, res) => {
   try { return res.json(await getPagarPayment({ id: String(req.params.id) })); } catch { return res.status(502).json({ error: "Não foi possível consultar o pagamento." }); }
 });
 
@@ -148,7 +179,7 @@ router.get(["/pagar/payments", "/debitopay/payments", "/paysuite/payments"], asy
   try { return res.json(await listPagarPayments({ status: String(req.query.status || ""), cursor: String(req.query.cursor || ""), limit: String(req.query.limit || "") })); } catch { return res.status(502).json({ error: "Não foi possível consultar os pagamentos." }); }
 });
 
-router.get(["/pagar/admin/webhook-deliveries", "/debitopay/admin/webhook-deliveries", "/paysuite/admin/webhook-deliveries", "/emedx/admin/webhook-deliveries"], async (req, res) => {
+router.get(["/pagar/admin/webhook-deliveries", "/debitopay/admin/webhook-deliveries", "/paysuite/admin/webhook-deliveries", "/emedx/admin/webhook-deliveries", "/kivora/admin/webhook-deliveries"], async (req, res) => {
   if (!process.env.SESSION_SECRET || req.header("x-internal-payment-key") !== process.env.SESSION_SECRET) {
     return res.status(401).json({ error: "Acção administrativa não autorizada." });
   }
@@ -159,7 +190,7 @@ router.get(["/pagar/admin/webhook-deliveries", "/debitopay/admin/webhook-deliver
   }
 });
 
-router.post(["/pagar/admin/webhook-deliveries/:eventId/retry", "/debitopay/admin/webhook-deliveries/:eventId/retry", "/paysuite/admin/webhook-deliveries/:eventId/retry", "/emedx/admin/webhook-deliveries/:eventId/retry"], async (req, res) => {
+router.post(["/pagar/admin/webhook-deliveries/:eventId/retry", "/debitopay/admin/webhook-deliveries/:eventId/retry", "/paysuite/admin/webhook-deliveries/:eventId/retry", "/emedx/admin/webhook-deliveries/:eventId/retry", "/kivora/admin/webhook-deliveries/:eventId/retry"], async (req, res) => {
   if (!process.env.SESSION_SECRET || req.header("x-internal-payment-key") !== process.env.SESSION_SECRET) {
     return res.status(401).json({ error: "Acção administrativa não autorizada." });
   }

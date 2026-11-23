@@ -16,13 +16,14 @@ const knownPaymentStates = new Set([
 const forwardableEventTypes = new Set(["payment.succeeded", "payment.failed"]);
 const forwardingStatuses = new Set(["pending", "forwarding", "failed", "delivered"]);
 
-type PaymentProvider = "pagar" | "debitopay" | "paysuite" | "vpay" | "mozpayment" | "emedx";
+type PaymentProvider = "pagar" | "debitopay" | "paysuite" | "vpay" | "mozpayment" | "emedx" | "kivora";
 
 let vpayTokenCache: { key: string; token: string; expiresAt: number } | null = null;
 let vpayTokenRequest: { key: string; promise: Promise<string> } | null = null;
 
 function activeProvider(): PaymentProvider {
-  const configuredProvider = process.env.PAYMENT_PROVIDER?.trim().toLowerCase() || "emedx";
+  const configuredProvider = process.env.PAYMENT_PROVIDER?.trim().toLowerCase() || "kivora";
+  if (configuredProvider === "kivora") return "kivora";
   if (configuredProvider === "vpay") return "vpay";
   if (configuredProvider === "mozpayment") return "mozpayment";
   if (configuredProvider === "emedx") return "emedx";
@@ -33,6 +34,7 @@ function activeProvider(): PaymentProvider {
 }
 
 function providerName(provider: PaymentProvider = activeProvider()) {
+  if (provider === "kivora") return "Kivora";
   if (provider === "vpay") return "Vpay";
   if (provider === "mozpayment") return "MozPayment";
   if (provider === "emedx") return "eMedx";
@@ -50,6 +52,22 @@ function emedxLocalPhone(phone: unknown) {
   const digits = phone.replace(/\D/g, "");
   const local = digits.startsWith("258") ? digits.slice(3) : digits;
   return /^(84|85)\d{7}$/.test(local) ? local : undefined;
+}
+
+function kivoraLocalPhone(phone: unknown) {
+  if (typeof phone !== "string") return undefined;
+  const digits = phone.replace(/\D/g, "");
+  const local = digits.startsWith("258") ? digits.slice(3) : digits;
+  return /^(84|85|86|87)\d{7}$/.test(local) ? local : undefined;
+}
+
+function normalizeKivoraStatus(status: string | undefined) {
+  if (!status) return undefined;
+  const upper = status.trim().toUpperCase();
+  if (["PAID", "COMPLETED", "SUCCEEDED", "SUCCESS"].includes(upper)) return "PAID";
+  if (["FAILED", "DECLINED", "EXPIRED", "CANCELLED", "CANCELED", "REJECTED"].includes(upper)) return "FAILED";
+  if (["PENDING", "PROCESSING", "CREATED", "INITIATED", "IN_PROGRESS", "AWAITING_CUSTOMER"].includes(upper)) return "PENDING";
+  return undefined;
 }
 
 function normalizePaysuiteStatus(status: string | undefined) {
@@ -268,6 +286,18 @@ export interface PagarPaymentInput {
 }
 
 function config(provider: PaymentProvider = activeProvider()) {
+  if (provider === "kivora") {
+    const apiKey = process.env.KIVORA_API_KEY?.trim();
+    if (!apiKey) {
+      throw new Error("Kivora API não está configurada no servidor.");
+    }
+    return {
+      provider: "kivora" as const,
+      baseUrl: process.env.KIVORA_API_BASE_URL || "https://www.kivorapayments.com",
+      apiKey,
+    };
+  }
+
   if (provider === "emedx") {
     const clientKey = process.env.EMEDX_CLIENT_KEY?.trim();
     const clientSecret = process.env.EMEDX_CLIENT_SECRET?.trim();
@@ -345,15 +375,24 @@ function config(provider: PaymentProvider = activeProvider()) {
 
 function safeMessage(status: number, data: unknown) {
   const body = data as { safeMessage?: unknown; message?: unknown; error?: unknown; requestId?: unknown };
+  const nestedError = body?.error && typeof body.error === "object" && !Array.isArray(body.error)
+    ? body.error as { message?: unknown; code?: unknown }
+    : undefined;
   const message = typeof body?.safeMessage === "string"
     ? body.safeMessage
     : typeof body?.message === "string"
       ? body.message
-      : `Pedido ${providerName()} recusado.`;
+      : typeof nestedError?.message === "string"
+        ? nestedError.message
+        : `Pedido ${providerName()} recusado.`;
   return {
     message,
     requestId: typeof body?.requestId === "string" ? body.requestId : undefined,
-    error: typeof body?.error === "string" ? body.error : undefined,
+    error: typeof body?.error === "string"
+      ? body.error
+      : typeof nestedError?.code === "string"
+        ? nestedError.code
+        : undefined,
     status,
   };
 }
@@ -474,7 +513,10 @@ async function request(
   const headers: Record<string, string> = {
     Accept: "application/json",
   };
-  if (configuration.provider === "vpay") {
+  if (configuration.provider === "kivora") {
+    headers.Authorization = `Bearer ${configuration.apiKey}`;
+    if (rawBody !== undefined) headers["Content-Type"] = "application/json";
+  } else if (configuration.provider === "vpay") {
     headers.Authorization = `Bearer ${await vpayAccessToken(configuration)}`;
     if (rawBody !== undefined) headers["Content-Type"] = "application/json";
   } else if (configuration.provider === "emedx") {
@@ -514,7 +556,11 @@ async function request(
   }
   // MozPayment's synchronous C2B response can wait while the customer confirms
   // the wallet prompt. A short generic timeout can lose a paid result.
-  const timeoutMs = configuration.provider === "emedx" ? 45_000 : configuration.provider === "mozpayment" ? 30_000 : 15_000;
+  const timeoutMs = configuration.provider === "emedx"
+    ? 45_000
+    : configuration.provider === "kivora" || configuration.provider === "mozpayment"
+      ? 30_000
+      : 15_000;
   const startedAt = configuration.provider === "mozpayment" ? Date.now() : undefined;
   let response: Response;
   try {
@@ -706,25 +752,194 @@ export type EmedxC2BResult = {
   failureReason?: string;
 };
 
+function walletDisplayName(method?: string) {
+  return String(method || "").trim().toUpperCase() === "EMOLA" ? "" : "M-Pesa";
+}
+
+export function translateMobileMoneyError(input: {
+  code?: string;
+  desc?: string;
+  method?: string;
+}): string {
+  const code = String(input.code || "").trim().toUpperCase();
+  const desc = String(input.desc || "").trim();
+  const normalizedDesc = desc
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  const wallet = walletDisplayName(input.method);
+  const accountLabel = wallet ? `conta ${wallet}` : "conta";
+  const pinLabel = wallet ? `PIN ${wallet}` : "PIN";
+  const walletInSentence = wallet ? ` no ${wallet}` : "";
+  const walletPayment = wallet ? ` ${wallet}` : "";
+
+  if (
+    code === "INS-1" ||
+    code === "INSUFFICIENT_FUNDS" ||
+    code === "INSUFFICIENT_BALANCE" ||
+    /\b(insufficient|not enough (?:balance|funds)|low balance|saldo insuficiente|sem saldo|saldo nao e suficiente|fundos? insuficientes?)\b/.test(normalizedDesc)
+  ) {
+    return `Saldo insuficiente na sua ${accountLabel}. Recarregue a conta e tente novamente.`;
+  }
+
+  if (
+    code === "INS-2006" ||
+    code === "INS-2057" ||
+    code === "INVALID_PIN" ||
+    code === "WRONG_PIN" ||
+    code === "PIN_INCORRECT" ||
+    /\b(?:invalid|wrong|incorrect|errad[oa]|incorret[oa]|invalid[oa])\s+pin\b|\bpin\s+(?:is\s+)?(?:invalid|wrong|incorrect|errad[oa]|incorret[oa]|invalid[oa])\b/.test(normalizedDesc)
+  ) {
+    return `O ${pinLabel} está incorrecto. Verifique o seu PIN e tente novamente.`;
+  }
+
+  if (
+    code === "INS-9" ||
+    code === "TIMEOUT" ||
+    code === "PAYMENT_TIMEOUT" ||
+    code === "USER_TIMEOUT" ||
+    code === "EXPIRED" ||
+    code === "PAYMENT_EXPIRED" ||
+    /\b(timeout|timed out|time out|expired|expirou|expirado|tempo esgotado|demorou|not confirmed in time)\b/.test(normalizedDesc)
+  ) {
+    return `O tempo para confirmar o PIN${walletInSentence} expirou. Tente novamente e confirme rapidamente no telemóvel.`;
+  }
+
+  if (/\bpin\b/.test(normalizedDesc)) {
+    return `O ${pinLabel} está incorrecto. Verifique o seu PIN e tente novamente.`;
+  }
+
+  if (
+    code === "INS-2051" ||
+    code === "CANCELLED" ||
+    code === "CANCELED" ||
+    code === "USER_CANCELLED" ||
+    /\b(cancelled|canceled|cancelad[oa]|rejeitad[oa] pelo utilizador)\b/.test(normalizedDesc)
+  ) {
+    return "Pagamento cancelado no telemóvel. Pode tentar novamente quando quiser.";
+  }
+
+  if (
+    code === "INS-10" ||
+    code === "INVALID_PHONE" ||
+    code === "INVALID_MSISDN" ||
+    /\b(invalid phone|invalid msisdn|numero (?:de telefone )?invalido|not registered)\b/.test(normalizedDesc)
+  ) {
+    return "Número de telefone inválido. Verifique o número e tente novamente.";
+  }
+
+  if (
+    code === "LOCKED" ||
+    code === "BLOCKED" ||
+    code === "LIMIT_EXCEEDED" ||
+    /\b(locked|blocked|bloquead[oa]|limit exceeded|limite excedido)\b/.test(normalizedDesc)
+  ) {
+    return `A ${accountLabel} atingiu o limite ou está bloqueada. Verifique a sua conta antes de tentar novamente.`;
+  }
+
+  const isGenericEnglish = /^(unable to process payment|payment failed|transaction failed|request failed|invalid request|internal server error|payment processing error|failed)\.?$/i.test(normalizedDesc);
+  if (desc && desc.length > 0 && desc.length <= 160 && !isGenericEnglish) {
+    return desc;
+  }
+  return `O pagamento${walletPayment} não foi concluído. Verifique o saldo ou PIN e tente novamente.`;
+}
+
 function translateMpesaError(code?: string, desc?: string): string {
-  const c = String(code || "").toUpperCase();
-  const d = String(desc || "").toLowerCase();
-  if (c === "INS-1" || d.includes("insufficient")) {
-    return "Saldo insuficiente na sua conta M-Pesa.";
+  return translateMobileMoneyError({ code, desc, method: "MPESA" });
+}
+
+export function extractKivoraFailureReason(payload: unknown, method?: string): string {
+  const queue: Array<{ value: unknown; depth: number }> = [{ value: payload, depth: 0 }];
+  const seen = new Set<object>();
+  const codes: string[] = [];
+  const descriptions: string[] = [];
+
+  while (queue.length) {
+    const { value, depth } = queue.shift()!;
+    if (!value || typeof value !== "object" || Array.isArray(value) || seen.has(value)) continue;
+    seen.add(value);
+    const record = value as Record<string, unknown>;
+
+    for (const key of ["code", "error_code", "errorCode", "failure_code", "failureCode", "mpesaResponseCode", "output_ResponseCode"]) {
+      const candidate = record[key];
+      if (typeof candidate === "string" && candidate.trim()) {
+        codes.push(candidate.trim());
+      }
+    }
+    for (const key of [
+      "failure_reason",
+      "failureReason",
+      "reason",
+      "error_message",
+      "errorMessage",
+      "mpesaResponseDesc",
+      "output_ResponseDesc",
+      "message",
+      "description",
+      "detail",
+      "status_description",
+    ]) {
+      const candidate = record[key];
+      if (typeof candidate === "string" && candidate.trim()) {
+        descriptions.push(candidate.trim());
+      }
+    }
+    if (typeof record.error === "string" && record.error.trim()) {
+      descriptions.push(record.error.trim());
+    }
+    if (typeof record.details === "string" && record.details.trim()) {
+      descriptions.push(record.details.trim());
+    }
+
+    if (depth >= 3) continue;
+    for (const key of [
+      "error",
+      "data",
+      "payment",
+      "transaction",
+      "provider_response",
+      "providerResponse",
+      "mpesa_response",
+      "mpesaResponse",
+      "emola_response",
+      "emolaResponse",
+      "metadata",
+      "details",
+      "raw",
+    ]) {
+      if (record[key] && typeof record[key] === "object") {
+        queue.push({ value: record[key], depth: depth + 1 });
+      }
+    }
   }
-  if (c === "INS-2051" || d.includes("cancelled") || d.includes("canceled")) {
-    return "Pagamento cancelado no telemóvel.";
+
+  // If any collected code/desc maps to a specific translated message, prefer that first.
+  for (const code of codes) {
+    for (const desc of descriptions.length ? descriptions : [undefined]) {
+      const translated = translateMobileMoneyError({ code, desc, method });
+      if (
+        !translated.startsWith("O pagamento ") ||
+        !translated.endsWith("Verifique o saldo ou PIN e tente novamente.")
+      ) {
+        return translated;
+      }
+    }
   }
-  if (c === "INS-2006" || c === "INS-2057" || d.includes("pin")) {
-    return "PIN M-Pesa incorrecto.";
+  for (const desc of descriptions) {
+    const translated = translateMobileMoneyError({ desc, method });
+    if (
+      !translated.startsWith("O pagamento ") ||
+      !translated.endsWith("Verifique o saldo ou PIN e tente novamente.")
+    ) {
+      return translated;
+    }
   }
-  if (d.includes("timeout") || d.includes("expired") || c === "INS-9") {
-    return "O tempo para introduzir o PIN no M-Pesa expirou.";
-  }
-  if (desc && desc.trim().length > 0 && desc.trim().length < 120) {
-    return desc.trim();
-  }
-  return "O pagamento não foi concluído na rede M-Pesa.";
+
+  return translateMobileMoneyError({
+    code: codes[0],
+    desc: descriptions[0],
+    method,
+  });
 }
 
 export function parseEmedxC2BResponse(
@@ -803,6 +1018,103 @@ export async function createEmedxC2BPayment(input: Pick<
   return parseEmedxC2BResponse(data, input);
 }
 
+export type KivoraC2BResult = {
+  status: "PAID" | "FAILED" | "PENDING" | "RECONCILIATION_REQUIRED";
+  operationId?: string;
+  failureReason?: string;
+};
+
+export function parseKivoraC2BResponse(
+  data: unknown,
+  expected: { reference: string; amountMzn: number; method?: string },
+): KivoraC2BResult {
+  const root = data && typeof data === "object" && !Array.isArray(data)
+    ? data as Record<string, unknown>
+    : {};
+  const operation = extractProviderOperation(root);
+  const status = normalizeKivoraStatus(providerStatus(operation));
+  const operationId = providerOperationId(operation);
+  const reference = providerReference(operation);
+  const amount = providerAmount(operation);
+  const currency = typeof operation.currency === "string"
+    ? operation.currency.trim().toUpperCase()
+    : undefined;
+  const referenceOk = !reference || reference === expected.reference;
+  const amountOk = amount === undefined || amount === expected.amountMzn;
+  const currencyOk = !currency || currency === "MZN";
+
+  if (!status || !operationId || !referenceOk || !amountOk || !currencyOk) {
+    return { status: "RECONCILIATION_REQUIRED", ...(operationId ? { operationId } : {}) };
+  }
+  if (status === "PAID") {
+    return { status: "PAID", operationId };
+  }
+  if (status === "FAILED") {
+    return {
+      status: "FAILED",
+      operationId,
+      failureReason: extractKivoraFailureReason(root, expected.method),
+    };
+  }
+  return { status: "PENDING", operationId };
+}
+
+export async function createKivoraC2BPayment(input: Pick<
+  PagarPaymentInput,
+  "reference" | "amountMzn" | "payerPhone" | "description"
+> & { method?: PagarMethod }): Promise<KivoraC2BResult> {
+  const phone = kivoraLocalPhone(input.payerPhone);
+  if (!phone) {
+    throw new Error("A Kivora aceita apenas números moçambicanos válidos (84, 85, 86 ou 87).");
+  }
+  const method = input.method || (/^(86|87)/.test(phone) ? "EMOLA" : "MPESA");
+  const body = {
+    phone,
+    amount: input.amountMzn,
+    currency: "MZN",
+    reference: input.reference,
+    ...(input.description ? { description: input.description } : {}),
+  };
+  let data: Record<string, unknown>;
+  try {
+    data = await request("POST", "/v1/c2b", body, undefined, "kivora");
+  } catch (error) {
+    const errObj = error as { error?: unknown; status?: unknown; requestId?: unknown };
+    const code = typeof errObj.error === "string" ? errObj.error.trim() : undefined;
+    const desc = error instanceof Error ? error.message : undefined;
+    const httpStatus = typeof errObj.status === "number" ? errObj.status : undefined;
+    const hasExplicitProviderCode = Boolean(
+      code &&
+      /^(INS-\d+|INSUFFICIENT_FUNDS|INSUFFICIENT_BALANCE|INVALID_PIN|WRONG_PIN|PIN_INCORRECT|PAYMENT_TIMEOUT|USER_TIMEOUT|PAYMENT_EXPIRED|EXPIRED|USER_CANCELLED|CANCELLED|CANCELED|INVALID_PHONE|INVALID_MSISDN|LOCKED|BLOCKED|LIMIT_EXCEEDED)$/i.test(code),
+    );
+    const isDirectCustomerRejection =
+      !isUncertainProviderError(error) ||
+      hasExplicitProviderCode ||
+      (httpStatus === 408 && Boolean(code || (desc && !/^(pedido kivora recusado\.?|request timeout)$/i.test(desc.trim()))));
+
+    if (isDirectCustomerRejection) {
+      const translated = translateMobileMoneyError({ code, desc, method });
+      const localized = new Error(translated);
+      Object.assign(localized, {
+        status: httpStatus,
+        error: errObj.error,
+        requestId: errObj.requestId,
+      });
+      throw localized;
+    }
+    // Kivora uses `reference` as its idempotency key: retrying with the same
+    // reference returns 409 PAYMENT_ALREADY_EXISTS instead of double-charging.
+    try {
+      data = await request("POST", "/v1/c2b", body, undefined, "kivora");
+    } catch {
+      const uncertain = new Error("A resposta da Kivora não confirmou se o pedido foi aceite.");
+      Object.assign(uncertain, { status: 503 });
+      throw uncertain;
+    }
+  }
+  return parseKivoraC2BResponse(data, { ...input, method });
+}
+
 export async function createVpayHostedOrder(input: Pick<
   PagarPaymentInput,
   "sourceId" | "title" | "description" | "amountMzn" | "payerPhone"
@@ -844,7 +1156,8 @@ function isConfigurationError(error: unknown) {
     error.message === "Paysuite API não está configurada no servidor." ||
     error.message === "Vpay API não está configurada no servidor." ||
     error.message === "MozPayment não está configurado no servidor." ||
-    error.message === "eMedx API não está configurada no servidor."
+    error.message === "eMedx API não está configurada no servidor." ||
+    error.message === "Kivora API não está configurada no servidor."
   );
 }
 
@@ -877,6 +1190,7 @@ export async function ensurePagarTables() {
       method text NOT NULL,
       payer_phone text NOT NULL,
       checkout_url text,
+      failure_reason text,
       receipt_number text,
       receipt_url text,
       created_at timestamptz NOT NULL DEFAULT now(),
@@ -884,6 +1198,7 @@ export async function ensurePagarTables() {
     );
     ALTER TABLE pagar_operations ADD COLUMN IF NOT EXISTS provider text;
     ALTER TABLE pagar_operations ADD COLUMN IF NOT EXISTS provider_query_reference text;
+    ALTER TABLE pagar_operations ADD COLUMN IF NOT EXISTS failure_reason text;
     ALTER TABLE pagar_operations ALTER COLUMN provider DROP NOT NULL;
     ALTER TABLE pagar_operations ALTER COLUMN provider DROP DEFAULT;
     ALTER TABLE pagar_operations ADD COLUMN IF NOT EXISTS checkout_url text;
@@ -900,6 +1215,7 @@ export async function ensurePagarTables() {
       operation_id text,
       reference text,
       payment_status text,
+      failure_reason text,
       forwarding_status text NOT NULL DEFAULT 'not_required',
       forwarding_attempts integer NOT NULL DEFAULT 0,
       forwarding_last_error text,
@@ -910,6 +1226,7 @@ export async function ensurePagarTables() {
     ALTER TABLE pagar_webhook_events ADD COLUMN IF NOT EXISTS operation_id text;
     ALTER TABLE pagar_webhook_events ADD COLUMN IF NOT EXISTS reference text;
     ALTER TABLE pagar_webhook_events ADD COLUMN IF NOT EXISTS payment_status text;
+    ALTER TABLE pagar_webhook_events ADD COLUMN IF NOT EXISTS failure_reason text;
     ALTER TABLE pagar_webhook_events ADD COLUMN IF NOT EXISTS forwarding_status text NOT NULL DEFAULT 'not_required';
     ALTER TABLE pagar_webhook_events ADD COLUMN IF NOT EXISTS forwarding_attempts integer NOT NULL DEFAULT 0;
     ALTER TABLE pagar_webhook_events ADD COLUMN IF NOT EXISTS forwarding_last_error text;
@@ -945,6 +1262,7 @@ export async function createPagarPayment(input: PagarPaymentInput) {
   const isVpay = provider === "vpay";
   const isMozPayment = provider === "mozpayment";
   const isEmedx = provider === "emedx";
+  const isKivora = provider === "kivora";
   try {
   let paysuiteContactId: string | undefined;
   if (isPaysuite) {
@@ -1012,6 +1330,34 @@ export async function createPagarPayment(input: PagarPaymentInput) {
       return {
         ...payment,
         mozpayment_failure_reason: result.failureReason || null,
+      };
+    } else if (isKivora) {
+      const result = await createKivoraC2BPayment({
+        reference: normalizedInput.reference,
+        amountMzn: input.amountMzn,
+        payerPhone: input.payerPhone,
+        description: input.description,
+        method: input.method,
+      });
+      const updated = await database.query(
+        `UPDATE pagar_operations
+            SET pagar_operation_id = $1,
+                status = $2,
+                failure_reason = COALESCE($3, failure_reason),
+                confirmed_at = CASE WHEN $2 = 'PAID' THEN COALESCE(confirmed_at, now()) ELSE confirmed_at END
+          WHERE internal_id = $4
+          RETURNING *`,
+        [result.operationId || null, result.status, result.failureReason || null, input.localTransactionId],
+      );
+      const payment = updated.rows[0] || {
+        ...inserted.rows[0],
+        pagar_operation_id: result.operationId || null,
+        status: result.status,
+        failure_reason: result.failureReason || null,
+      };
+      return {
+        ...payment,
+        kivora_failure_reason: result.failureReason || null,
       };
     } else if (isEmedx) {
       const result = await createEmedxC2BPayment({
@@ -1087,6 +1433,14 @@ export async function getPagarPayment(
     Object.assign(error, { status: 501 });
     throw error;
   }
+  if (provider === "kivora") {
+    if (!identifier.id) {
+      const error = new Error("A Kivora ainda não devolveu o identificador do pagamento.");
+      Object.assign(error, { status: 409 });
+      throw error;
+    }
+    return request("GET", `/v1/c2b/${encodeURIComponent(identifier.id)}`, undefined, undefined, provider);
+  }
   if (provider === "emedx") {
     if (!identifier.reference || !identifier.queryReference) {
       const error = new Error("O eMedx ainda não devolveu as referências necessárias para consultar o pagamento.");
@@ -1137,7 +1491,7 @@ export async function getPagarPayment(
 export async function reconcilePagarPayment(localTransactionId: string) {
   const database = requirePool();
   const localResult = await database.query(
-    `SELECT internal_id, provider, pagar_operation_id, pagar_reference, provider_query_reference, amount_mzn, status
+    `SELECT internal_id, provider, pagar_operation_id, pagar_reference, provider_query_reference, amount_mzn, status, method, payer_phone
        FROM pagar_operations WHERE internal_id = $1`,
     [localTransactionId],
   );
@@ -1149,7 +1503,7 @@ export async function reconcilePagarPayment(localTransactionId: string) {
   }
   if (terminalStates.has(normalizePaymentStatus(local.status) || "")) return local;
   const provider = local.provider as PaymentProvider;
-  if (!["pagar", "debitopay", "paysuite", "vpay", "mozpayment", "emedx"].includes(provider)) {
+  if (!["pagar", "debitopay", "paysuite", "vpay", "mozpayment", "emedx", "kivora"].includes(provider)) {
     const error = new Error("O provedor original desta operação não está identificado; é necessária confirmação manual.");
     Object.assign(error, { status: 409 });
     throw error;
@@ -1169,6 +1523,7 @@ export async function reconcilePagarPayment(localTransactionId: string) {
   }, provider);
   const isVpay = provider === "vpay";
   const isEmedx = provider === "emedx";
+  const isKivora = provider === "kivora";
   const operation = isVpay ? extractVpayOperation(data) : extractProviderOperation(data);
   const rawProviderStatus = providerStatus(operation);
   const normalizedProviderStatus = provider === "debitopay"
@@ -1177,9 +1532,11 @@ export async function reconcilePagarPayment(localTransactionId: string) {
       ? normalizePaysuiteStatus(rawProviderStatus)
       : isEmedx
         ? normalizeEmedxStatus(rawProviderStatus)
-      : isVpay
-        ? vpayResponseStatus(data)
-        : normalizePaymentStatus(rawProviderStatus);
+        : isKivora
+          ? normalizeKivoraStatus(rawProviderStatus)
+          : isVpay
+            ? vpayResponseStatus(data)
+            : normalizePaymentStatus(rawProviderStatus);
   if (!normalizedProviderStatus || (
     (provider === "pagar" || isVpay) && !knownPaymentStates.has(normalizedProviderStatus)
   )) {
@@ -1206,6 +1563,10 @@ export async function reconcilePagarPayment(localTransactionId: string) {
       (reference !== local.pagar_reference || !operationId)) {
     throw new Error("O eMedx não confirmou a identidade do pagamento.");
   }
+  if (isKivora && normalizedProviderStatus === "PAID" &&
+      (!operationId || (reference && reference !== local.pagar_reference))) {
+    throw new Error("A Kivora não confirmou a identidade do pagamento.");
+  }
   const queryReference = isEmedx && typeof operation.output_ConversationID === "string"
     ? operation.output_ConversationID
     : undefined;
@@ -1216,9 +1577,20 @@ export async function reconcilePagarPayment(localTransactionId: string) {
   const amountMatches = isVpay
     ? vpayOperationAmountMatches(data, local.amount_mzn)
     : providerAmountMatches(providerAmount(operation), local.amount_mzn, provider);
-  if (((isVpay || isEmedx) && normalizedProviderStatus === "PAID" && amountMatches !== true) || amountMatches === false) {
+  if (((isVpay || isEmedx || isKivora) && normalizedProviderStatus === "PAID" && amountMatches !== true) || amountMatches === false) {
     throw new Error(`O valor devolvido pelo ${providerName(provider)} não corresponde ao pagamento local.`);
   }
+
+  const reconciliationFailureReason = (normalizedProviderStatus === "FAILED" || normalizedProviderStatus === "CANCELLED")
+    ? isKivora
+      ? extractKivoraFailureReason(data, local.method)
+      : isEmedx
+        ? translateMpesaError(
+            typeof operation.mpesaResponseCode === "string" ? operation.mpesaResponseCode.trim() : undefined,
+            typeof operation.mpesaResponseDesc === "string" ? operation.mpesaResponseDesc.trim() : typeof operation.message === "string" ? operation.message.trim() : undefined,
+          )
+        : undefined
+    : undefined;
 
   const receipt = (operation.receipt || {}) as Record<string, unknown>;
   const client = await database.connect();
@@ -1237,9 +1609,9 @@ export async function reconcilePagarPayment(localTransactionId: string) {
 
     // PAID is monotonic: a late or inconsistent failure response must not
     // undo a payment that the provider already confirmed.
-      const nextStatus = current.status === "PAID" && normalizedProviderStatus !== "PAID"
+    const nextStatus = current.status === "PAID" && normalizedProviderStatus !== "PAID"
       ? "PAID"
-       : normalizedProviderStatus;
+      : normalizedProviderStatus;
     const updated = await client.query(
       `UPDATE pagar_operations
           SET status = $1,
@@ -1247,8 +1619,9 @@ export async function reconcilePagarPayment(localTransactionId: string) {
               provider_query_reference = COALESCE($3, provider_query_reference),
               receipt_number = COALESCE($4, receipt_number),
               receipt_url = COALESCE($5, receipt_url),
+              failure_reason = COALESCE($6, failure_reason),
               confirmed_at = CASE WHEN $1 = 'PAID' THEN COALESCE(confirmed_at, now()) ELSE confirmed_at END
-        WHERE internal_id = $6
+        WHERE internal_id = $7
         RETURNING *`,
       [
         nextStatus,
@@ -1256,6 +1629,7 @@ export async function reconcilePagarPayment(localTransactionId: string) {
         queryReference || null,
         typeof receipt.number === "string" ? receipt.number : null,
         typeof receipt.url === "string" ? receipt.url : null,
+        nextStatus === "PAID" ? null : (reconciliationFailureReason || null),
         localTransactionId,
       ],
     );
@@ -1327,6 +1701,94 @@ export function verifyEmedxWebhook(rawBody: Buffer, signatureHeader: string) {
   const expected = createHmac("sha256", secret).update(rawBody).digest();
   const received = Buffer.from(match[1], "hex");
   return received.length === expected.length && timingSafeEqual(received, expected);
+}
+
+export function verifyKivoraWebhook(rawBody: Buffer, signatureHeader: string) {
+  const secret = process.env.KIVORA_WEBHOOK_SECRET;
+  const trimmed = signatureHeader.trim();
+  if (!secret || !trimmed) return false;
+  if (trimmed.includes("t=") && trimmed.includes("v1=")) {
+    const { timestamp, signature } = parseWebhookSignature(trimmed);
+    const seconds = Number(timestamp);
+    if (!/^\d+$/.test(timestamp || "") || !Number.isFinite(seconds) || Math.abs(Date.now() / 1000 - seconds) > 300 || !signature) {
+      return false;
+    }
+    const expected = createHmac("sha256", secret).update(`${timestamp}.${rawBody.toString("utf8")}`).digest();
+    const received = Buffer.from(signature, "hex");
+    return received.length === expected.length && timingSafeEqual(received, expected);
+  }
+  return timingSafeSignature(rawBody, trimmed, secret);
+}
+
+export async function processKivoraWebhook(rawBody: Buffer) {
+  const payload = JSON.parse(rawBody.toString("utf8")) as Record<string, unknown>;
+  const data = payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)
+    ? payload.data as Record<string, unknown>
+    : {};
+  const rawEventId = typeof payload.id === "string" ? payload.id.trim() : "";
+  const event = typeof payload.type === "string" ? payload.type.trim().toLowerCase() : "";
+  const operationId = providerOperationId(data);
+  const reference = providerReference(data);
+  const amount = providerAmount(data);
+  const status = normalizeKivoraStatus(providerStatus(data));
+  const currency = typeof data.currency === "string" ? data.currency.trim().toUpperCase() : "MZN";
+
+  if (!event || (!operationId && !reference) || currency !== "MZN") {
+    const error = new Error("Payload Kivora inválido ou incompleto.");
+    Object.assign(error, { status: 400 });
+    throw error;
+  }
+
+  const database = requirePool();
+  const localResult = await database.query(
+    `SELECT amount_mzn, method
+       FROM pagar_operations
+      WHERE provider = 'kivora'
+        AND (pagar_operation_id = $1 OR pagar_reference = $2)
+      LIMIT 1`,
+    [operationId || "", reference || ""],
+  );
+  const local = localResult.rows[0];
+  if (local && amount !== undefined && Number(local.amount_mzn) !== amount) {
+    const error = new Error("Os dados do webhook Kivora não correspondem à cobrança.");
+    Object.assign(error, { status: 400 });
+    throw error;
+  }
+
+  const eventType = event === "payment.completed" && status === "PAID"
+    ? "payment.succeeded"
+    : event === "payment.failed" && (status === "FAILED" || !status)
+      ? "payment.failed"
+      : "payment.pending";
+  const normalizedStatus = eventType === "payment.succeeded"
+    ? "PAID"
+    : eventType === "payment.failed"
+      ? "FAILED"
+      : status || "PENDING";
+  const inferredMethod = typeof local?.method === "string"
+    ? local.method
+    : typeof data.phone === "string" && /^(?:258)?8[67]/.test(data.phone.replace(/\D/g, ""))
+      ? "EMOLA"
+      : "MPESA";
+  const failureReason = eventType === "payment.failed"
+    ? extractKivoraFailureReason(payload, inferredMethod)
+    : undefined;
+  const eventId = `kivora:${rawEventId || `${event}:${operationId || reference}`}`;
+  const normalizedBody = {
+    data: {
+      id: operationId,
+      reference,
+      status: normalizedStatus,
+      amountMzn: amount,
+      ...(failureReason ? { failureReason } : {}),
+    },
+  };
+  return processPagarWebhook(
+    eventId,
+    eventType,
+    Buffer.from(JSON.stringify(normalizedBody)),
+    "kivora",
+  );
 }
 
 function paysuiteEventType(payload: Record<string, unknown>) {
@@ -1623,6 +2085,7 @@ interface PagarWebhookRow {
   operation_id?: string;
   reference?: string;
   payment_status?: string;
+  failure_reason?: string;
   forwarding_status: PagarWebhookForwardingStatus;
   forwarding_attempts: number;
   forwarding_last_error?: string;
@@ -1636,6 +2099,7 @@ export interface PagarWebhookEvent {
   operationId?: string;
   reference?: string;
   status?: string;
+  failureReason?: string;
   forwardingStatus: PagarWebhookForwardingStatus;
   forwardingAttempts: number;
   forwardingLastError?: string;
@@ -1657,6 +2121,7 @@ function webhookEventFromRow(row: PagarWebhookRow): PagarWebhookEvent {
     operationId: row.operation_id || undefined,
     reference: row.reference || undefined,
     status: row.payment_status || undefined,
+    failureReason: row.failure_reason || undefined,
     forwardingStatus,
     forwardingAttempts: Number(row.forwarding_attempts || 0),
     forwardingLastError: row.forwarding_last_error || undefined,
@@ -1681,20 +2146,23 @@ export async function processPagarWebhook(
   const operationId = typeof data.id === "string" ? data.id : undefined;
   const reference = typeof data.reference === "string" ? data.reference : undefined;
   const status = typeof data.status === "string" ? data.status : undefined;
+  const failureReason = typeof data.failureReason === "string" && data.failureReason.trim()
+    ? data.failureReason.trim()
+    : undefined;
   const client = await database.connect();
   try {
     await client.query("BEGIN");
     const eventInsert = await client.query(
       `INSERT INTO pagar_webhook_events
-        (event_id, event_type, operation_id, reference, payment_status, forwarding_status, forwarding_next_retry_at)
-       VALUES ($1,$2,$3,$4,$5,$6,CASE WHEN $6 = 'pending' THEN now() ELSE NULL END)
+        (event_id, event_type, operation_id, reference, payment_status, failure_reason, forwarding_status, forwarding_next_retry_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,CASE WHEN $7 = 'pending' THEN now() ELSE NULL END)
        ON CONFLICT (event_id) DO NOTHING
        RETURNING event_id`,
-      [eventId, eventType, operationId || null, reference || null, status || null, forwardingStatusFor(eventType, operationId, reference)],
+      [eventId, eventType, operationId || null, reference || null, status || null, failureReason || null, forwardingStatusFor(eventType, operationId, reference)],
     );
     if (!eventInsert.rowCount) {
       const existing = await client.query(
-        `SELECT event_id, event_type, operation_id, reference, payment_status,
+        `SELECT event_id, event_type, operation_id, reference, payment_status, failure_reason,
                 forwarding_status, forwarding_attempts, forwarding_last_error,
                 forwarding_next_retry_at, forwarding_updated_at
            FROM pagar_webhook_events WHERE event_id = $1`,
@@ -1728,15 +2196,16 @@ export async function processPagarWebhook(
                   pagar_operation_id = COALESCE($2,pagar_operation_id),
                   receipt_number = COALESCE($3,receipt_number),
                   receipt_url = COALESCE($4,receipt_url),
+                  failure_reason = CASE WHEN $1 = 'PAID' THEN NULL ELSE COALESCE($5, failure_reason) END,
                   confirmed_at = CASE WHEN $1 = 'PAID' THEN COALESCE(confirmed_at, now()) ELSE confirmed_at END
-            WHERE internal_id = $5`,
-          [nextStatus, operationId || null, typeof receipt.number === "string" ? receipt.number : null, typeof receipt.url === "string" ? receipt.url : null, local.internal_id],
+            WHERE internal_id = $6`,
+          [nextStatus, operationId || null, typeof receipt.number === "string" ? receipt.number : null, typeof receipt.url === "string" ? receipt.url : null, failureReason || null, local.internal_id],
         );
       }
     }
     await client.query("COMMIT");
     const inserted = await database.query(
-      `SELECT event_id, event_type, operation_id, reference, payment_status,
+      `SELECT event_id, event_type, operation_id, reference, payment_status, failure_reason,
               forwarding_status, forwarding_attempts, forwarding_last_error,
               forwarding_next_retry_at, forwarding_updated_at
          FROM pagar_webhook_events WHERE event_id = $1`,
@@ -1807,6 +2276,7 @@ export async function forwardPagarWebhook(event: PagarWebhookEvent, options: { f
             operationId: event.operationId,
             reference: event.reference,
             status: event.status,
+            ...(event.failureReason ? { failureReason: event.failureReason } : {}),
           }),
           signal: AbortSignal.any([controller.signal, AbortSignal.timeout(5_000)]),
         });
@@ -1839,7 +2309,7 @@ export async function forwardPagarWebhook(event: PagarWebhookEvent, options: { f
       );
     }
     const current = await client.query(
-      `SELECT event_id, event_type, operation_id, reference, payment_status,
+      `SELECT event_id, event_type, operation_id, reference, payment_status, failure_reason,
               forwarding_status, forwarding_attempts, forwarding_last_error,
               forwarding_next_retry_at, forwarding_updated_at
          FROM pagar_webhook_events WHERE event_id = $1`,
@@ -1860,7 +2330,7 @@ export async function forwardPagarWebhook(event: PagarWebhookEvent, options: { f
 export async function getPagarWebhookEvent(eventId: string) {
   const database = requirePool();
   const result = await database.query(
-    `SELECT event_id, event_type, operation_id, reference, payment_status,
+    `SELECT event_id, event_type, operation_id, reference, payment_status, failure_reason,
             forwarding_status, forwarding_attempts, forwarding_last_error,
             forwarding_next_retry_at, forwarding_updated_at
        FROM pagar_webhook_events WHERE event_id = $1`,
@@ -1872,7 +2342,7 @@ export async function getPagarWebhookEvent(eventId: string) {
 export async function listPagarWebhookEvents() {
   const database = requirePool();
   const result = await database.query(
-    `SELECT event_id, event_type, operation_id, reference, payment_status,
+    `SELECT event_id, event_type, operation_id, reference, payment_status, failure_reason,
             forwarding_status, forwarding_attempts, forwarding_last_error,
             forwarding_next_retry_at, forwarding_updated_at
        FROM pagar_webhook_events
@@ -1945,7 +2415,7 @@ export function startPagarWebhookRetryWorker(intervalMs = 30_000) {
     forwardingRetryRunning = true;
     try {
       const due = await requirePool().query(
-        `SELECT event_id, event_type, operation_id, reference, payment_status,
+        `SELECT event_id, event_type, operation_id, reference, payment_status, failure_reason,
                 forwarding_status, forwarding_attempts, forwarding_last_error,
                 forwarding_next_retry_at, forwarding_updated_at
            FROM pagar_webhook_events

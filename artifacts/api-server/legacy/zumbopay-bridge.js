@@ -25,7 +25,7 @@ const PAYMENT_MODE         = String(
 ).toLowerCase()
 const isTestMode           = PAYMENT_MODE === 'mock' || PAYMENT_MODE === 'test'
 const isFreeMode           = PAYMENT_MODE === 'free'
-const configuredPaymentProvider = (process.env.PAYMENT_PROVIDER || 'emedx').trim().toLowerCase()
+const configuredPaymentProvider = (process.env.PAYMENT_PROVIDER || 'kivora').trim().toLowerCase()
 const PAYMENT_API_ROUTE    = configuredPaymentProvider === 'paysuite'
   ? 'paysuite'
   : configuredPaymentProvider === 'debitopay'
@@ -36,8 +36,10 @@ const PAYMENT_API_ROUTE    = configuredPaymentProvider === 'paysuite'
         ? 'mozpayment'
         : configuredPaymentProvider === 'pagar'
           ? 'pagar'
-        : 'emedx'
-const PAYMENT_PROVIDERS = new Set(['pagar', 'debitopay', 'paysuite', 'vpay', 'mozpayment', 'emedx'])
+          : configuredPaymentProvider === 'emedx'
+            ? 'emedx'
+            : 'kivora'
+const PAYMENT_PROVIDERS = new Set(['pagar', 'debitopay', 'paysuite', 'vpay', 'mozpayment', 'emedx', 'kivora'])
 const MIN_RECHARGE_AMOUNT = 20
 const MAX_RECHARGE_AMOUNT = 40000
 function isValidRechargeAmount(amount) {
@@ -246,23 +248,23 @@ const PUBLIC_INFO_PAGES = {
     ],
   },
   '/pagar-megas-mpesa-emola': {
-    title: 'Recarregar Saldo com M-Pesa via eMedx | Megabyte',
-    description: 'Recarregue o saldo da sua conta Megabyte com M-Pesa via eMedx e use-o para activar pacotes de megas.',
+    title: 'Recarregar Saldo com M-Pesa | Megabyte',
+    description: 'Recarregue o saldo da sua conta Megabyte com M-Pesa e use-o para activar pacotes de megas.',
     heading: 'Recarregar saldo com M-Pesa',
-    intro: 'Adicione saldo à sua conta Megabyte por M-Pesa através do eMedx. Depois, use o saldo para comprar pacotes de internet Vodacom.',
+    intro: 'Adicione saldo à sua conta Megabyte por M-Pesa. Depois, use o saldo para comprar pacotes de internet Vodacom.',
     sections: [
       {
         heading: 'Como recarregar e comprar pacotes',
         steps: [
           'Entre na sua conta Megabyte e escolha a opção para recarregar saldo.',
-          'Confirme o pedido no número M-Pesa 84 ou 85 associado à recarga.',
+          'Confirme o pedido no número M-Pesa (84 ou 85) associado à recarga.',
           'Escolha um pacote e pague com o saldo disponível na sua conta.',
         ],
       },
       {
         heading: 'Pagamento de pacotes',
         paragraphs: [
-          'M-Pesa via eMedx serve para adicionar saldo à conta; não é um método de pagamento directo de pacotes.',
+          'O M-Pesa serve para adicionar saldo à conta; não é um método de pagamento directo de pacotes.',
           'Ao comprar um pacote, o valor é descontado do saldo da conta Megabyte.',
         ],
       },
@@ -286,7 +288,7 @@ const PUBLIC_INFO_PAGES = {
         steps: [
           'Compare o preço, a quantidade de megas e o período de validade.',
           'Escolha o número Vodacom que deve receber o pacote.',
-          'Escolha o pacote e pague com o saldo da sua conta. Se precisar, recarregue o saldo com M-Pesa via eMedx.',
+          'Escolha o pacote e pague com o saldo da sua conta. Se precisar, recarregue o saldo com M-Pesa.',
         ],
       },
     ],
@@ -1004,7 +1006,7 @@ function historyCsv(type) {
         o.gwKeyId === 'principal' ? 'Canal principal' : `Canal privado · ${o.gwKeyId || 'privado'}`,
         o.phone,
         o.amount,
-        ({ mpesa: 'M-Pesa', emola: 'e-Mola' }[o.method] || o.method),
+        ({ mpesa: 'M-Pesa', emola: 'Móvel' }[o.method] || o.method),
         o.status,
         o.extRef || '',
       ]
@@ -1015,7 +1017,7 @@ function historyCsv(type) {
         o.beneficiaryPhone || o.phone,
         o.bundleLabel || '',
         o.amount,
-        ({ mpesa: 'M-Pesa', emola: 'e-Mola' }[o.method] || o.method),
+        ({ mpesa: 'M-Pesa', emola: 'Móvel' }[o.method] || o.method),
         o.status,
         csvDate(o.activatedAt),
         o.zumboRef || '',
@@ -1033,30 +1035,37 @@ function gatewayDocsPage() {
   const isVpay = PAYMENT_API_ROUTE === 'vpay'
   const isMozPayment = PAYMENT_API_ROUTE === 'mozpayment'
   const isEmedx = PAYMENT_API_ROUTE === 'emedx'
+  const isKivora = PAYMENT_API_ROUTE === 'kivora'
   const providerDescription = isVpay
     ? 'Documentação da API Gateway Megabyte para iniciar pagamentos através do checkout hospedado Vpay.'
     : isMozPayment
       ? 'Documentação da API Gateway Megabyte para criar recargas C2B MozPayment, confirmar o pagamento pela resposta da API e acompanhar a activação automática.'
       : isEmedx
         ? 'Documentação da API Gateway Megabyte para receber pagamentos M-Pesa C2B através do eMedx em projectos externos.'
-        : 'Documentação da API Gateway Megabyte para receber pagamentos M-Pesa e e-Mola em projectos externos.'
+        : isKivora
+          ? 'Documentação da API Gateway Megabyte para receber pagamentos M-Pesa C2B através da Kivora Payments em projectos externos.'
+          : 'Documentação da API Gateway Megabyte para receber pagamentos M-Pesa em projectos externos.'
   const paymentFlowDescription = isVpay
     ? 'Cria uma encomenda na Vpay. Abra o checkoutUrl devolvido para o cliente concluir o pagamento.'
     : isMozPayment
       ? 'Cria uma recarga C2B MozPayment no valor exacto indicado. O método é detectado pelo prefixo do telefone; após confirmação, o pacote é enviado para esse número.'
       : isEmedx
         ? 'Cria uma cobrança C2B e envia um pedido de confirmação M-Pesa para um número 84 ou 85. O estado é confirmado pelo eMedx antes da entrega.'
-        : 'Cria uma cobrança e inicia o pedido no M-Pesa ou e-Mola. O método é detectado pelo prefixo do número.'
+        : isKivora
+          ? 'Cria uma cobrança C2B na Kivora e envia o pedido de confirmação M-Pesa para o telemóvel do cliente. O estado é confirmado pela Kivora antes da entrega.'
+          : 'Cria uma cobrança e inicia o pedido M-Pesa. O método é detectado pelo prefixo do número.'
   const checkoutResponseField = isVpay
     ? '  "checkoutUrl": "https://checkout.vpay.co.mz/exemplo-order-id",\n'
     : ''
   const checkoutCallout = isVpay
     ? '<div class="callout"><strong>Checkout Vpay:</strong> redireccione o cliente para <code class="inline">checkoutUrl</code>. Esse link também é devolvido pela consulta do estado. Os métodos apresentados dentro do checkout são controlados pela Vpay; esta API não os filtra.</div>'
     : isMozPayment
-      ? '<div class="callout"><strong>MozPayment C2B:</strong> o pagamento é confirmado pela resposta imediata da API: <code class="inline">cod: 200</code>, <code class="inline">status: "success"</code> e <code class="inline">transacao</code>. M-Pesa e e-Mola não enviam callback/webhook neste fluxo. A cobrança aparece no painel como <code class="inline">Recarga [valor] MT</code>, pelo montante exacto; após confirmação, a Megabyte coloca a entrega USSD em fila. O <code class="inline">callback_url</code> opcional desta API é apenas uma notificação do Gateway Megabyte para o seu projecto.</div>'
+      ? '<div class="callout"><strong>MozPayment C2B:</strong> o pagamento é confirmado pela resposta imediata da API: <code class="inline">cod: 200</code>, <code class="inline">status: "success"</code> e <code class="inline">transacao</code>. Os pagamentos móveis não enviam callback/webhook neste fluxo. A cobrança aparece no painel como <code class="inline">Recarga [valor] MT</code>, pelo montante exacto; após confirmação, a Megabyte coloca a entrega USSD em fila. O <code class="inline">callback_url</code> opcional desta API é apenas uma notificação do Gateway Megabyte para o seu projecto.</div>'
       : isEmedx
         ? '<div class="callout"><strong>eMedx C2B:</strong> suporta apenas M-Pesa 84/85. O webhook eMedx é validado com HMAC-SHA256 no corpo bruto; a referência única evita cobranças duplicadas. Não repita o pagamento com uma nova referência enquanto o estado estiver pendente.</div>'
-      : ''
+        : isKivora
+          ? '<div class="callout"><strong>Kivora C2B:</strong> suporta pagamentos M-Pesa a partir de 20 MT. O webhook Kivora é validado com HMAC-SHA256 no corpo bruto; a referência única evita cobranças duplicadas. Não repita o pagamento com uma nova referência enquanto o estado estiver pendente.</div>'
+          : ''
   return `<!doctype html><html lang="pt-MZ"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Gateway de pagamentos — Megabyte</title>
@@ -1070,12 +1079,12 @@ a{color:#0f766e}.wrap{width:min(1120px,calc(100% - 36px));margin:auto}.hero{back
 <header class="hero"><div class="wrap">
   <div class="brand"><span class="brand-mark">◎</span><span>megabyte.live</span></div>
   <div class="eyebrow">Documentação para programadores</div>
-  <div class="hero-grid"><div><h1>Receba pagamentos no seu projecto.</h1><p>Use uma única API para ${isVpay ? 'criar encomendas no checkout hospedado Vpay, acompanhar o resultado e confirmar callbacks assinados.' : isMozPayment ? 'criar recargas MozPayment, confirmar o pagamento pela resposta C2B e acompanhar a activação do pacote.' : isEmedx ? 'iniciar cobranças C2B M-Pesa pelo eMedx, acompanhar o resultado e confirmar callbacks assinados.' : 'iniciar cobranças M-Pesa e e-Mola, acompanhar o resultado e confirmar callbacks assinados.'}</p></div><div class="base"><small>Base URL</small><code>${baseUrl}</code></div></div>
+  <div class="hero-grid"><div><h1>Receba pagamentos no seu projecto.</h1><p>Use uma única API para ${isVpay ? 'criar encomendas no checkout hospedado Vpay, acompanhar o resultado e confirmar callbacks assinados.' : isMozPayment ? 'criar recargas MozPayment, confirmar o pagamento pela resposta C2B e acompanhar a activação do pacote.' : isEmedx ? 'iniciar cobranças C2B M-Pesa pelo eMedx, acompanhar o resultado e confirmar callbacks assinados.' : isKivora ? 'iniciar cobranças C2B M-Pesa pela Kivora Payments, acompanhar o resultado e confirmar callbacks assinados.' : 'iniciar cobranças M-Pesa, acompanhar o resultado e confirmar callbacks assinados.'}</p></div><div class="base"><small>Base URL</small><code>${baseUrl}</code></div></div>
 </div></header>
 <main class="wrap layout">
   <nav class="toc" aria-label="Nesta página"><strong>Nesta página</strong><a href="#inicio">Visão geral</a><a href="#autenticacao">Autenticação</a><a href="#criar">Criar pagamento</a><a href="#estado">Consultar estado</a><a href="#callback">Callback</a><a href="#erros">Erros</a></nav>
   <div>
-    <section class="section" id="inicio"><h2>Começar em 3 passos</h2><p class="intro">Crie uma chave no painel Gateway, guarde-a no seu servidor e use o fluxo abaixo. O Gateway regista cada cobrança como uma compra de megas na rede móvel.</p><div class="grid2"><div class="card"><h3>1. Obter credenciais</h3><p>No painel admin, abra <strong>Gateway → Chaves de API</strong>. Copie a chave e o segredo para as variáveis privadas do seu servidor.</p></div><div class="card"><h3>2. Iniciar cobrança</h3><p>${isVpay ? 'Envie o número do cliente e o valor em MT. Abra o checkout hospedado indicado em checkoutUrl.' : isMozPayment ? 'Envie o telefone que vai pagar e receber os megas, e o valor inteiro da recarga em MT (de 10 a 40000 MT).' : isEmedx ? 'Envie um número M-Pesa 84/85 e o valor inteiro em MT para receber o pedido de confirmação no telemóvel.' : 'Envie o número do cliente e o valor em MT para receber o pedido de PIN no telemóvel.'}</p></div><div class="card"><h3>3. Confirmar resultado</h3><p>Use o callback assinado e confirme o estado com o endpoint de consulta antes de entregar o seu produto. A entrega de megas da Megabyte é iniciada automaticamente após confirmação.</p></div><div class="card"><h3>Ambiente</h3><p>Esta documentação aponta para produção. Use sempre HTTPS e nunca exponha credenciais no browser.</p></div></div><div class="callout"><strong>Importante:</strong> a chave <code class="inline">gw_live_...</code> autentica os pedidos. O segredo <code class="inline">gwsec_...</code> serve apenas para verificar callbacks no seu backend.</div></section>
+    <section class="section" id="inicio"><h2>Começar em 3 passos</h2><p class="intro">Crie uma chave no painel Gateway, guarde-a no seu servidor e use o fluxo abaixo. O Gateway regista cada cobrança como uma compra de megas na rede móvel.</p><div class="grid2"><div class="card"><h3>1. Obter credenciais</h3><p>No painel admin, abra <strong>Gateway → Chaves de API</strong>. Copie a chave e o segredo para as variáveis privadas do seu servidor.</p></div><div class="card"><h3>2. Iniciar cobrança</h3><p>${isVpay ? 'Envie o número do cliente e o valor em MT. Abra o checkout hospedado indicado em checkoutUrl.' : isMozPayment ? 'Envie o telefone que vai pagar e receber os megas, e o valor inteiro da recarga em MT (de 10 a 40000 MT).' : isEmedx ? 'Envie um número M-Pesa 84/85 e o valor inteiro em MT para receber o pedido de confirmação no telemóvel.' : isKivora ? 'Envie o número M-Pesa do cliente e o valor inteiro em MT (mín. 20 MT) para receber o pedido de PIN no telemóvel.' : 'Envie o número do cliente e o valor em MT para receber o pedido de PIN no telemóvel.'}</p></div><div class="card"><h3>3. Confirmar resultado</h3><p>Use o callback assinado e confirme o estado com o endpoint de consulta antes de entregar o seu produto. A entrega de megas da Megabyte é iniciada automaticamente após confirmação.</p></div><div class="card"><h3>Ambiente</h3><p>Esta documentação aponta para produção. Use sempre HTTPS e nunca exponha credenciais no browser.</p></div></div><div class="callout"><strong>Importante:</strong> a chave <code class="inline">gw_live_...</code> autentica os pedidos. O segredo <code class="inline">gwsec_...</code> serve apenas para verificar callbacks no seu backend.</div></section>
     <section class="section" id="autenticacao"><h2>Autenticação</h2><p>Envie a chave em todos os pedidos de pagamento e de consulta:</p><pre>X-API-Key: gw_live_SUA_CHAVE</pre><p>Guarde ambos os valores em variáveis de ambiente. Não os coloque em aplicações mobile, JavaScript do frontend, páginas HTML ou repositórios públicos.</p></section>
     <section class="section" id="criar"><h2>Criar um pagamento</h2><div class="endpoint"><div class="endpoint-head"><span class="method">POST</span><code>/gateway/api/pay</code></div><div class="endpoint-body"><p>${paymentFlowDescription}${isVpay ? ' O campo method indica a carteira inferida pelo prefixo do telefone, mas não garante o método efectivamente escolhido no checkout.' : isMozPayment ? ' O telefone recebe o pedido de confirmação PIN. Não repita a cobrança enquanto o estado estiver pending.' : ''}</p><h3>Pedido</h3><pre>curl -X POST ${baseUrl}/gateway/api/pay \\
   -H "Content-Type: application/json" \\
@@ -1086,14 +1095,14 @@ a{color:#0f766e}.wrap{width:min(1120px,calc(100% - 36px));margin:auto}.hero{back
     "reference": "pedido-123",
     "description": "Compra na minha loja",
     "callback_url": "https://seusite.com/api/gateway/callback"
-  }'</pre><p><code class="inline">phone</code> e <code class="inline">amount</code> são obrigatórios.${isMozPayment ? ' O valor deve ser inteiro entre 10 e 40000 MT e é enviado sem arredondamento.' : isEmedx ? ' O eMedx aceita apenas números M-Pesa 84/85 e valores inteiros a partir de 20 MT.' : ''} <code class="inline">reference</code> tem no máximo 64 caracteres. <code class="inline">description</code> tem no máximo 120. O <code class="inline">callback_url</code> é opcional, mas deve ser HTTPS público.</p><h3>Resposta <span class="pill">202 Accepted</span></h3><pre>{
+  }'</pre><p><code class="inline">phone</code> e <code class="inline">amount</code> são obrigatórios.${isMozPayment ? ' O valor deve ser inteiro entre 10 e 40000 MT e é enviado sem arredondamento.' : isEmedx ? ' O eMedx aceita apenas números M-Pesa 84/85 e valores inteiros a partir de 20 MT.' : isKivora ? ' A Kivora aceita números M-Pesa e valores inteiros entre 20 e 40000 MT.' : ''} <code class="inline">reference</code> tem no máximo 64 caracteres. <code class="inline">description</code> tem no máximo 120. O <code class="inline">callback_url</code> é opcional, mas deve ser HTTPS público.</p><h3>Resposta <span class="pill">202 Accepted</span></h3><pre>{
   "ok": true,
   "txId": "a1b2c3d4e5f6",
   "status": "pending",
   "method": "mpesa",
   "megabytes": 4096,
 ${checkoutResponseField}  "statusUrl": "${baseUrl}/gateway/api/status/a1b2c3d4e5f6"
- }</pre></div></div><div class="callout"><strong>Conversão em megas:</strong> valores iguais aos pacotes normais usam a quantidade exacta do catálogo. Outros valores usam <code class="inline">amount × 40 MB</code>. ${isMozPayment ? 'O valor cobrado pela MozPayment é exactamente o <code class="inline">amount</code> enviado.' : isEmedx ? 'O valor enviado ao eMedx é exactamente o montante indicado em MT.' : ''} Por exemplo: 25 MT = 1024 MB; 100 MT = 4096 MB.</div></section>
+ }</pre></div></div><div class="callout"><strong>Conversão em megas:</strong> valores iguais aos pacotes normais usam a quantidade exacta do catálogo. Outros valores usam <code class="inline">amount × 40 MB</code>. ${isMozPayment ? 'O valor cobrado pela MozPayment é exactamente o <code class="inline">amount</code> enviado.' : isEmedx ? 'O valor enviado ao eMedx é exactamente o montante indicado em MT.' : isKivora ? 'O valor enviado à Kivora é exactamente o montante indicado em MZN.' : ''} Por exemplo: 25 MT = 1024 MB; 100 MT = 4096 MB.</div></section>
     <section class="section" id="estado"><h2>Consultar o estado</h2><div class="endpoint"><div class="endpoint-head"><span class="method get">GET</span><code>/gateway/api/status/&lt;txId&gt;</code></div><div class="endpoint-body"><pre>curl ${baseUrl}/gateway/api/status/a1b2c3d4e5f6 \\
   -H "X-API-Key: gw_live_SUA_CHAVE"</pre><h3>Resposta</h3><pre>{
   "ok": true,
@@ -1109,7 +1118,7 @@ ${checkoutResponseField}  "reference": "pedido-123",
   "ts": "2026-09-21T12:00:00.000Z"
  }</pre><p>Consulte a cada 3–5 segundos enquanto o estado for <code class="inline">pending</code>. Pare quando chegar a <code class="inline">succeeded</code> ou <code class="inline">failed</code>. Quando disponível, <code class="inline">deliveryStatus</code> indica o estado da entrega USSD dos megas.</p></div></div></section>
 ${checkoutCallout}
-    <section class="section" id="callback"><h2>Callback assinado do Gateway</h2><p>Se enviar <code class="inline">callback_url</code>, o Gateway Megabyte fará um POST ao seu projecto quando o pagamento terminar. Este callback é enviado pelo Gateway; não é um webhook ${isMozPayment ? 'da MozPayment' : isEmedx ? 'do eMedx' : 'do provedor de pagamento'}.</p><pre>Content-Type: application/json
+    <section class="section" id="callback"><h2>Callback assinado do Gateway</h2><p>Se enviar <code class="inline">callback_url</code>, o Gateway Megabyte fará um POST ao seu projecto quando o pagamento terminar. Este callback é enviado pelo Gateway; não é um webhook ${isMozPayment ? 'da MozPayment' : isEmedx ? 'do eMedx' : isKivora ? 'da Kivora' : 'do provedor de pagamento'}.</p><pre>Content-Type: application/json
 X-Gateway-Signature: assinatura_hmac_sha256</pre><pre>{
   "event": "payment.succeeded",
   "txId": "a1b2c3d4e5f6",
@@ -1151,7 +1160,7 @@ const response = await fetch(baseUrl + "/gateway/api/pay", {
  const payment = await response.json();
  console.log(payment.txId, payment.status, payment.statusUrl);</pre></section>
   </div>
-</main><footer class="footer"><div class="wrap">Gateway Megabyte · ${isVpay ? 'Checkout Vpay' : isMozPayment ? 'MozPayment C2B' : isEmedx ? 'eMedx C2B M-Pesa' : 'M-Pesa e e-Mola'} · <a href="${baseUrl}/megas">Voltar à loja</a></div></footer>
+</main><footer class="footer"><div class="wrap">Gateway Megabyte · ${isVpay ? 'Checkout Vpay' : isMozPayment ? 'MozPayment C2B' : isEmedx ? 'eMedx C2B M-Pesa' : isKivora ? 'Kivora C2B M-Pesa' : 'M-Pesa'} · <a href="${baseUrl}/megas">Voltar à loja</a></div></footer>
 </body></html>`
 }
 function redirect(res, url, headers = {}) {
@@ -1292,7 +1301,7 @@ async function initiateCharge(tx, customerName) {
       } else if (['FAILED','CANCELLED','REFUNDED'].includes(providerStatus)) {
         await applyPagarProviderStatus(tx, providerStatus, {
           reference: tx.ref,
-          error: data.failureReason || data.error || (PAYMENT_API_ROUTE === 'emedx' ? 'Pagamento M-Pesa não concluído.' : undefined),
+          error: data.failureReason || data.error || (PAYMENT_API_ROUTE === 'emedx' ? 'Pagamento M-Pesa não concluído.' : PAYMENT_API_ROUTE === 'kivora' ? `Pagamento ${tx.method === 'emola' ? '' : 'M-Pesa '}não concluído.` : undefined),
           ...(data.failureReason === 'EMOLA_PIN_INCORRECT'
             ? { failureReason: 'EMOLA_PIN_INCORRECT' }
             : {}),
@@ -1338,7 +1347,7 @@ async function initiateCharge(tx, customerName) {
       return 'unknown'
     }
     tx.status = 'pending'
-    tx.error = `A confirmar o pagamento com o ${PAYMENT_API_ROUTE}.`
+    tx.error = PAYMENT_API_ROUTE === 'kivora' ? 'A confirmar o pagamento com a Kivora.' : `A confirmar o pagamento com o ${PAYMENT_API_ROUTE}.`
     notifyTx(tx.id, { status:'pending', method:tx.method })
     await updateOrderStatus(tx.id, 'pending', {
       pagarRef: tx.ref,
@@ -1454,7 +1463,10 @@ async function reconcilePagarTransaction(tx) {
       return 'manual_required'
     }
     if (providerStatus === 'PAID' || ['FAILED','CANCELLED','REFUNDED'].includes(providerStatus)) {
-      return applyPagarProviderStatus(tx, providerStatus, { reference: data.reference || tx.ref })
+      return applyPagarProviderStatus(tx, providerStatus, {
+        reference: data.reference || tx.ref,
+        ...(data.failureReason || data.error ? { error: data.failureReason || data.error } : {}),
+      })
     }
     tx.status = 'pending'
     tx.error = null
@@ -1691,22 +1703,27 @@ self.addEventListener('fetch',e=>{
     const isPaysuite = configuredPaymentProvider === 'paysuite'
     const isMozPayment = configuredPaymentProvider === 'mozpayment'
     const isEmedx = configuredPaymentProvider === 'emedx'
+    const isKivora = configuredPaymentProvider === 'kivora'
     return json(res, {
-      registered: isVpay || isMozPayment ? false : Boolean(isEmedx ? process.env.EMEDX_WEBHOOK_SECRET : isPaysuite ? process.env.PAYSUITE_WEBHOOK_SECRET : process.env.PAGAR_WEBHOOK_SECRET),
+      registered: isVpay || isMozPayment ? false : Boolean(isKivora ? process.env.KIVORA_WEBHOOK_SECRET : isEmedx ? process.env.EMEDX_WEBHOOK_SECRET : isPaysuite ? process.env.PAYSUITE_WEBHOOK_SECRET : process.env.PAGAR_WEBHOOK_SECRET),
       url: isVpay || isMozPayment
         ? null
-        : isEmedx
-          ? `${SITE_URL}/api/emedx/webhook`
-        : isPaysuite
-        ? (process.env.PAYSUITE_WEBHOOK_URL || 'https://megabyte.live/api/paysuite/webhook')
-        : (process.env.PAGAR_WEBHOOK_URL || null),
+        : isKivora
+          ? (process.env.KIVORA_WEBHOOK_URL || `${SITE_URL}/api/kivora/webhook`)
+          : isEmedx
+            ? `${SITE_URL}/api/emedx/webhook`
+            : isPaysuite
+              ? (process.env.PAYSUITE_WEBHOOK_URL || 'https://megabyte.live/api/paysuite/webhook')
+              : (process.env.PAGAR_WEBHOOK_URL || null),
       active: isVpay
         ? Boolean(process.env.VPAY_CLIENT_ID && process.env.VPAY_CLIENT_SECRET)
         : isMozPayment
           ? Boolean(process.env.MOZPAYMENT_WALLET_ID)
-          : isEmedx
-            ? Boolean(process.env.EMEDX_CLIENT_KEY && process.env.EMEDX_CLIENT_SECRET)
-          : Boolean(isPaysuite ? process.env.PAYSUITE_API_KEY : process.env.PAGAR_API_KEY),
+          : isKivora
+            ? Boolean(process.env.KIVORA_API_KEY)
+            : isEmedx
+              ? Boolean(process.env.EMEDX_CLIENT_KEY && process.env.EMEDX_CLIENT_SECRET)
+              : Boolean(isPaysuite ? process.env.PAYSUITE_API_KEY : process.env.PAGAR_API_KEY),
     })
   }
 
@@ -1739,7 +1756,11 @@ self.addEventListener('fetch',e=>{
     transactions.set(txId, liveTx)
     await applyPagarProviderStatus(liveTx, providerStatus, {
       reference: body.reference || liveTx.ref,
-      error: providerStatus === 'FAILED' ? 'Pagamento recusado.' : undefined,
+      error: providerStatus === 'FAILED'
+        ? (typeof body.failureReason === 'string' && body.failureReason.trim()
+            ? body.failureReason.trim()
+            : 'Pagamento recusado. Verifique o saldo ou PIN e tente novamente.')
+        : undefined,
     })
     return json(res, { ok:true })
   }
@@ -1768,7 +1789,7 @@ self.addEventListener('fetch',e=>{
     const { name, phone, password } = body
     if (!name||!name.trim())       return json(res, { error:'Nome é obrigatório.' }, 400)
     if (!isSupportedLocalPhone(phone))
-                                   return json(res, { error:'Número inválido. Use M-Pesa 84/85 ou e-Mola 86/87.' }, 400)
+                                   return json(res, { error:'Número inválido. Introduza um número válido de 9 dígitos.' }, 400)
     if (!password||password.length < 6) return json(res, { error:'Senha deve ter pelo menos 6 caracteres.' }, 400)
     const ph = normalizeLocalPhone(phone)
     if (findUserByPhone(ph))       return json(res, { error:'Este número já tem uma conta.' }, 409)
@@ -1812,7 +1833,7 @@ self.addEventListener('fetch',e=>{
     const name = String(body.name || '').trim()
     const phone = normalizeLocalPhone(body.phone)
     if (!name) return json(res, { error:'Nome é obrigatório.' }, 400)
-    if (!isSupportedLocalPhone(phone)) return json(res, { error:'Número inválido. Use M-Pesa 84/85 ou e-Mola 86/87.' }, 400)
+    if (!isSupportedLocalPhone(phone)) return json(res, { error:'Número inválido. Introduza um número válido de 9 dígitos.' }, 400)
     const existing = findUserByPhone(phone)
     if (existing && existing.id !== user.id) return json(res, { error:'Este número já tem uma conta.' }, 409)
     user.name = name
@@ -1847,8 +1868,11 @@ self.addEventListener('fetch',e=>{
     if (!isValidRechargeAmount(amount))
       return json(res, { error:'O valor da recarga deve ser um número inteiro entre 20 e 40000 MT.' }, 400)
     const paymentPhone = normalizeLocalPhone(String(body.paymentPhone || user.phone || ''))
-    if (!/^(84|85)\d{7}$/.test(paymentPhone))
-      return json(res, { error:'Introduza um número M-Pesa válido (84 ou 85) para confirmar a recarga.' }, 400)
+    const mpesaOnly = PAYMENT_API_ROUTE === 'emedx'
+    const phoneValid = mpesaOnly ? /^(84|85)\d{7}$/.test(paymentPhone) : isSupportedLocalPhone(paymentPhone)
+    if (!phoneValid)
+      return json(res, { error: 'Introduza um número M-Pesa válido (84 ou 85) para confirmar a recarga.' }, 400)
+    const rechargeMethod = detectMethod(normalizeMsisdn(paymentPhone)) || 'mpesa'
     const txId = randomBytes(6).toString('hex')
     const tx = {
       id:txId,
@@ -1859,7 +1883,7 @@ self.addEventListener('fetch',e=>{
       paymentPhone,
       beneficiaryPhone:null,
       amount,
-      method:'mpesa',
+      method:rechargeMethod,
       status:'pending',
       ref:null,
       error:null,
@@ -1877,7 +1901,7 @@ self.addEventListener('fetch',e=>{
       ok:true,
       txId,
       status:tx.status,
-      method:'mpesa',
+      method:rechargeMethod,
       paymentPhone,
       requestState,
       testMode:isTestMode,
@@ -1893,10 +1917,13 @@ self.addEventListener('fetch',e=>{
     if (!isValidRechargeAmount(amount))
       return json(res, { error:'O valor da recarga deve ser um número inteiro entre 20 e 40000 MT.' }, 400)
     const paymentPhone = normalizeLocalPhone(String(body.paymentPhone || user.phone || ''))
-    if (!/^(84|85)\d{7}$/.test(paymentPhone))
-      return json(res, { error:'Introduza um número M-Pesa válido (84 ou 85) para confirmar a recarga.' }, 400)
+    const mpesaOnly = PAYMENT_API_ROUTE === 'emedx'
+    const phoneValid = mpesaOnly ? /^(84|85)\d{7}$/.test(paymentPhone) : isSupportedLocalPhone(paymentPhone)
+    if (!phoneValid)
+      return json(res, { error: 'Introduza um número M-Pesa válido (84 ou 85) para confirmar a recarga.' }, 400)
+    const rechargeMethod = detectMethod(normalizeMsisdn(paymentPhone)) || 'mpesa'
     const txId = randomBytes(6).toString('hex')
-    const tx = { id:txId, type:'recharge', bundleId:null, bundleLabel:`Recarga ${amount} MT`, phone:user.phone, paymentPhone, beneficiaryPhone:null, msisdn:normalizeMsisdn(paymentPhone), amount, method:'mpesa', status:'pending', ref:null, error:null, sourceId:randomUUID(), ts:new Date().toISOString(), userId:user.id }
+    const tx = { id:txId, type:'recharge', bundleId:null, bundleLabel:`Recarga ${amount} MT`, phone:user.phone, paymentPhone, beneficiaryPhone:null, msisdn:normalizeMsisdn(paymentPhone), amount, method:rechargeMethod, status:'pending', ref:null, error:null, sourceId:randomUUID(), ts:new Date().toISOString(), userId:user.id }
     transactions.set(txId, tx)
     trackOrder(tx)
     const requestState = await initiateCharge(tx, `Recarga Megabyte ${amount} MT`)
@@ -1906,7 +1933,7 @@ self.addEventListener('fetch',e=>{
     return json(res, {
       txId,
       status:tx.status,
-      method:'mpesa',
+      method:rechargeMethod,
       paymentPhone,
       requestState,
       testMode:isTestMode,
@@ -1965,7 +1992,7 @@ Headers:
   X-API-Key: gw_live_...
 Corpo JSON:
   {
-    "phone": "84xxxxxxx",             // obrigatório, número M-Pesa (84/85) ou e-Mola (86/87)
+    "phone": "84xxxxxxx",             // obrigatório, número M-Pesa (84/85)
     "amount": 100,                    // obrigatório, valor inteiro em MT (meticais); convertido em megas
     "reference": "pedido-123",        // opcional, a sua referência interna (máx 64 chars)
    "description": "Compra na loja",  // opcional, contexto adicional (máx 120 chars)
@@ -2039,7 +2066,7 @@ curl ${SITE_URL}/gateway/api/status/TXID_RECEBIDO \\
 
 NOTAS
 -----
-- Moeda: meticais (MT). M-Pesa Moçambique (números 84/85) ou e-Mola (86/87).
+- Moeda: meticais (MT). M-Pesa Moçambique (números 84/85).
 - Guarde o txId associado ao seu pedido para conferir o estado.
 - Use "reference" para reconciliar os pagamentos com os seus pedidos.
 - Estados finais: "succeeded" (pago) ou "failed" (falhou/expirou). Não há reversão automática.
@@ -2057,7 +2084,7 @@ NOTAS
     if (!Number.isInteger(amountNumber) || amount < minimumGatewayAmount || amount > 40000)
       return json(res, { error:`O valor (amount) deve ser um número inteiro entre ${minimumGatewayAmount} e 40000 MT.` }, 400)
     const msisdn = normalizeMsisdn(body.phone), meth = detectMethod(msisdn)
-    if (!meth) return json(res, { error:'Número inválido. Use M-Pesa 84/85 ou e-Mola 86/87.' }, 400)
+    if (!meth) return json(res, { error:'Número inválido. Introduza um número M-Pesa válido.' }, 400)
     if (PAYMENT_API_ROUTE === 'emedx' && meth !== 'mpesa')
       return json(res, { error:'O eMedx aceita apenas números M-Pesa 84/85.' }, 400)
     let callbackUrl = null
@@ -3711,7 +3738,7 @@ function phoneMethod(phone) {
   return null
 }
 function paymentMethodLabel(method) {
-  return method === 'emola' ? 'e-Mola' : 'M-Pesa'
+  return method === 'emola' ? 'telemóvel' : 'M-Pesa'
 }
 function openAuthDialog(tab) {
   authSetTab(tab || 'register')
@@ -3734,7 +3761,7 @@ async function registerUser() {
   const pass2=document.getElementById('reg-pass2').value
   const err=document.getElementById('reg-err'); err.style.display='none'
   if (!name){err.textContent='Introduza o seu nome.';err.style.display='block';return}
-   if (!phoneMethod(phone)){err.textContent='Número inválido. Use M-Pesa 84/85 ou e-Mola 86/87.';err.style.display='block';return}
+   if (!phoneMethod(phone)){err.textContent='Número inválido. Introduza um número válido de 9 dígitos.';err.style.display='block';return}
   if (pass.length<6){err.textContent='Senha deve ter pelo menos 6 caracteres.';err.style.display='block';return}
   if (pass!==pass2){err.textContent='As senhas não coincidem.';err.style.display='block';return}
   const btn=document.getElementById('reg-btn'); btn.disabled=true; btn.textContent='A criar conta…'
@@ -3814,7 +3841,7 @@ async function saveProfile() {
   const phone=document.getElementById('profile-phone').value.trim().replace(/\\D/g,'')
   const err=document.getElementById('profile-err'); err.style.display='none'
   if (!name) { err.textContent='Introduza o seu nome.'; err.style.display='block'; return }
-  if (!phoneMethod(phone)) { err.textContent='Número inválido. Use M-Pesa 84/85 ou e-Mola 86/87.'; err.style.display='block'; return }
+  if (!phoneMethod(phone)) { err.textContent='Número inválido. Introduza um número válido de 9 dígitos.'; err.style.display='block'; return }
   const btn=document.getElementById('profile-btn'); btn.disabled=true; btn.textContent='A guardar…'
   try {
     const r=await fetch('/api/auth/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,phone})})
@@ -3912,8 +3939,11 @@ async function submitRecharge() {
   const err=document.getElementById('rech-err'); err.style.display='none'
   if(!isValidRechargeAmount(amount)){err.textContent='Introduza um valor inteiro entre 20 e 40.000 MT.';err.style.display='block';return}
   const paymentPhone=normalizeRechargePaymentPhone(document.getElementById('recharge-payment-phone').value)
-  if(!/^(84|85)[0-9]{7}$/.test(paymentPhone)){err.textContent='Introduza um número M-Pesa válido com 9 dígitos, começando por 84 ou 85. Pode incluir +258.';err.style.display='block';return}
-  const btn=document.getElementById('rech-btn'); btn.disabled=true; btn.textContent='A enviar pedido M-Pesa…'
+  const mpesaOnly=${PAYMENT_API_ROUTE === 'emedx' ? 'true' : 'false'}
+  const validPhone=mpesaOnly ? /^(84|85)[0-9]{7}$/.test(paymentPhone) : /^(84|85|86|87)[0-9]{7}$/.test(paymentPhone)
+  if(!validPhone){err.textContent='Introduza um número M-Pesa válido com 9 dígitos, começando por 84 ou 85. Pode incluir +258.';err.style.display='block';return}
+  const methodLabel=/^(86|87)/.test(paymentPhone) ? '' : ' M-Pesa'
+  const btn=document.getElementById('rech-btn'); btn.disabled=true; btn.textContent=\`A enviar pedido\${methodLabel}…\`
   try {
     const r=await fetch('/api/recharge/checkout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount,paymentPhone})})
     const d=await r.json()
@@ -3938,12 +3968,13 @@ async function submitRecharge() {
     document.getElementById('recharge-selection').style.display='none'
     document.getElementById('recharge-checkout').style.display='block'
     const notice=document.getElementById('recharge-payment-notice')
+    const resolvedMethod=d.method==='emola' ? '' : methodLabel
     if(d.testMode){
-      notice.textContent='Modo de teste: nenhum pedido foi enviado ao M-Pesa e não houve cobrança real.'
+      notice.textContent=\`Modo de teste: nenhum pedido foi enviado\${resolvedMethod ? ' ao M-Pesa' : ''} e não houve cobrança real.\`
     }else if(d.freeMode){
-      notice.textContent='Esta recarga foi aplicada sem pagamento; nenhum pedido M-Pesa foi enviado.'
+      notice.textContent=\`Esta recarga foi aplicada sem pagamento; nenhum pedido\${resolvedMethod} foi enviado.\`
     }else if(d.requestState==='submitted'){
-      notice.textContent=\`Pedido M-Pesa enviado para \${d.paymentPhone||paymentPhone}. Confirme no telemóvel; o saldo será actualizado após a confirmação.\`
+      notice.textContent=\`Pedido\${resolvedMethod} enviado para \${d.paymentPhone||paymentPhone}. Confirme no telemóvel; o saldo será actualizado após a confirmação.\`
     }else if(d.requestState==='confirmed'){
       notice.textContent='Pagamento confirmado pelo provedor. O saldo será actualizado nesta conta.'
     }else{
@@ -4078,6 +4109,11 @@ function shShow(s) {
   const sh=document.getElementById('sheet')
   const centered=['pending','recharging']
   if(centered.includes(s)){sh.classList.add('pending-full')}else{sh.classList.remove('pending-full')}
+  if(s==='recharge-ok'||s==='recharge-fail'){
+    const ov=document.getElementById('overlay')
+    if(ov) ov.classList.add('open')
+    setTimeout(()=>sh.classList.add('open'),10)
+  }
 }
 function renderResultPackage(prefix) {
   const values = {
@@ -4396,7 +4432,9 @@ function adminDashboard(filter = 'all', requestedPage = 1, gatewayMode = false) 
     ? 'Crie chaves para outros sites iniciarem pagamentos pelo checkout hospedado Vpay. A resposta inclui checkoutUrl; os métodos apresentados no checkout são controlados pela Vpay.'
     : PAYMENT_API_ROUTE === 'emedx'
       ? 'Crie chaves para outros sites iniciarem cobranças C2B M-Pesa 84/85 pelo eMedx.'
-    : 'Crie chaves para outros sites iniciarem pagamentos M-Pesa ou e-Mola através deste gateway.'
+      : PAYMENT_API_ROUTE === 'kivora'
+        ? 'Crie chaves para outros sites iniciarem cobranças C2B M-Pesa através da Kivora Payments.'
+        : 'Crie chaves para outros sites iniciarem pagamentos M-Pesa através deste gateway.'
   const megabyteTransactions = orders.filter(o => o.type !== 'gateway')
   const gatewayTransactions = orders.filter(o => o.type === 'gateway')
   const counts = { all:0, pending:0, succeeded:0, activated:0, failed:0 }
@@ -4461,7 +4499,7 @@ function adminDashboard(filter = 'all', requestedPage = 1, gatewayMode = false) 
   const SL = { pending:'A aguardar pagamento', succeeded:'Pagamento confirmado', activated:'Activado', failed:'Falhado' }
   const SC = { pending:'#92400e', succeeded:'#065f46', activated:'#1e3a8a', failed:'#991b1b' }
   const SBG= { pending:'#fef3c7', succeeded:'#d1fae5', activated:'#dbeafe', failed:'#fee2e2' }
-  const ML = { mpesa:'M-Pesa', emola:'e-Mola' }
+  const ML = { mpesa:'M-Pesa', emola:'Móvel' }
 
   const navSections = gatewayMode ? [
     { label: 'Gateway', items: [
@@ -4822,7 +4860,7 @@ function adminDashboard(filter = 'all', requestedPage = 1, gatewayMode = false) 
   </div>
   ${reconciliationAttention ? `<div class="delivery-alert pagar-reconciliation-alert">
      <strong>${o.pagarReconciliationStatus === 'manual_required' ? 'Confirmação manual necessária' : 'Pagamento em reconciliação'}</strong>
-     <span>${escapeHtml(o.pagarReconciliationError || (o.pagarProvider === 'mozpayment' ? 'Confirme o estado no painel MozPayment. Não pague novamente.' : o.pagarProvider === 'emedx' ? 'A confirmar o estado desta cobrança com o eMedx. O pagamento não foi marcado como falhado.' : 'A confirmar o estado desta cobrança com o Pagar. O pagamento não foi marcado como falhado.'))}</span>
+     <span>${escapeHtml(o.pagarReconciliationError || (o.pagarProvider === 'mozpayment' ? 'Confirme o estado no painel MozPayment. Não pague novamente.' : o.pagarProvider === 'emedx' ? 'A confirmar o estado desta cobrança com o eMedx. O pagamento não foi marcado como falhado.' : o.pagarProvider === 'kivora' ? 'A confirmar o estado desta cobrança com a Kivora. O pagamento não foi marcado como falhado.' : 'A confirmar o estado desta cobrança com o Pagar. O pagamento não foi marcado como falhado.'))}</span>
      ${manualMozPaymentConfirmation ? `<button class="activate-btn" onclick="confirmMozPayment('${escapeHtml(o.txId)}',this)">Confirmar pagamento no MozPayment</button>` : ''}
    </div>` : ''}${forwardingAttention ? `<div class="delivery-alert pagar-forwarding-alert">
     <strong>${o.pagarForwardingStatus === 'failed' ? 'Encaminhamento Pagar falhou' : o.pagarForwardingStatus === 'forwarding' ? 'A encaminhar confirmação Pagar' : 'A aguardar encaminhamento Pagar'}</strong>
@@ -5360,6 +5398,8 @@ async function retryPagarForwarding(eventId,btn){
 // ── Servidor ──────────────────────────────────────────────────────────────────
 const paymentRequiredConfig = configuredPaymentProvider === 'paysuite'
   ? ['PAYSUITE_API_KEY', 'PAYSUITE_WEBHOOK_SECRET']
+  : configuredPaymentProvider === 'kivora'
+    ? ['KIVORA_API_KEY']
   : configuredPaymentProvider === 'emedx'
     ? ['EMEDX_CLIENT_KEY', 'EMEDX_CLIENT_SECRET']
   : configuredPaymentProvider === 'vpay'
@@ -5377,7 +5417,7 @@ const requiredConfig = [
   'SESSION_SECRET',
 ]
 const missingConfig = requiredConfig.filter(key => !process.env[key])
-const paymentProviderIsSupported = ['pagar', 'debitopay', 'paysuite', 'vpay', 'mozpayment', 'emedx'].includes(configuredPaymentProvider)
+const paymentProviderIsSupported = ['pagar', 'debitopay', 'paysuite', 'vpay', 'mozpayment', 'emedx', 'kivora'].includes(configuredPaymentProvider)
 const isLiveConfiguration = isTestMode || isFreeMode || (paymentProviderIsSupported && missingConfig.length === 0)
 
 await dbInit()
